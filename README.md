@@ -1,3 +1,41 @@
+## Example
+```javascript
+import S from '@oversword/super-small-state-machine'
+
+const fibonacciGenerator = new S({
+    input: 1,
+    result: 0,
+    lastResult: 0,
+}, {
+    initial: 'testStart',
+    testStart: [
+        {
+            if: ({ result }) => result === 0,
+            then: () => ({ result: 1 })
+        },
+        'fibonacci'
+    ],
+    fibonacci: [
+        ({ result, lastResult }) => ({
+            lastResult: result,
+            result: result + lastResult
+        }),
+        'testEnd',
+    ],
+    testEnd: [
+        ({ input }) => ({ input: input-1 }),
+        {
+            if: ({ input }) => input > 1,
+            then: 'fibonacci',
+            else: S.return,
+        }
+    ]
+}).input(number => ({ input: number }))
+
+const twelfthFibonacci = fibonacciGenerator(12)
+
+console.log(twelfthFibonacci) // prints 144
+```
 
 ## Basics
 ### Creating a Machine

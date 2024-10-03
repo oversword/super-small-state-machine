@@ -118,6 +118,10 @@ if (failed.length) {
         console.log(`Failed: ${test.description}. Got ${test.result}, expected ${test.expected}`)
     })
 }
+console.groupEnd()
+
+
+/*
 const log = (...a) => () => console.log(...a)
 
 const simple = new S({},[
@@ -126,6 +130,20 @@ const simple = new S({},[
     log('c'),
     log('d'),
 ])
+
+
+const step = simple.step.input((a) => {
+    console.log({a})
+    return a
+})
+
+const state1 = step({})
+const state2 = step(state1)
+const state3 = step(state2)
+const state4 = step(state3)
+const state5 = step(state4)
+
+console.log({ step, state1, state2, state3, state4, state5 })
 
 // if (name === 'asStep') {
 //     let state = clone_object(initialState)
@@ -155,13 +173,6 @@ const exec = new S({
 console.log(exec())
 
 
-console.groupEnd()
-
-
-
-
-// TODO: add real tests and specs
-/*
 const multipyRByN = ({ result, n }) => ({ result: result * n })
 const NMinusOne = ({ n }) => ({ n: n-1 })
 const repeatOrStop = ({ n }) => n <= 1 ? 3 : 0 

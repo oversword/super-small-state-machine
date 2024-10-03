@@ -1,0 +1,1 @@
+declare module '@oversword/super-small-state-machine'

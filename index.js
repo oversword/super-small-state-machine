@@ -1,6 +1,6 @@
 const clone_object = (obj) => {
     if (Array.isArray(obj))
-        return obj.map(item => clone_object(item))
+        return obj.map(clone_object)
     if (obj === null) return null
     if (typeof obj !== 'object')
         return obj
@@ -8,12 +8,10 @@ const clone_object = (obj) => {
         key, clone_object(value)
     ]));
 }
-const unique_list_strings = (list, getId = item => item) =>
-    Object.values(Object.fromEntries(list.map(item=>[getId(item),item])));
-const get_path_object = (object, path) =>
-    path.reduce((obj, step) => obj[step], object)
-const normalise_function = functOrReturn =>
-    typeof functOrReturn === 'function' ? functOrReturn : () => functOrReturn
+const unique_list_strings = (list, getId = item => item) => Object.values(Object.fromEntries(list.map(item=>[getId(item),item])));
+const reduce_get_path_object = (obj, step) => obj[step]
+const get_path_object = (object, path) => path.reduce(reduce_get_path_object, object)
+const normalise_function = functOrReturn => (typeof functOrReturn === 'function') ? functOrReturn : () => functOrReturn
 const reduce_deep_merge_object = (base, override) => {
     if (!((base && typeof base === 'object') && !Array.isArray(base) && (override && typeof override === 'object') && !Array.isArray(override)))
         return override;
@@ -22,8 +20,11 @@ const reduce_deep_merge_object = (base, override) => {
         key, key in override ? deep_merge_object(base[key], override[key]) : base[key]
     ]));
 }
-const deep_merge_object = (base, ...overrides) =>
-    overrides.reduce(reduce_deep_merge_object, base)
+const deep_merge_object = (base, ...overrides) => overrides.reduce(reduce_deep_merge_object, base)
+
+class GoToReferenceError extends ReferenceError {}
+class GoToTypeError extends ReferenceError {}
+class ContextReferenceError extends ReferenceError {}
 
 export default class S {
     static return = Symbol('Small State Machine Return')
@@ -41,14 +42,16 @@ export default class S {
     }
     static keywords = S.kw
     static runConfig = {
-        delay: 0,
-        allow: 1000,
         iterations: 10000,
-        wait: 0,
         result: true,
-        until: result => result[S.return],
+        until: result => S.return in result,
         inputModifier: a => a,
         outputModifier: a => a,
+
+        // Timing settings for async
+        delay: 0,
+        allow: 1000,
+        wait: 0,
     }
 
     static lastArray(sequence, path) {
@@ -79,12 +82,12 @@ export default class S {
         return parentPath.slice(0, lastNumber).concat([parentPath[lastNumber]+1])
     }
     static execute(state, method, path) {
-        const methodType = (method === null) ? 'undefined' : (typeof method)
-        switch (methodType) {
+        switch (typeof method) {
             case 'number':
             case 'string':
                 return { [S.goto]: method }
             case 'object': {
+                if (!method) break;
                 if (Array.isArray(method)) {
                     return { [S.goto]: [...path,0] }
                 }
@@ -105,12 +108,12 @@ export default class S {
             }
             case 'function': {
                 const output = method(state)
-                const outputType = typeof output
-                switch (outputType) {
+                switch (typeof output) {
                     case 'number':
                     case 'string':
                         return { [S.goto]: output }
                     case 'object': {
+                        if (!output) break;
                         if (Array.isArray(output))
                             return { [S.goto]: output }
 
@@ -120,7 +123,7 @@ export default class S {
                         return newState
                     }
                     case 'symbol': {
-                        switch (method) {
+                        switch (output) {
                             case S.return:
                                 return { [S.return]: state.result }
                         }
@@ -156,18 +159,26 @@ export default class S {
                     }
                 const gotoType = typeof goto
                 switch (gotoType) {
-                    case 'number':
+                    case 'number':{
+                        const lastArray = S.lastArray(process, path.slice(0,-1))
+                        if (!lastArray)
+                            throw new GoToReferenceError(`A relative goto has been provided as a number (${goto}), but no list exists that this number could be an index of.`)
                         return {
                             ...currentState,
-                            [S.path]: [...S.lastArray(process, path.slice(0,-1)), goto]
+                            [S.path]: [...lastArray, goto]
                         }
-                    case 'string':
+                    }
+                    case 'string':{
+                        const lastMachine = S.lastMachine(process, path.slice(0,-1))
+                        if (!lastMachine)
+                            throw new GoToReferenceError(`A relative goto has been provided as a string (${goto}), but no state machine exists that this string could be a state of.`)
                         return {
                             ...currentState,
-                            [S.path]: [...S.lastMachine(process, path.slice(0,-1)), goto]
+                            [S.path]: [...lastMachine, goto]
                         }
+                    }
                     default:
-                        throw new Error()
+                        throw new GoToTypeError(`A relative goto has been provided as a ${gotoType}, only strings and numbers are acceptable.`)
                 }
             }
 
@@ -180,7 +191,6 @@ export default class S {
                 ...currentState,
                 [S.return]: true,
             }
-
         return {
             ...currentState,
             [S.path]: nextPath
@@ -192,8 +202,10 @@ export default class S {
         return this.advance(state, process, path, output)
     }
     static applyChanges(state, changes) {
-        const validChanges = Object.fromEntries(Object.entries(changes).filter(([name]) => name in state))
-        return deep_merge_object(state, validChanges)
+        const invalidChanges = Object.entries(changes).find(([name]) => !(name in state))
+        if (invalidChanges)
+            throw new ContextReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed '${invalidChanges[0]}', which is not one of: ${Object.keys(state).join(', ')}`)
+        return deep_merge_object(state, changes)
     }
     // TODO: async
     constructor({ ...state } = {}, process, runConfig = S.runConfig) {
@@ -236,10 +248,7 @@ export default class S {
                             outputModifier: output => outputModifier(defaultRunConfig.outputModifier(output))
                         })
                     case 'step':
-                        return (state, path) => {
-                            const currentState = S.applyChanges(initialState, state)
-                            return S.executeAdvance(currentState, process, path || state[S.path] || [])
-                        }
+                        return new S(state, process, { iterations: 1, result: false })
                     case 'actionName':
                         return path => {
                             const method = get_path_object(process, path)
