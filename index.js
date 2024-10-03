@@ -218,16 +218,16 @@ export default class S {
 
             const modifiedInput = inputModifier(input) || {}
             const { [S.path]: path = [], ...pureInput } = modifiedInput
-            
+
             let currentPath = path
             let currentState = S.applyChanges(initialState, pureInput)
             let r = 0
             while (r < iterations) {
+                if (until(currentState))
+                    break;
                 r++
                 currentState = S.executeAdvance(currentState, process, currentPath)
                 currentPath = currentState[S.path]
-                if (until(currentState))
-                    break;
             }
             return outputModifier(result ? currentState[S.kw.RS] : currentState)
         }
