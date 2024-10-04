@@ -267,6 +267,8 @@ export default class S {
             },
             get(target, name) {
                 switch (name) {
+                    case 'config':
+                        return runConfig => new S(initialState, process, { ...defaultRunConfig, ...runConfig })
                     case 'async':
                         return new S(initialState, process, { ...defaultRunConfig, async: true })
                     case 'sync':
