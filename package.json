@@ -1,6 +1,6 @@
 {
   "name": "@oversword/super-small-state-machine",
-  "version": "1.0.3",
+  "version": "2.0.0",
   "description": "A tiny, stand-alone state machine executor that uses an extremely simple syntax",
   "main": "index.js",
   "type": "module",
