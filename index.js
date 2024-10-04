@@ -1,12 +1,8 @@
 const clone_object = (obj) => {
-    if (Array.isArray(obj))
-        return obj.map(clone_object)
+    if (Array.isArray(obj)) return obj.map(clone_object)
     if (obj === null) return null
-    if (typeof obj !== 'object')
-        return obj
-    return Object.fromEntries(Object.entries(obj).map(([key,value]) => [
-        key, clone_object(value)
-    ]));
+    if (typeof obj !== 'object') return obj
+    return Object.fromEntries(Object.entries(obj).map(([key,value]) => [ key, clone_object(value) ]));
 }
 const unique_list_strings = (list, getId = item => item) => Object.values(Object.fromEntries(list.map(item=>[getId(item),item])));
 const reduce_get_path_object = (obj, step) => obj[step]
@@ -49,13 +45,10 @@ export default class S {
         inputModifier: a => a,
         outputModifier: a => a,
         async: false,
-
-        // Timing settings for async
         delay: 0,
         allow: 1000,
         wait: 0,
     }
-
     static traverse = (iterator = a => a, post = b => b) => {
         const iterate = sequence => {
             if (Array.isArray(sequence))
@@ -92,18 +85,17 @@ export default class S {
         }
         return iterate
     }
-
     static lastArray(sequence, path) {
         const item = get_path_object(sequence, path)
         if (Array.isArray(item)) return path
         if (path.length === 0) return null
-        return this.lastArray(sequence, path.slice(0,-1))
+        return S.lastArray(sequence, path.slice(0,-1))
     }
     static lastMachine(sequence, path) {
         const item = get_path_object(sequence, path)
-        if (item && typeof item === 'object' && (this.kw.IT in item)) return path
+        if (item && typeof item === 'object' && (S.kw.IT in item)) return path
         if (path.length === 0) return null
-        return this.lastMachine(sequence, path.slice(0,-1))
+        return S.lastMachine(sequence, path.slice(0,-1))
     }
     static nextPath(sequence, path) {
         const childItem = path[path.length-1]
@@ -127,9 +119,7 @@ export default class S {
                 [S.return]: true,
                 [S.path]: path
             }
-
         let currentState = state
-        
         switch (typeof output) {
             case 'undefined':
                 break;
@@ -162,7 +152,7 @@ export default class S {
                             ...currentState,
                             [S.path]: output[S.goto]
                         }
-                    return this.advance(currentState, process, path, output[S.goto])
+                    return S.advance(currentState, process, path, output[S.goto])
                 }
                 if (S.return in output)
                     return {
@@ -171,7 +161,6 @@ export default class S {
                         [S.kw.RS]: output[S.return],
                         [S.path]: path
                     }
-
                 // If none of the above, assume it is an assign object
                 currentState = S.applyChanges(currentState, output)
                 break;
@@ -179,8 +168,6 @@ export default class S {
             default:
                 throw new ActionTypeError(`Unknwown output or action type: ${typeof output} at [ ${path.join(', ')} ]`)
         }
-
-
         const nextPath = S.nextPath(process, path)
         if (! nextPath)
             return {
@@ -198,66 +185,28 @@ export default class S {
         const methodType = typeof method
         switch (methodType) {
             case 'function': {
-                const output = method(state)
-                return output
+                return method(state)
             }
             case 'object': {
                 if (!method) break;
                 if (Array.isArray(method))
-                    return { [S.goto]: [...path,0] }
+                    return [...path,0]
                 if (S.kw.IF in method) {
                     if (normalise_function(method[S.kw.IF])(state))
-                        return { [S.goto]: [...path,S.kw.TN] }
-                    else return { [S.goto]: [...path,S.kw.EL] }
+                        return [...path,S.kw.TN]
+                    else return [...path,S.kw.EL]
                 }
                 if (S.kw.SW in method) {
                     const key = normalise_function(method[S.kw.SW])(state)
                     const fallbackKey = key in (method[S.kw.CS]) ? key : S.kw.DF
-                    return { [S.goto]: [...path,S.kw.CS,fallbackKey] }
+                    return [...path,S.kw.CS,fallbackKey]
                 }
                 if (S.kw.IT in method) {
-                    return { [S.goto]: [...path,S.kw.IT] }
+                    return [...path,S.kw.IT]
                 }
             }
         }
         return method
-    }
-    static async executeAsync(state, process, path) {
-        const method = get_path_object(process, path)
-        const methodType = typeof method
-        switch (methodType) {
-            case 'function': {
-                const output = await method(state)
-                return output
-            }
-            case 'object': {
-                if (!method) break;
-                if (Array.isArray(method))
-                    return { [S.goto]: [...path,0] }
-                if (S.kw.IF in method) {
-                    if (await (normalise_function(method[S.kw.IF])(state)))
-                        return { [S.goto]: [...path,S.kw.TN] }
-                    else return { [S.goto]: [...path,S.kw.EL] }
-                }
-                if (S.kw.SW in method) {
-                    const key = await (normalise_function(method[S.kw.SW])(state))
-                    const fallbackKey = key in (method[S.kw.CS]) ? key : S.kw.DF
-                    return { [S.goto]: [...path,S.kw.CS,fallbackKey] }
-                }
-                if (S.kw.IT in method) {
-                    return { [S.goto]: [...path,S.kw.IT] }
-                }
-            }
-        }
-        return method
-    }
-    static executeAdvance(state, process, path) {
-        const output = S.execute(state, process, path)
-        return S.advance(state, process, path, output)
-    }
-    static async executeAdvanceAsync(state, process, path) {
-        const output = await S.executeAsync(state, process, path)
-        return S.advance(state, process, path, output)
     }
     static applyChanges(state, changes) {
         const invalidChanges = Object.entries(changes).find(([name]) => !(name in state))
@@ -265,7 +214,6 @@ export default class S {
             throw new ContextReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed '${invalidChanges[0]}', which is not one of: ${Object.keys(state).join(', ')}`)
         return deep_merge_object(state, changes)
     }
-
     constructor(state = {}, process, runConfig = S.runConfig) {
         const defaultRunConfig = deep_merge_object(S.runConfig, runConfig)
         const initialState = deep_merge_object({
@@ -273,10 +221,8 @@ export default class S {
         }, state)
         const exec = (input = {}, runConfig = defaultRunConfig) => {
             const { until, result, iterations, inputModifier, outputModifier } = deep_merge_object(defaultRunConfig, runConfig)
-
             const modifiedInput = inputModifier(input) || {}
             const { [S.path]: path = [], ...pureInput } = modifiedInput
-
             let currentPath = path
             let currentState = S.applyChanges(initialState, pureInput)
             let r = 0
@@ -284,20 +230,18 @@ export default class S {
                 if (until(currentState))
                     break;
                 r++
-                currentState = S.executeAdvance(currentState, process, currentPath)
+                const output = S.execute(currentState, process, currentPath)
+                currentState = S.advance(currentState, process, currentPath, output)
                 currentPath = currentState[S.path]
             }
             return outputModifier(result ? currentState[S.kw.RS] : currentState)
         }
         const execAsync = async (input = {}, runConfig = defaultRunConfig) => {
             const { delay, allow, wait, until, result, iterations, inputModifier, outputModifier } = deep_merge_object(defaultRunConfig, runConfig)
-
             const modifiedInput = (await inputModifier(input)) || {}
             const { [S.path]: path = [], ...pureInput } = modifiedInput
-
             let currentPath = path
             let currentState = S.applyChanges(initialState, pureInput)
-
             if (delay)
                 await wait_time(delay)
             let startTime = Date.now()
@@ -306,9 +250,9 @@ export default class S {
                 if (until(currentState))
                     break;
                 r++
-                currentState = await S.executeAdvanceAsync(currentState, process, currentPath)
+                const output = await S.execute(currentState, process, currentPath)
+                currentState = S.advance(currentState, process, currentPath, output)
                 currentPath = currentState[S.path]
-
                 if (allow > 0 && r % 10 === 0) {
                     const nowTime = Date.now()
                     if (nowTime - startTime >= allow)
@@ -317,16 +261,16 @@ export default class S {
             }
             return outputModifier(result ? currentState[S.kw.RS] : currentState)
         }
-        return new Proxy(() => {}, {
+        return new Proxy(S, {
             apply(target, thisArg, argumentsList) {
-                return defaultRunConfig.async ? execAsync (...argumentsList) : exec(...argumentsList)
+                return defaultRunConfig.async ? execAsync(...argumentsList) : exec(...argumentsList)
             },
             get(target, name) {
                 switch (name) {
                     case 'async':
-                        return new S(state, process, { ...defaultRunConfig, async: true })
+                        return new S(initialState, process, { ...defaultRunConfig, async: true })
                     case 'sync':
-                        return new S(state, process, { ...defaultRunConfig, async: false })
+                        return new S(initialState, process, { ...defaultRunConfig, async: false })
                     case 'input':
                         return inputModifier => new S(initialState, process, {
                             ...defaultRunConfig,
@@ -338,7 +282,7 @@ export default class S {
                             outputModifier: output => outputModifier(defaultRunConfig.outputModifier(output))
                         })
                     case 'step':
-                        return new S(state, process, { ...defaultRunConfig, iterations: 1, result: false })
+                        return new S(initialState, process, { ...defaultRunConfig, iterations: 1, result: false })
                     case 'actionName':
                         return path => {
                             const method = get_path_object(process, path)
@@ -352,4 +296,3 @@ export default class S {
     }
 }
 export const SuperSmallStateMachine = S
-

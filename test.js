@@ -697,20 +697,6 @@ const makeTestAsync = (test) => {
         if (typeof node === 'function')
             return makeAsync(node)
         return node
-    }, (obj) => {
-        if (S.kw.IF in obj) {
-            return {
-                ...obj,
-                [S.kw.IF]: makeAsync(obj[S.kw.IF])
-            }
-        }
-        if (S.kw.SW in obj) {
-            return {
-                ...obj,
-                [S.kw.SW]: makeAsync(obj[S.kw.SW])
-            }
-        }
-        return obj
     })(test.sequence)
 
     return {
