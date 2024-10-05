@@ -24,6 +24,7 @@ export class PathReferenceError extends ReferenceError {}
 export class ContextReferenceError extends ReferenceError {}
 export class ActionTypeError extends TypeError {}
 export class UndefinedActionError extends ReferenceError {}
+export class MaxIterationsError extends Error {}
 
 export default class S {
     static testCases = () => testCases
@@ -59,32 +60,19 @@ export default class S {
             if (Array.isArray(process))
                 return process.map(action => iterate(action))
             if (process && (typeof process) === 'object') {
-                if (S.kw.IF in process) {
+                if (S.kw.IF in process)
                     return post({
                         [S.kw.IF]: process[S.kw.IF],
-                        ...(S.kw.TN in process ? {
-                            [S.kw.TN]: iterate(process[S.kw.TN])
-                        } : {}),
-                        ...(S.kw.EL in process ? {
-                            [S.kw.EL]: iterate(process[S.kw.EL])
-                        } : {})
+                        ...(S.kw.TN in process ? { [S.kw.TN]: iterate(process[S.kw.TN]) } : {}),
+                        ...(S.kw.EL in process ? { [S.kw.EL]: iterate(process[S.kw.EL]) } : {})
                     })
-                } else if (S.kw.SW in process) {
-                    const cases = Object.fromEntries(Object.entries(process[S.kw.CS]).map(([key, method]) => [
-                        key,
-                        iterate(method)
-                    ]))
+                if (S.kw.SW in process)
                     return post({
-                        [S.kw.SW]: process.switch,
-                        [S.kw.CS]: cases,
+                        [S.kw.SW]: process[S.kw.SW],
+                        [S.kw.CS]: Object.fromEntries(Object.entries(process[S.kw.CS]).map(([key, method]) => [ key, iterate(method) ])),
                     })
-                } else if (S.kw.IT in process) {
-                    const stages = Object.fromEntries(Object.entries(process).map(([key, method]) => [
-                        key,
-                        iterate(method)
-                    ]))
-                    return post(stages)
-                }
+                if (S.kw.IT in process)
+                    return post(Object.fromEntries(Object.entries(process).map(([key, method]) => [ key, iterate(method) ])))
             }
             return iterator(process)
         }
@@ -122,70 +110,64 @@ export default class S {
             return [ ...parPath, childItem+1 ]
         return S.nextPath(process, parPath)
     }
-    // TODO: just use state[S.path] instead of passing around path?
     static advance(state, process, output) {
-        const path = state[S.path]
         if (output === S.return)
             return {
                 ...state,
                 [S.return]: true,
-                [S.path]: path
+                [S.path]: state[S.path]
             }
         let currentState = state
         const outputType = typeof output
         switch (outputType) {
-            case 'undefined':
-                break;
+            case 'undefined': break; // Set and forget action
             case 'number':
             case 'string':
             case 'symbol':
-                const lastOf = S.lastOf(process, path.slice(0,-1), outputType === 'number' ? Array.isArray : S.isStateMachine)
+                const lastOf = S.lastOf(process, state[S.path].slice(0,-1), outputType === 'number' ? Array.isArray : S.isStateMachine)
                 if (!lastOf)
-                    throw new PathReferenceError(`A relative goto has been provided as a ${outputType} (${output}), but no ${outputType === 'number' ? 'list' : 'state machine'} exists that this ${outputType} could be ${outputType === 'number' ? 'an index': 'a state'} of from path [ ${path.join(', ')} ].`)
+                    throw new PathReferenceError(`A relative goto has been provided as a ${outputType} (${output}), but no ${outputType === 'number' ? 'list' : 'state machine'} exists that this ${outputType} could be ${outputType === 'number' ? 'an index': 'a state'} of from path [ ${state[S.path].join(', ')} ].`)
                 return {
-                    ...currentState,
+                    ...state,
                     [S.path]: [...lastOf, output]
                 }
             case 'object': {
                 if (!output) break; // Handle null being an object
                 if (Array.isArray(output))
                     return {
-                        ...currentState,
+                        ...state,
                         [S.path]: output
                     }
                 if (S.path in output) {
                     if (Array.isArray(output[S.path]))
                         return {
-                            ...currentState,
+                            ...state,
                             [S.path]: output[S.path]
                         }
-                    return S.advance(currentState, process, output[S.path])
+                    return S.advance(state, process, output[S.path])
                 }
                 if (S.return in output)
                     return {
-                        ...currentState,
+                        ...state,
                         [S.return]: true,
                         [S.kw.RS]: output[S.return],
-                        [S.path]: path
                     }
+
                 // If none of the above, assume it's a state change object
-                currentState = S.applyChanges(currentState, output)
+                currentState = S.applyChanges(state, output)
                 break;
             }
             default:
-                throw new ActionTypeError(`Unknwown output or action type: ${outputType} at [ ${path.join(', ')} ]`)
+                throw new ActionTypeError(`Unknwown output or action type: ${outputType} at [ ${state[S.path].join(', ')} ]`)
         }
         // Increment path unless handling a goto or return
-        const nextPath = S.nextPath(process, path)
-        if (!nextPath)
-            return {
-                ...currentState,
-                [S.path]: path,
-                [S.return]: true,
-            }
-        return {
+        const nextPath = S.nextPath(process, state[S.path])
+        return nextPath ? {
             ...currentState,
             [S.path]: nextPath
+        } : {
+            ...currentState,
+            [S.return]: true,
         }
     }
     static execute(state, process) {
@@ -235,56 +217,43 @@ export default class S {
         const exec = (input = {}, runConfig = defaultRunConfig) => {
             const { until, result, iterations, inputModifier, outputModifier } = deep_merge_object(defaultRunConfig, runConfig)
             const modifiedInput = inputModifier(input) || {}
-            let currentState = S.applyChanges({
-                    ...initialState,
-                    [S.path]: modifiedInput[S.path] || []
-                }, modifiedInput)
+            let currentState = S.applyChanges({ ...initialState, [S.path]: modifiedInput[S.path] || [] }, modifiedInput)
             let r = 0
             while (r < iterations) {
-                if (until(currentState))
-                    break;
-                r++
-                const output = S.execute(currentState, process)
-                currentState = S.advance(currentState, process, output)
+                if (until(currentState)) break;
+                if (++r > iterations)
+                    throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.path].join(', ')} ]`)
+                currentState = S.advance(currentState, process, S.execute(currentState, process))
             }
             return outputModifier(result ? currentState[S.kw.RS] : currentState)
         }
         const execAsync = async (input = {}, runConfig = defaultRunConfig) => {
             const { delay, allow, wait, until, result, iterations, inputModifier, outputModifier } = deep_merge_object(defaultRunConfig, runConfig)
             const modifiedInput = (await inputModifier(input)) || {}
-
-            let currentState = S.applyChanges({
-                ...initialState,
-                [S.path]: modifiedInput[S.path] || []
-            }, modifiedInput)
-            if (delay)
-                await wait_time(delay)
-            let startTime = Date.now()
-            let r = 0
+            let currentState = S.applyChanges({ ...initialState, [S.path]: modifiedInput[S.path] || [] }, modifiedInput)
+            if (delay) await wait_time(delay)
+            let r = 0, startTime = Date.now()
             while (r < iterations) {
-                if (until(currentState))
-                    break;
-                r++
+                if (until(currentState)) break;
+                if (++r > iterations)
+                    throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.path].join(', ')} ]`)
                 const method = get_path_object(process, currentState[S.path])
-                let output;
                 if (S.isParallel(method)) {
-                    const newChanges = await Promise.all(method.map(parallel =>
-                        new S(initialState, parallel, {
-                            ...defaultRunConfig,
-                            result: false, async: true,
-                            inputModifier: ({ [S.path]:_path, [S.changes]: _changes,  ...pureState }) => pureState,
-                            outputModifier: ({ [S.changes]: changes }) => changes,
-                        })(currentState)))
-                    const allChanges = deep_merge_object(currentState[S.changes] || {}, ...newChanges)
-                    currentState = S.applyChanges(currentState, allChanges)
+                    const newChanges = await Promise.all(method.map(parallel => new S(initialState, parallel, {
+                        ...defaultRunConfig,
+                        result: false, async: true,
+                        inputModifier: ({ [S.path]:_path, [S.changes]: _changes,  ...pureState }) => pureState,
+                        outputModifier: ({ [S.changes]: changes }) => changes,
+                    })(currentState)))
+                    currentState = S.advance(currentState, process, deep_merge_object(currentState[S.changes] || {}, ...newChanges))
                 }
-                else output = await S.execute(currentState, process)
-                currentState = S.advance(currentState, process, output)
-
+                else currentState = S.advance(currentState, process, await S.execute(currentState, process))
                 if (allow > 0 && r % 10 === 0) {
                     const nowTime = Date.now()
-                    if (nowTime - startTime >= allow)
+                    if (nowTime - startTime >= allow) {
                         await wait_time(wait)
+                        startTime = Date.now()
+                    }
                 }
             }
             return outputModifier(result ? currentState[S.kw.RS] : currentState)
@@ -326,5 +295,6 @@ export default class S {
         })
     }
 }
+
 export const StateMachine = S
 export const SuperSmallStateMachine = S
