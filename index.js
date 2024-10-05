@@ -20,7 +20,7 @@ const reduce_deep_merge_object = (base, override) => {
 const deep_merge_object = (base, ...overrides) => overrides.reduce(reduce_deep_merge_object, base)
 const wait_time = delay => (delay ? new Promise(resolve => setTimeout(resolve, delay)) : Promise.resolve())
 
-class GoToReferenceError extends ReferenceError {}
+class PathReferenceError extends ReferenceError {}
 class ContextReferenceError extends ReferenceError {}
 class ActionTypeError extends TypeError {}
 class UndefinedActionError extends ReferenceError {}
@@ -28,7 +28,6 @@ class UndefinedActionError extends ReferenceError {}
 export default class S {
     static testCases = () => testCases
     static return = Symbol('Small State Machine Return')
-    static goto = Symbol('Small State Machine Go-To')
     static path = Symbol('Small State Machine Path')
     static kw = {
         IF: 'if',
@@ -39,6 +38,7 @@ export default class S {
         DF: 'default',
         IT: 'initial',
         RS: 'result',
+        PL: 'parallel',
     }
     static keywords = S.kw
     static runConfig = {
@@ -92,6 +92,13 @@ export default class S {
     static isStateMachine(object) {
         return object && typeof object === 'object' && (S.kw.IT in object)
     }
+    static isParallel(object) {
+        return Array.isArray(object) && S.kw.PL in object
+    }
+    static parallel(...list) {
+        list[S.kw.PL] = true
+        return list
+    }
     static lastOf(process, path, condition = () => true) {
         const item = get_path_object(process, path)
         if (condition(item, path, process)) return path
@@ -131,7 +138,7 @@ export default class S {
             case 'symbol':
                 const lastOf = S.lastOf(process, path.slice(0,-1), outputType === 'number' ? Array.isArray : S.isStateMachine)
                 if (!lastOf)
-                    throw new GoToReferenceError(`A relative goto has been provided as a ${outputType} (${output}), but no ${outputType === 'number' ? 'list' : 'state machine'} exists that this ${outputType} could be ${outputType === 'number' ? 'an index': 'a state'} of from path [ ${path.join(', ')} ].`)
+                    throw new PathReferenceError(`A relative goto has been provided as a ${outputType} (${output}), but no ${outputType === 'number' ? 'list' : 'state machine'} exists that this ${outputType} could be ${outputType === 'number' ? 'an index': 'a state'} of from path [ ${path.join(', ')} ].`)
                 return {
                     ...currentState,
                     [S.path]: [...lastOf, output]
@@ -143,13 +150,13 @@ export default class S {
                         ...currentState,
                         [S.path]: output
                     }
-                if (S.goto in output) {
-                    if (Array.isArray(output[S.goto]))
+                if (S.path in output) {
+                    if (Array.isArray(output[S.path]))
                         return {
                             ...currentState,
-                            [S.path]: output[S.goto]
+                            [S.path]: output[S.path]
                         }
-                    return S.advance(currentState, process, path, output[S.goto])
+                    return S.advance(currentState, process, path, output[S.path])
                 }
                 if (S.return in output)
                     return {
@@ -247,7 +254,17 @@ export default class S {
                 if (until(currentState))
                     break;
                 r++
-                const output = await S.execute(currentState, process, currentPath)
+                const method = get_path_object(process, currentPath)
+                let output;
+                if (S.isParallel(method)) {
+                    const { [S.path]:_path, ...pureState } = currentState
+                    const newStates = await Promise.all(method.map(parallel => new S(initialState, parallel, { ...defaultRunConfig, result: false })(pureState)))
+                    currentState = {
+                        ...deep_merge_object(currentState, ...newStates),
+                        [S.path]: currentPath
+                    }
+                }
+                else output = await S.execute(currentState, process, currentPath)
                 currentState = S.advance(currentState, process, currentPath, output)
                 currentPath = currentState[S.path]
                 if (allow > 0 && r % 10 === 0) {
@@ -295,6 +312,5 @@ export default class S {
         })
     }
 }
-
 export const StateMachine = S
 export const SuperSmallStateMachine = S

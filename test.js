@@ -232,9 +232,9 @@ let tests = [
             {
                 description: 'Static Values',
                 tests: [
-                    // Can use goto object as absolute path
+                    // Can use path object as absolute path
                     {
-                        description: 'Can use goto object as absolute path',
+                        description: 'Can use path object as absolute path',
                         expected: 9,
                         initial: {
                             result: 5,
@@ -243,15 +243,15 @@ let tests = [
                             result: 0,
                         },
                         sequence: {
-                            initial: { [S.goto]: ['second',0] },
+                            initial: { [S.path]: ['second',0] },
                             second: [
                                 ({ result }) => ({ result: result + 4 })
                             ]
                         }
                     },
-                    // Can use goto object as relative path
+                    // Can use path object as relative path
                     {
-                        description: 'Can use goto object as relative path',
+                        description: 'Can use path object as relative path',
                         expected: 9,
                         initial: {
                             result: 5,
@@ -260,7 +260,7 @@ let tests = [
                             result: 0,
                         },
                         sequence: {
-                            initial: { [S.goto]: 'second' },
+                            initial: { [S.path]: 'second' },
                             second: [
                                 ({ result }) => ({ result: result + 4 })
                             ]
@@ -383,9 +383,9 @@ let tests = [
                             ]
                         }
                     },
-                    // Can return goto object as absolute path
+                    // Can return path object as absolute path
                     {
-                        description: 'Can return goto object as absolute path',
+                        description: 'Can return path object as absolute path',
                         expected: 9,
                         initial: {
                             result: 5,
@@ -394,15 +394,15 @@ let tests = [
                             result: 0,
                         },
                         sequence: {
-                            initial: () => ({ [S.goto]: ['second',0] }),
+                            initial: () => ({ [S.path]: ['second',0] }),
                             second: [
                                 ({ result }) => ({ result: result + 4 })
                             ]
                         }
                     },
-                    // Can return goto object as relative path
+                    // Can return path object as relative path
                     {
-                        description: 'Can return goto object as relative path',
+                        description: 'Can return path object as relative path',
                         expected: 9,
                         initial: {
                             result: 5,
@@ -411,7 +411,7 @@ let tests = [
                             result: 0,
                         },
                         sequence: {
-                            initial: () => ({ [S.goto]: 'second' }),
+                            initial: () => ({ [S.path]: 'second' }),
                             second: [
                                 ({ result }) => ({ result: result + 4 })
                             ]
@@ -709,7 +709,75 @@ const makeTestAsync = (test) => {
     }
 }
 
-tests = tests.concat([{description: 'Async', tests:tests.map(makeTestAsync)}])
+tests = tests.concat([{description: 'Async', tests:tests.map(makeTestAsync).concat([
+    {
+        description: 'Can perform parallel actions when using async.',
+        async: true,
+        expected: '9_7',
+        defaults: {
+            input: 0,
+            result: []
+        },
+        initial: {
+            input: 10 
+        },
+        sequence: [
+            ({ input }) => ({ input: input - 1 }),
+            S.parallel({
+                if: ({ input }) => input > 5,
+                then: [
+                    ({ result, input }) => ({ result: [...result,input] }),
+                    ({ input }) => ({ input: input - 1 }),
+                ],
+            },
+            {
+                if: ({ input }) => input > 5, 
+                then: [
+                    ({ result, input }) => ({ result: [...result,input] }),
+                    ({ input }) => ({ input: input - 1 }),
+                ],
+            }),
+            {
+                if: ({ input }) => input > 0,
+                then: 0,
+            },
+            ({ result }) => ({ [S.return]: result.join('_') })
+        ],
+    },
+    {
+        description: 'Cannot perform parallel actions when not using async.',
+        expected: '9_8_6',
+        defaults: {
+            input: 0,
+            result: []
+        },
+        initial: {
+            input: 10 
+        },
+        sequence: [
+            ({ input }) => ({ input: input - 1 }),
+            S.parallel({
+                if: ({ input }) => input > 5,
+                then: [
+                    ({ result, input }) => ({ result: [...result,input] }),
+                    ({ input }) => ({ input: input - 1 }),
+                ],
+            },
+            {
+                if: ({ input }) => input > 5, 
+                then: [
+                    ({ result, input }) => ({ result: [...result,input] }),
+                    ({ input }) => ({ input: input - 1 }),
+                ],
+            }),
+            {
+                if: ({ input }) => input > 0,
+                then: 0,
+            },
+            ({ result }) => ({ [S.return]: result.join('_') })
+        ],
+    }
+])}])
 
 // Testing Framework
 const runTest = async (test) => {
