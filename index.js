@@ -88,19 +88,19 @@ export default class S {
         list[S.kw.PL] = true
         return list
     }
-    static lastOf(process, path, condition = () => true) {
+    static lastOf(process = null, path = [], condition = () => true) {
         const item = get_path_object(process, path)
         if (condition(item, path, process)) return path
         if (path.length === 0) return null
         return S.lastOf(process, path.slice(0,-1), condition)
     }
-    static lastArray(process, path) {
+    static lastArray(process = null, path = []) {
         return S.lastOf(process, path, Array.isArray)
     }
-    static lastMachine(process, path) {
+    static lastMachine(process = null, path = []) {
         return S.lastOf(process, path, S.isStateMachine)
     }
-    static nextPath(process, path) {
+    static nextPath(process = null, path = []) {
         if (path.length === 0) return null
         const parPath = S.lastArray(process, path.slice(0,-1))
         if (!parPath) return null
@@ -110,12 +110,13 @@ export default class S {
             return [ ...parPath, childItem+1 ]
         return S.nextPath(process, parPath)
     }
-    static advance(state, process, output) {
+    static advance(state = {}, process = null, output = null) {
+        const path = state[S.path] || []
         if (output === S.return)
             return {
                 ...state,
                 [S.return]: true,
-                [S.path]: state[S.path]
+                [S.path]: path
             }
         let currentState = state
         const outputType = typeof output
@@ -124,9 +125,9 @@ export default class S {
             case 'number':
             case 'string':
             case 'symbol':
-                const lastOf = S.lastOf(process, state[S.path].slice(0,-1), outputType === 'number' ? Array.isArray : S.isStateMachine)
+                const lastOf = S.lastOf(process, path.slice(0,-1), outputType === 'number' ? Array.isArray : S.isStateMachine)
                 if (!lastOf)
-                    throw new PathReferenceError(`A relative goto has been provided as a ${outputType} (${output}), but no ${outputType === 'number' ? 'list' : 'state machine'} exists that this ${outputType} could be ${outputType === 'number' ? 'an index': 'a state'} of from path [ ${state[S.path].join(', ')} ].`)
+                    throw new PathReferenceError(`A relative goto has been provided as a ${outputType} (${output}), but no ${outputType === 'number' ? 'list' : 'state machine'} exists that this ${outputType} could be ${outputType === 'number' ? 'an index': 'a state'} of from path [ ${path.join(', ')} ].`)
                 return {
                     ...state,
                     [S.path]: [...lastOf, output]
@@ -158,10 +159,10 @@ export default class S {
                 break;
             }
             default:
-                throw new ActionTypeError(`Unknwown output or action type: ${outputType} at [ ${state[S.path].join(', ')} ]`)
+                throw new ActionTypeError(`Unknwown output or action type: ${outputType} at [ ${path.join(', ')} ]`)
         }
         // Increment path unless handling a goto or return
-        const nextPath = S.nextPath(process, state[S.path])
+        const nextPath = S.nextPath(process, path)
         return nextPath ? {
             ...currentState,
             [S.path]: nextPath
@@ -170,7 +171,7 @@ export default class S {
             [S.return]: true,
         }
     }
-    static execute(state, process) {
+    static execute(state = {}, process = null) {
         const path = state[S.path] || []
         const method = get_path_object(process, path)
         if (method === undefined)
@@ -198,7 +199,7 @@ export default class S {
         }
         return method
     }
-    static applyChanges(state, changes) {
+    static applyChanges(state = {}, changes = {}) {
         const invalidChanges = Object.entries(changes).find(([name]) => !(name in state))
         if (invalidChanges)
             throw new ContextReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed '${invalidChanges[0]}', which is not one of: ${Object.keys(state).join(', ')}`)
@@ -209,7 +210,7 @@ export default class S {
             [S.changes]: allChanges
         }
     }
-    constructor(state = {}, process, runConfig = S.runConfig) {
+    constructor(state = {}, process = null, runConfig = S.runConfig) {
         const defaultRunConfig = deep_merge_object(S.runConfig, runConfig)
         const initialState = deep_merge_object({
             [S.kw.RS]: null
@@ -295,6 +296,5 @@ export default class S {
         })
     }
 }
-
 export const StateMachine = S
 export const SuperSmallStateMachine = S
