@@ -1,5 +1,6 @@
 import S from "./index.js"
 
+const testSymbol = Symbol('Test Symbol')
 let tests = [
     // # Requirements
     {
@@ -289,6 +290,29 @@ let tests = [
                             ]
                         }
                     },
+                    // Can use symbol as relative path
+                    {
+                        description: 'Can use symbol as relative path',
+                        expected: 7,
+                        initial: {
+                            result: 0,
+                        },
+                        defaults: {
+                            result: 9,
+                        },
+                        sequence: {
+                            initial: [
+                                ({ result }) => ({ result: result + 1 }),
+                                testSymbol
+                            ],
+                            [testSymbol]: [
+                                {
+                                    if: ({ result }) => result < 7,
+                                    then: 'initial'
+                                }
+                            ]
+                        }
+                    },
                     // Can use number as relative path
                     {
                         description: 'Can use number as relative path',
@@ -433,6 +457,29 @@ let tests = [
                                 () => 'final'
                             ],
                             final: [
+                                {
+                                    if: ({ result }) => result < 7,
+                                    then: () => 'initial'
+                                }
+                            ]
+                        }
+                    },
+                    // Can return symbol as relative path
+                    {
+                        description: 'Can return symbol as relative path',
+                        expected: 7,
+                        initial: {
+                            result: 0,
+                        },
+                        defaults: {
+                            result: 9,
+                        },
+                        sequence: {
+                            initial: [
+                                ({ result }) => ({ result: result + 1 }),
+                                () => testSymbol
+                            ],
+                            [testSymbol]: [
                                 {
                                     if: ({ result }) => result < 7,
                                     then: () => 'initial'
@@ -700,6 +747,14 @@ const makeTestAsync = (test) => {
         if (typeof node === 'function')
             return makeAsync(node)
         return node
+    }, obj => {
+        if (testSymbol in obj && typeof obj[testSymbol] === 'function') {
+            return {
+                ...obj,
+                [testSymbol]: makeAsync(obj[testSymbol])
+            }
+        }
+        return obj
     })(test.sequence)
 
     return {

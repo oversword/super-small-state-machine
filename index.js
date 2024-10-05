@@ -57,22 +57,29 @@ export default class S {
     }
     static traverse = (iterator = a => a, post = b => b) => {
         const iterate = process => {
-            if (Array.isArray(process))
-                return process.map(action => iterate(action))
+            if (Array.isArray(process)) {
+                const ret = process.map(action => iterate(action))
+                return S.isParallel(process) ? S.parallel(ret) : ret
+            }
             if (process && (typeof process) === 'object') {
                 if (S.kw.IF in process)
                     return post({
+                        ...process,
                         [S.kw.IF]: process[S.kw.IF],
                         ...(S.kw.TN in process ? { [S.kw.TN]: iterate(process[S.kw.TN]) } : {}),
                         ...(S.kw.EL in process ? { [S.kw.EL]: iterate(process[S.kw.EL]) } : {})
                     })
                 if (S.kw.SW in process)
                     return post({
+                        ...process,
                         [S.kw.SW]: process[S.kw.SW],
                         [S.kw.CS]: Object.fromEntries(Object.entries(process[S.kw.CS]).map(([key, method]) => [ key, iterate(method) ])),
                     })
                 if (S.kw.IT in process)
-                    return post(Object.fromEntries(Object.entries(process).map(([key, method]) => [ key, iterate(method) ])))
+                    return post({
+                        ...process,
+                        ...Object.fromEntries(Object.entries(process).map(([key, method]) => [ key, iterate(method) ]))
+                    })
             }
             return iterator(process)
         }
@@ -106,8 +113,7 @@ export default class S {
         if (!parPath) return null
         const parActs = get_path_object(process, parPath)
         const childItem = path[parPath.length]
-        if (childItem+1 < parActs.length)
-            return [ ...parPath, childItem+1 ]
+        if (childItem+1 < parActs.length) return [ ...parPath, childItem+1 ]
         return S.nextPath(process, parPath)
     }
     static advance(state = {}, process = null, output = null) {
@@ -153,7 +159,6 @@ export default class S {
                         [S.return]: true,
                         [S.kw.RS]: output[S.return],
                     }
-
                 // If none of the above, assume it's a state change object
                 currentState = S.applyChanges(state, output)
                 break;
@@ -200,10 +205,9 @@ export default class S {
         return method
     }
     static applyChanges(state = {}, changes = {}) {
-        const invalidChanges = Object.entries(changes).find(([name]) => !(name in state))
-        if (invalidChanges)
-            throw new ContextReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed '${invalidChanges[0]}', which is not one of: ${Object.keys(state).join(', ')}`)
-        const allChanges =  deep_merge_object(state[S.changes] || {}, changes)
+        if (Object.entries(changes).some(([name]) => !(name in state)))
+            throw new ContextReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).join(', ')} ]`)
+        const allChanges = deep_merge_object(state[S.changes] || {}, changes)
         return {
             ...deep_merge_object(state, allChanges),
             [S.path]: state[S.path],
@@ -218,8 +222,7 @@ export default class S {
         const exec = (input = {}, runConfig = defaultRunConfig) => {
             const { until, result, iterations, inputModifier, outputModifier } = deep_merge_object(defaultRunConfig, runConfig)
             const modifiedInput = inputModifier(input) || {}
-            let currentState = S.applyChanges({ ...initialState, [S.path]: modifiedInput[S.path] || [] }, modifiedInput)
-            let r = 0
+            let r = 0, currentState = S.applyChanges({ ...initialState, [S.path]: modifiedInput[S.path] || [] }, modifiedInput)
             while (r < iterations) {
                 if (until(currentState)) break;
                 if (++r > iterations)
@@ -231,9 +234,8 @@ export default class S {
         const execAsync = async (input = {}, runConfig = defaultRunConfig) => {
             const { delay, allow, wait, until, result, iterations, inputModifier, outputModifier } = deep_merge_object(defaultRunConfig, runConfig)
             const modifiedInput = (await inputModifier(input)) || {}
-            let currentState = S.applyChanges({ ...initialState, [S.path]: modifiedInput[S.path] || [] }, modifiedInput)
             if (delay) await wait_time(delay)
-            let r = 0, startTime = Date.now()
+            let r = 0, startTime = Date.now(), currentState = S.applyChanges({ ...initialState, [S.path]: modifiedInput[S.path] || [] }, modifiedInput)
             while (r < iterations) {
                 if (until(currentState)) break;
                 if (++r > iterations)
@@ -296,5 +298,6 @@ export default class S {
         })
     }
 }
+
 export const StateMachine = S
 export const SuperSmallStateMachine = S
