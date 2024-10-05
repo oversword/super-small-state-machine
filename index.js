@@ -28,6 +28,7 @@ class UndefinedActionError extends ReferenceError {}
 export default class S {
     static testCases = () => testCases
     static return = Symbol('Small State Machine Return')
+    static changes = Symbol('Small State Machine Changes')
     static path = Symbol('Small State Machine Path')
     static kw = {
         IF: 'if',
@@ -93,7 +94,7 @@ export default class S {
         return object && typeof object === 'object' && (S.kw.IT in object)
     }
     static isParallel(object) {
-        return Array.isArray(object) && S.kw.PL in object
+        return Array.isArray(object) && (S.kw.PL in object)
     }
     static parallel(...list) {
         list[S.kw.PL] = true
@@ -216,7 +217,12 @@ export default class S {
         const invalidChanges = Object.entries(changes).find(([name]) => !(name in state))
         if (invalidChanges)
             throw new ContextReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed '${invalidChanges[0]}', which is not one of: ${Object.keys(state).join(', ')}`)
-        return deep_merge_object(state, changes)
+        const allChanges =  deep_merge_object(state[S.changes] || {}, changes)
+        return {
+            ...deep_merge_object(state, allChanges),
+            [S.path]: state[S.path],
+            [S.changes]: allChanges
+        }
     }
     constructor(state = {}, process, runConfig = S.runConfig) {
         const defaultRunConfig = deep_merge_object(S.runConfig, runConfig)
@@ -257,12 +263,15 @@ export default class S {
                 const method = get_path_object(process, currentPath)
                 let output;
                 if (S.isParallel(method)) {
-                    const { [S.path]:_path, ...pureState } = currentState
-                    const newStates = await Promise.all(method.map(parallel => new S(initialState, parallel, { ...defaultRunConfig, result: false })(pureState)))
-                    currentState = {
-                        ...deep_merge_object(currentState, ...newStates),
-                        [S.path]: currentPath
-                    }
+                    const newChanges = await Promise.all(method.map(parallel =>
+                        new S(initialState, parallel, {
+                            ...defaultRunConfig,
+                            result: false, async: true,
+                            inputModifier: ({ [S.path]:_path, [S.changes]: _changes,  ...pureState }) => pureState,
+                            outputModifier: ({ [S.changes]: changes }) => changes,
+                        })(currentState)))
+                    const allChanges = deep_merge_object(currentState[S.changes] || {}, ...newChanges)
+                    currentState = S.applyChanges(currentState, allChanges)
                 }
                 else output = await S.execute(currentState, process, currentPath)
                 currentState = S.advance(currentState, process, currentPath, output)
