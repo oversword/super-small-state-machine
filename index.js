@@ -20,10 +20,10 @@ const reduce_deep_merge_object = (base, override) => {
 const deep_merge_object = (base, ...overrides) => overrides.reduce(reduce_deep_merge_object, base)
 const wait_time = delay => (delay ? new Promise(resolve => setTimeout(resolve, delay)) : Promise.resolve())
 
-class PathReferenceError extends ReferenceError {}
-class ContextReferenceError extends ReferenceError {}
-class ActionTypeError extends TypeError {}
-class UndefinedActionError extends ReferenceError {}
+export class PathReferenceError extends ReferenceError {}
+export class ContextReferenceError extends ReferenceError {}
+export class ActionTypeError extends TypeError {}
+export class UndefinedActionError extends ReferenceError {}
 
 export default class S {
     static testCases = () => testCases
@@ -122,7 +122,9 @@ export default class S {
             return [ ...parPath, childItem+1 ]
         return S.nextPath(process, parPath)
     }
-    static advance(state, process, path, output) {
+    // TODO: just use state[S.path] instead of passing around path?
+    static advance(state, process, output) {
+        const path = state[S.path]
         if (output === S.return)
             return {
                 ...state,
@@ -157,7 +159,7 @@ export default class S {
                             ...currentState,
                             [S.path]: output[S.path]
                         }
-                    return S.advance(currentState, process, path, output[S.path])
+                    return S.advance(currentState, process, output[S.path])
                 }
                 if (S.return in output)
                     return {
@@ -186,7 +188,8 @@ export default class S {
             [S.path]: nextPath
         }
     }
-    static execute(state, process, path) {
+    static execute(state, process) {
+        const path = state[S.path] || []
         const method = get_path_object(process, path)
         if (method === undefined)
             throw new UndefinedActionError(`There is nothing to execute at path [ ${path.join(', ')} ]`)
@@ -232,26 +235,28 @@ export default class S {
         const exec = (input = {}, runConfig = defaultRunConfig) => {
             const { until, result, iterations, inputModifier, outputModifier } = deep_merge_object(defaultRunConfig, runConfig)
             const modifiedInput = inputModifier(input) || {}
-            const { [S.path]: path = [], ...pureInput } = modifiedInput
-            let currentPath = path
-            let currentState = S.applyChanges(initialState, pureInput)
+            let currentState = S.applyChanges({
+                    ...initialState,
+                    [S.path]: modifiedInput[S.path] || []
+                }, modifiedInput)
             let r = 0
             while (r < iterations) {
                 if (until(currentState))
                     break;
                 r++
-                const output = S.execute(currentState, process, currentPath)
-                currentState = S.advance(currentState, process, currentPath, output)
-                currentPath = currentState[S.path]
+                const output = S.execute(currentState, process)
+                currentState = S.advance(currentState, process, output)
             }
             return outputModifier(result ? currentState[S.kw.RS] : currentState)
         }
         const execAsync = async (input = {}, runConfig = defaultRunConfig) => {
             const { delay, allow, wait, until, result, iterations, inputModifier, outputModifier } = deep_merge_object(defaultRunConfig, runConfig)
             const modifiedInput = (await inputModifier(input)) || {}
-            const { [S.path]: path = [], ...pureInput } = modifiedInput
-            let currentPath = path
-            let currentState = S.applyChanges(initialState, pureInput)
+
+            let currentState = S.applyChanges({
+                ...initialState,
+                [S.path]: modifiedInput[S.path] || []
+            }, modifiedInput)
             if (delay)
                 await wait_time(delay)
             let startTime = Date.now()
@@ -260,7 +265,7 @@ export default class S {
                 if (until(currentState))
                     break;
                 r++
-                const method = get_path_object(process, currentPath)
+                const method = get_path_object(process, currentState[S.path])
                 let output;
                 if (S.isParallel(method)) {
                     const newChanges = await Promise.all(method.map(parallel =>
@@ -273,9 +278,9 @@ export default class S {
                     const allChanges = deep_merge_object(currentState[S.changes] || {}, ...newChanges)
                     currentState = S.applyChanges(currentState, allChanges)
                 }
-                else output = await S.execute(currentState, process, currentPath)
-                currentState = S.advance(currentState, process, currentPath, output)
-                currentPath = currentState[S.path]
+                else output = await S.execute(currentState, process)
+                currentState = S.advance(currentState, process, output)
+
                 if (allow > 0 && r % 10 === 0) {
                     const nowTime = Date.now()
                     if (nowTime - startTime >= allow)
