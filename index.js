@@ -5,11 +5,12 @@ const clone_object = (obj) => {
     return Object.fromEntries(Object.entries(obj).map(([key,value]) => [ key, clone_object(value) ]));
 }
 const unique_list_strings = (list, getId = item => item) => Object.values(Object.fromEntries(list.map(item=>[getId(item),item])));
-const reduce_get_path_object = (obj, step) => obj[step]
+const reduce_get_path_object = (obj, step) => obj ? obj[step] : undefined
 const get_path_object = (object, path) => path.reduce(reduce_get_path_object, object)
 const normalise_function = functOrReturn => (typeof functOrReturn === 'function') ? functOrReturn : () => functOrReturn
 const reduce_deep_merge_object = (base, override) => {
-    if (!((base && typeof base === 'object') && !Array.isArray(base) && (override && typeof override === 'object') && !Array.isArray(override)))
+    if (!((base && typeof base === 'object') && !Array.isArray(base)
+    && (override && typeof override === 'object') && !Array.isArray(override)))
         return override;
     const allKeys = unique_list_strings(Object.keys(base).concat(Object.keys(override)));
     return Object.fromEntries(allKeys.map(key => [
@@ -22,8 +23,10 @@ const wait_time = delay => (delay ? new Promise(resolve => setTimeout(resolve, d
 class GoToReferenceError extends ReferenceError {}
 class ContextReferenceError extends ReferenceError {}
 class ActionTypeError extends TypeError {}
+class UndefinedActionError extends ReferenceError {}
 
 export default class S {
+    static testCases = () => testCases
     static return = Symbol('Small State Machine Return')
     static goto = Symbol('Small State Machine Go-To')
     static path = Symbol('Small State Machine Path')
@@ -45,72 +48,71 @@ export default class S {
         inputModifier: a => a,
         outputModifier: a => a,
         async: false,
+        // Special settings for async
         delay: 0,
         allow: 1000,
         wait: 0,
     }
     static traverse = (iterator = a => a, post = b => b) => {
-        const iterate = sequence => {
-            if (Array.isArray(sequence))
-                return sequence.map(action => iterate(action))
-            if (sequence && (typeof sequence) === 'object') {
-                if (S.kw.IF in sequence) {
+        const iterate = process => {
+            if (Array.isArray(process))
+                return process.map(action => iterate(action))
+            if (process && (typeof process) === 'object') {
+                if (S.kw.IF in process) {
                     return post({
-                        [S.kw.IF]: sequence[S.kw.IF],
-                        ...(S.kw.TN in sequence ? {
-                            [S.kw.TN]: iterate(sequence[S.kw.TN])
+                        [S.kw.IF]: process[S.kw.IF],
+                        ...(S.kw.TN in process ? {
+                            [S.kw.TN]: iterate(process[S.kw.TN])
                         } : {}),
-                        ...(S.kw.EL in sequence ? {
-                            [S.kw.EL]: iterate(sequence[S.kw.EL])
+                        ...(S.kw.EL in process ? {
+                            [S.kw.EL]: iterate(process[S.kw.EL])
                         } : {})
                     })
-                } else if (S.kw.SW in sequence) {
-                    const cases = Object.fromEntries(Object.entries(sequence[S.kw.CS]).map(([key, method]) => [
+                } else if (S.kw.SW in process) {
+                    const cases = Object.fromEntries(Object.entries(process[S.kw.CS]).map(([key, method]) => [
                         key,
                         iterate(method)
                     ]))
                     return post({
-                        [S.kw.SW]: sequence.switch,
+                        [S.kw.SW]: process.switch,
                         [S.kw.CS]: cases,
                     })
-                } else if (S.kw.IT in sequence) {
-                    const stages = Object.fromEntries(Object.entries(sequence).map(([key, method]) => [
+                } else if (S.kw.IT in process) {
+                    const stages = Object.fromEntries(Object.entries(process).map(([key, method]) => [
                         key,
                         iterate(method)
                     ]))
                     return post(stages)
                 }
             }
-            return iterator(sequence)
+            return iterator(process)
         }
         return iterate
     }
-    static lastArray(sequence, path) {
-        const item = get_path_object(sequence, path)
-        if (Array.isArray(item)) return path
-        if (path.length === 0) return null
-        return S.lastArray(sequence, path.slice(0,-1))
+    static isStateMachine(object) {
+        return object && typeof object === 'object' && (S.kw.IT in object)
     }
-    static lastMachine(sequence, path) {
-        const item = get_path_object(sequence, path)
-        if (item && typeof item === 'object' && (S.kw.IT in item)) return path
+    static lastOf(process, path, condition = () => true) {
+        const item = get_path_object(process, path)
+        if (condition(item, path, process)) return path
         if (path.length === 0) return null
-        return S.lastMachine(sequence, path.slice(0,-1))
+        return S.lastOf(process, path.slice(0,-1), condition)
     }
-    static nextPath(sequence, path) {
-        const childItem = path[path.length-1]
-        const parentPath = path.slice(0,-1)
-        const parActs = get_path_object(sequence, parentPath)
-        const acts = get_path_object(sequence, path)
-        if (Array.isArray(acts) && acts.length !== 0)
-            return [ ...path, 0 ]
-        if (Array.isArray(parActs) && childItem+1 < parActs.length)
-            return [ ...parentPath, childItem+1 ]
-        if (parentPath.length === 0)
-            return null
-        // TODO: use lastArray instead
-        const lastNumber = parentPath.findLastIndex(p => typeof p === 'number')
-        return parentPath.slice(0, lastNumber).concat([parentPath[lastNumber]+1])
+    static lastArray(process, path) {
+        return S.lastOf(process, path, Array.isArray)
+    }
+    static lastMachine(process, path) {
+        return S.lastOf(process, path, S.isStateMachine)
+    }
+    static nextPath(process, path) {
+        if (path.length === 0) return null
+        const parPath = S.lastArray(process, path.slice(0,-1))
+        if (!parPath) return null
+        const parActs = get_path_object(process, parPath)
+        const childItem = path[parPath.length]
+        if (childItem+1 < parActs.length)
+            return [ ...parPath, childItem+1 ]
+        return S.nextPath(process, parPath)
     }
     static advance(state, process, path, output) {
         if (output === S.return)
@@ -120,27 +122,22 @@ export default class S {
                 [S.path]: path
             }
         let currentState = state
-        switch (typeof output) {
+        const outputType = typeof output
+        switch (outputType) {
             case 'undefined':
                 break;
             case 'number':
-                const lastArray = S.lastArray(process, path.slice(0,-1))
-                if (!lastArray)
-                    throw new GoToReferenceError(`A relative goto has been provided as a number (${output}), but no list exists that this number could be an index of.`)
-                return {
-                    ...currentState,
-                    [S.path]: [...lastArray, output]
-                }
             case 'string':
-                const lastMachine = S.lastMachine(process, path.slice(0,-1))
-                if (!lastMachine)
-                    throw new GoToReferenceError(`A relative goto has been provided as a string (${output}), but no state machine exists that this string could be a state of.`)
+            case 'symbol':
+                const lastOf = S.lastOf(process, path.slice(0,-1), outputType === 'number' ? Array.isArray : S.isStateMachine)
+                if (!lastOf)
+                    throw new GoToReferenceError(`A relative goto has been provided as a ${outputType} (${output}), but no ${outputType === 'number' ? 'list' : 'state machine'} exists that this ${outputType} could be ${outputType === 'number' ? 'an index': 'a state'} of from path [ ${path.join(', ')} ].`)
                 return {
                     ...currentState,
-                    [S.path]: [...lastMachine, output]
+                    [S.path]: [...lastOf, output]
                 }
             case 'object': {
-                if (!output) break;
+                if (!output) break; // Handle null being an object
                 if (Array.isArray(output))
                     return {
                         ...currentState,
@@ -161,15 +158,16 @@ export default class S {
                         [S.kw.RS]: output[S.return],
                         [S.path]: path
                     }
-                // If none of the above, assume it is an assign object
+                // If none of the above, assume it's a state change object
                 currentState = S.applyChanges(currentState, output)
                 break;
             }
             default:
-                throw new ActionTypeError(`Unknwown output or action type: ${typeof output} at [ ${path.join(', ')} ]`)
+                throw new ActionTypeError(`Unknwown output or action type: ${outputType} at [ ${path.join(', ')} ]`)
         }
+        // Increment path unless handling a goto or return
         const nextPath = S.nextPath(process, path)
-        if (! nextPath)
+        if (!nextPath)
             return {
                 ...currentState,
                 [S.path]: path,
@@ -182,28 +180,27 @@ export default class S {
     }
     static execute(state, process, path) {
         const method = get_path_object(process, path)
-        const methodType = typeof method
-        switch (methodType) {
-            case 'function': {
+        if (method === undefined)
+            throw new UndefinedActionError(`There is nothing to execute at path [ ${path.join(', ')} ]`)
+        switch (typeof method) {
+            case 'function':
                 return method(state)
-            }
             case 'object': {
-                if (!method) break;
+                if (!method) break; // Handle null being an object
                 if (Array.isArray(method))
-                    return [...path,0]
+                    return method.length ? [...path,0] : null
                 if (S.kw.IF in method) {
                     if (normalise_function(method[S.kw.IF])(state))
-                        return [...path,S.kw.TN]
-                    else return [...path,S.kw.EL]
+                        return S.kw.TN in method ? [...path,S.kw.TN] : null
+                    else return S.kw.EL in method ? [...path,S.kw.EL] : null
                 }
                 if (S.kw.SW in method) {
                     const key = normalise_function(method[S.kw.SW])(state)
                     const fallbackKey = key in (method[S.kw.CS]) ? key : S.kw.DF
-                    return [...path,S.kw.CS,fallbackKey]
+                    return fallbackKey in method[S.kw.CS] ? [...path,S.kw.CS,fallbackKey] : null
                 }
-                if (S.kw.IT in method) {
+                if (S.kw.IT in method)
                     return [...path,S.kw.IT]
-                }
             }
         }
         return method
@@ -261,6 +258,7 @@ export default class S {
             }
             return outputModifier(result ? currentState[S.kw.RS] : currentState)
         }
+        // Allows the "instance" to be used as an executable while also being extendable via properties
         return new Proxy(S, {
             apply(target, thisArg, argumentsList) {
                 return defaultRunConfig.async ? execAsync(...argumentsList) : exec(...argumentsList)
@@ -297,4 +295,6 @@ export default class S {
         })
     }
 }
+
+export const StateMachine = S
 export const SuperSmallStateMachine = S

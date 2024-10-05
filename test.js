@@ -1,7 +1,5 @@
 import S from "./index.js"
-const wait_time = delay => (delay ? new Promise(resolve => setTimeout(resolve, delay)) : Promise.resolve())
 
-console.group('Tests')
 let tests = [
     // # Requirements
     {
@@ -682,10 +680,15 @@ let tests = [
         ]
     }
 ]
+
+// Duplicate tests making every action async
+const wait_time = delay => (delay ? new Promise(resolve => setTimeout(resolve, delay)) : Promise.resolve())
+
 const makeAsync = method => async (...a) => {
-    await wait_time(10)
+    await wait_time(20)
     return method(...a)
 }
+
 const makeTestAsync = (test) => {
     if ('tests' in test) {
         return {
@@ -708,38 +711,77 @@ const makeTestAsync = (test) => {
 
 tests = tests.concat([{description: 'Async', tests:tests.map(makeTestAsync)}])
 
-//TODO: test async 
-const runTest = async (last, test) => {
-    const failed = await last
+// Testing Framework
+const runTest = async (test) => {
     if ('tests' in test) {
-        console.group(test.description)
-        const res = await test.tests.map(childTest => ({
+        const res = (await Promise.all(test.tests.map(childTest => ({
             ...childTest,
             path: (test.path || []).concat([test.description])
-        })).reduce(runTest, Promise.resolve([]))
-        if (res.length)
-            console.log(`Failed ${res.length}/${test.tests.length}`)
-        console.groupEnd()
-        return [...failed,...res]
+        })).map(runTest)))
+        return {
+            ...test,
+            result: res
+        }
     }
-    const testMachine = new S(test.defaults, test.sequence)
-    const runner  = test.async ? testMachine.async : testMachine.sync
-    const result = await runner(test.initial)
+    let result;
+    if ('method' in test) {
+        result = await test.method(test.initial)
+    } else {
+        const testMachine = new S(test.defaults, test.sequence, { iterations: 1000 })
+        const runner  = test.async ? testMachine.async : testMachine.sync
+        result = await runner(test.initial)
+    }
     if (result === test.expected) {
+        return ({ ...test, success: true })
+    } else {
+        return ({...test, result })
+    }
+}
+
+const printFailure = test => {
+    if ('tests' in test) {
+        console.group(test.description)
+        test.result.filter(filterFailures).forEach(printFailure)
+        console.groupEnd()
+        return
+    }
+    console.log(`Failed: ${test.description}. Expected ${test.expected}, got ${test.result}`)
+}
+
+const printResult = test => {
+    if ('tests' in test) {
+        console.group(test.description)
+        test.result.forEach(printResult)
+        const failures = test.result.filter(filterFailures)
+        if (failures.length)
+            console.log(`Failed ${failures.length}/${test.tests.length}`)
+        console.groupEnd()
+        return;
+    }
+    if (test.success) {
         console.log(test.description)
     } else {
-        console.log(`FAILED: ${test.description}. Got ${result}, expected ${test.expected}`)
-        failed.push({...test, result, path: test.path })
+        console.log(`FAILED: ${test.description}. Got ${test.result}, expected ${test.expected}`)
     }
-    return failed
 }
-const failed = await tests.reduce(runTest, Promise.resolve([]))
+
+const filterFailures = test => {
+    if ('tests' in test) {
+        const sub = test.result.filter(filterFailures)
+        return sub.length
+    }
+    return !test.success
+}
+
+// Run Tests
+console.group('Tests')
+const results = await Promise.all(tests.map(runTest))
+results.forEach(printResult)
+const failed = results.filter(filterFailures)
+
 if (failed.length) {
     console.group('FAILED')
-    console.error(`${failed.length} tests failed:`)
-    failed.forEach(test => {
-        console.log(`Failed: ${test.path.concat([test.description]).join('/')}. Got ${test.result}, expected ${test.expected}`)
-    })
+    failed.forEach(printFailure)
     console.groupEnd()
 }
 
