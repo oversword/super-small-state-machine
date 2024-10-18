@@ -1,4 +1,4 @@
-import { _changes, _path, _return, _strict, _strictTypes, Action, ArraySequence, Conditional, InitialState, InputState, Keywords, NodeType, NodeTypes, Output, Parallel, PartialPick, Path, RunConfig, Sequence, State, StateMachine, StateMachineClass, SwitchConditional, TransformerContext } from "./types";
+import {  Action, ActionTypeError, ArraySequence, Conditional, ContextReferenceError, ContextTypeError, InitialState, InputState, MaxIterationsError, NodeType, Output, Parallel, Path, PathReferenceError, RunConfig, Sequence, State, StateMachine, StateMachineClass, SwitchConditional, TransformerContext, UndefinedActionError, RelativeGOTOUnit } from "./types";
 
 export const clone_object = <T extends unknown = unknown>(obj: T): T => {
 	if (Array.isArray(obj)) return obj.map(clone_object) as T
@@ -7,7 +7,7 @@ export const clone_object = <T extends unknown = unknown>(obj: T): T => {
 	return Object.fromEntries(Object.entries(obj).map(([key,value]) => [ key, clone_object(value) ])) as T;
 }
 export const unique_list_strings = <T extends unknown = unknown>(list: Array<T>, getId: ((item: T) => string) = item => item as string): Array<T> => Object.values(Object.fromEntries(list.map(item=>[getId(item),item])));
-const reduce_get_path_object = <T extends unknown = unknown, O extends unknown = unknown>(obj: T | O | undefined, step: string | number): T | undefined => obj ? obj[step] : undefined
+const reduce_get_path_object = <T extends unknown = unknown, O extends unknown = unknown>(obj: T | O | undefined, step: RelativeGOTOUnit): T | undefined => obj ? obj[step] : undefined
 export const get_path_object = <T extends unknown = unknown, O extends unknown = unknown>(object: O, path: Path): undefined | T => (path.reduce(reduce_get_path_object<T,O>, object) as (T | undefined))
 export const normalise_function = (functOrReturn: Function | unknown): Function => (typeof functOrReturn === 'function') ? functOrReturn : () => functOrReturn
 const reduce_deep_merge_object = <T extends unknown = unknown>(base: T, override: unknown): T => {
@@ -22,22 +22,8 @@ const reduce_deep_merge_object = <T extends unknown = unknown>(base: T, override
 export const deep_merge_object = <T extends unknown = unknown>(base: T, ...overrides: Array<unknown>): T => overrides.reduce(reduce_deep_merge_object<T>, base)
 export const wait_time = (delay: number): Promise<void> => (delay ? new Promise(resolve => setTimeout(resolve, delay)) : Promise.resolve())
 
-export class PathReferenceError extends ReferenceError {}
-export class ContextReferenceError extends ReferenceError {}
-export class ContextTypeError extends TypeError {}
-export class ActionTypeError extends TypeError {}
-export class UndefinedActionError extends ReferenceError {}
-export class MaxIterationsError extends Error {}
 
-export default class S extends StateMachineClass {
-	static return      = _return
-	static changes     = _changes
-	static path        = _path
-	static strict      = _strict
-	static strictTypes = _strictTypes
-
-	static kw = Keywords
-	static keywords = S.kw
+export default class S extends StateMachineClass implements StateMachineClass {
 	static runConfig: RunConfig = {
 		iterations: 10000,
 		result: true,
@@ -52,10 +38,6 @@ export default class S extends StateMachineClass {
 		allow: 1000,
 		wait: 0,
 	}
-
-	// Types:
-	static nodeTypes = NodeTypes
-	static types = S.nodeTypes
 	static isNode(object: unknown, objectType: (typeof object) = typeof object): false | NodeType['name'] {
 		if (object === S.return)
 			return S.types.RT
@@ -98,6 +80,9 @@ export default class S extends StateMachineClass {
 		}
 		return false
 	}
+
+	// protected static additionalNodetypes: Record<NodeType['name'], NodeType>
+	// protected static additionalNodetypesList: Array<NodeType>
 	static #additionalNodetypes: Record<NodeType['name'], NodeType> = {}
 	static #additionalNodetypesList: Array<NodeType> = []
 	static addNode(name: NodeType['name'], { execute = null, isNode = null, advance = null, nextPath = null, advance2 = null }: Partial<Pick<NodeType, 'execute' | 'nextPath' | 'isNode' | 'advance'| 'advance2'>>): void {
@@ -147,7 +132,7 @@ export default class S extends StateMachineClass {
 	static lastStateMachine(process: Sequence = null, path: Path = []): Path | null {
 		return S.lastNode(process, path, S.types.SM)
 	}
-	static nextPath(state: State = ({} as State), process: Sequence = null, path: Path = state[_path] || []): Path | null {
+	static nextPath(state: State = ({} as State), process: Sequence = null, path: Path = state[S.path] || []): Path | null {
 		if (path.length === 0) return null
 		const parPath = S.lastNode(process, path.slice(0,-1), this.#additionalNodetypesList.filter(({ advance }) => advance).map(({ name }) => name))
 		if (!parPath) return null
@@ -160,7 +145,7 @@ export default class S extends StateMachineClass {
 		return S.nextPath(state, process, parPath)
 	}
 	static advance(state: State = ({} as State), process: Sequence = null, output: Output = null): State {
-		const path = state[_path] || []
+		const path = state[S.path] || []
 		let currentState = state
 		const nodeType = S.isNode(output)
 		switch (nodeType) {
@@ -180,14 +165,14 @@ export default class S extends StateMachineClass {
 			case S.types.SQ: // Arrays are absolute paths when used as output
 				return {
 					...state,
-					[S.path]: output
+					[S.path]: output as Path
 				}
 			case S.types.RT:
 				return {
 					...state,
 					[S.return]: true,
 					[S.path]: path,
-					...(!output || output === _return ? {} : { [S.kw.RS]: output[_return] })
+					...(!output || output === S.return ? {} : { [S.kw.RS]: output[S.return] })
 				}
 			case S.types.DR: {
 				const outputType = typeof output
@@ -199,7 +184,7 @@ export default class S extends StateMachineClass {
 						throw new PathReferenceError(`A relative directive has been provided as a ${outputType} (${String(output)}), but no ${outputType === 'number' ? 'sequence' : 'state machine'} exists that this ${outputType} could be ${outputType === 'number' ? 'an index': 'a state'} of from path [ ${path.join(', ')} ].`)
 					return {
 						...state,
-						[S.path]: [...lastOf, output]
+						[S.path]: [...lastOf, output as RelativeGOTOUnit]
 					}
 				}
 			}
@@ -210,7 +195,7 @@ export default class S extends StateMachineClass {
 		}
 	}
 	static execute(state: State = ({} as State), process: Sequence = null): Output {
-		const path = state[_path] || []
+		const path = state[S.path] || []
 		// console.log(path)
 		const node = get_path_object<Sequence>(process, path)
 		const nodeType = S.isNode(node)
@@ -241,18 +226,18 @@ export default class S extends StateMachineClass {
 		}
 	}
 	static applyChanges(state: State = ({} as State), changes: Partial<State> = {}): State {
-		if (state[_strict]) {
+		if (state[S.strict]) {
 			if (Object.entries(changes).some(([name]) => !(name in state)))
-				throw new ContextReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).join(', ')} ].\nPath: [ ${state[_path]?.join(' / ')} ]`)
-			if (state[_strict] === _strictTypes) {
+				throw new ContextReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).join(', ')} ].\nPath: [ ${state[S.path]?.join(' / ')} ]`)
+			if (state[S.strict] === S.strictTypes) {
 				if (Object.entries(changes).some(([name,value]) => typeof value !== typeof state[name]))
 					throw new ContextTypeError()//`Only properties that exist on the initial context may be updated.\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).join(', ')} ].\nPath: [ ${state[S.path].join(' / ')} ]`)
 			}
 		}
-		const allChanges = deep_merge_object(state[_changes] || {}, changes)
+		const allChanges = deep_merge_object(state[S.changes] || {}, changes)
 		return {
 			...deep_merge_object(state, allChanges),
-			[S.path]: state[_path],
+			[S.path]: state[S.path],
 			[S.changes]: allChanges
 		}
 	}
@@ -292,42 +277,42 @@ export default class S extends StateMachineClass {
 
 	static exec(state: InputState = {}, process: Sequence = null, runConfig: Partial<RunConfig> = S.runConfig, ...input: Array<unknown>) {
 		const { until, result, iterations, inputModifier, outputModifier, strictContext } = deep_merge_object(S.runConfig, runConfig)
-		const modifiedInput = inputModifier(...input) || {}
+		const modifiedInput = inputModifier.apply(this, input) || {}
 		let r = 0, currentState = S.applyChanges({
-			[_changes]: {},
+			[S.changes]: {},
 			...state,
-			[_path]: modifiedInput[_path] || [],
-			[_strict]: strictContext
+			[S.path]: modifiedInput[S.path] || [],
+			[S.strict]: strictContext
 		}, modifiedInput)
 		while (r < iterations) {
 			if (until(currentState)) break;
 			if (++r > iterations)
-				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[_path]?.join(', ')} ]`)
+				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.path]?.join(', ')} ]`)
 			currentState = S.advance(currentState, process, S.execute(currentState, process))
 		}
 		return outputModifier(result ? currentState[S.kw.RS] : currentState)
 	}
-	static async execAsync(state: InputState = {}, process: Sequence = null, runConfig: Partial<RunConfig> = S.runConfig, ...input: Array<unknown>) {
+	static async execAsync(state: InputState = {}, process: Sequence = null, runConfig: Partial<RunConfig> = S.runConfig, ...input) {
 		const { delay, allow, wait, until, result, iterations, inputModifier, outputModifier, strictContext } = deep_merge_object(S.runConfig, runConfig)
-		const modifiedInput = (await inputModifier(...input)) || {}
+		const modifiedInput = (await inputModifier.apply(this, input)) || {}
 		if (delay) await wait_time(delay)
-		let r = 0, startTime = Date.now(), currentState = S.applyChanges({ [_changes]: {}, ...state, [_path]: modifiedInput[_path] || [], [_strict]: strictContext }, modifiedInput)
+		let r = 0, startTime = Date.now(), currentState = S.applyChanges({ [S.changes]: {}, ...state, [S.path]: (modifiedInput[S.path] || []), [S.strict]: strictContext }, modifiedInput)
 		while (r < iterations) {
 			if (until(currentState)) break;
 			if (++r >= iterations)
-				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[_path]?.join(', ')} ]`)
-			const method = get_path_object<Sequence>(process, currentState[_path])
+				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.path]?.join(', ')} ]`)
+			const method = get_path_object<Sequence>(process, currentState[S.path])
 			if (S.isParallel(method)) {
 				const newChanges: Array<Partial<State>> = await Promise.all((method as ArraySequence).map(parallel => new S(state, parallel, {
 					...runConfig,
 					result: false, async: true,
 					inputModifier: (state) => {
-						const { [_path]:__path, [_changes]: __changes, [_strict]: __strict, [_return]: __return, ...pureState } = (state as State)
+						const { [S.path]:__path, [S.changes]: __changes, [S.strict]: __strict, [S.return]: __return, ...pureState } = (state as State)
 						return pureState
 					},
-					outputModifier: (state) => (state as State)[_changes],
+					outputModifier: (state) => (state as State)[S.changes],
 				})(currentState)))
-				currentState = S.advance(currentState, process, deep_merge_object(currentState[_changes] || {}, ...newChanges))
+				currentState = S.advance(currentState, process, deep_merge_object(currentState[S.changes] || {}, ...newChanges))
 			}
 			else currentState = S.advance(currentState, process, await S.execute(currentState, process))
 			if (allow > 0 && r % 10 === 0) {
@@ -347,7 +332,7 @@ export default class S extends StateMachineClass {
 	}
 
 	process: Sequence = null
-	// protected _initialState = { [S.kw.RS]: null }
+	protected _initialState = { [S.kw.RS]: null }
 	protected _runConfig = S.runConfig
 	constructor(state: InitialState = {}, process: Sequence = null, runConfig: Partial<RunConfig> = S.runConfig) {
 		super((...argumentsList: Array<unknown>) => (runConfig.runMethod || this.run).apply(this, argumentsList))
@@ -440,7 +425,7 @@ S.addNode(S.nodeTypes.SQ, {
 		return Array.isArray(object)
 	},
 	execute: (state, _process, node) => {
-		const path = state[_path] || []
+		const path = state[S.path] || []
 		return (node as ArraySequence).length ? [ ...path, 0 ] : null
 	}
 })

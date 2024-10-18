@@ -1,17 +1,17 @@
+export class PathReferenceError extends ReferenceError {}
+export class ContextReferenceError extends ReferenceError {}
+export class ContextTypeError extends TypeError {}
+export class ActionTypeError extends TypeError {}
+export class UndefinedActionError extends ReferenceError {}
+export class MaxIterationsError extends Error {}
 
-// export const _return = Symbol('Small State Machine Return')
-// export const _goto = Symbol('Small State Machine Go-To')
-// export const _path = Symbol('Small State Machine Path')
-
-
-export const _return			= Symbol('Super Small State Machine Return')
-export const _changes		 = Symbol('Super Small State Machine Changes')
-export const _path				= Symbol('Super Small State Machine Path')
-export const _strict			= Symbol('Super Small State Machine Strict')
-export const _strictTypes = Symbol('Super Small State Machine Strict Types')
+export const returnSymbol      = Symbol('Super Small State Machine Return')
+export const changesSymbol     = Symbol('Super Small State Machine Changes')
+export const pathSymbol        = Symbol('Super Small State Machine Path')
+export const strictSymbol      = Symbol('Super Small State Machine Strict')
+export const strictTypesSymbol = Symbol('Super Small State Machine Strict Types')
 
 export type PartialPick<O, K extends keyof O> = Pick<O, K> & Partial<O>;
-
 
 export enum Keywords {
 	IF = 'if',
@@ -39,19 +39,10 @@ export enum NodeTypes {
 }
 
 export interface RunConfig {
-	// delay: number,
-	// allow: number,
-	// iterations: number,
-	// wait: number,
-	// result: boolean,
-	// until: (state: any) => boolean,
-	// inputModifier: Function,
-	// outputModifier: Function,
-
 	iterations: number,
 	result: boolean,
 	until: (state: State) => boolean,
-	strictContext: boolean | typeof _strictTypes,
+	strictContext: boolean | typeof strictTypesSymbol,
 	runMethod: null,
 	inputModifier: (...input: Array<unknown>) => InputState,
 	outputModifier: (output: State | unknown) => unknown,
@@ -64,14 +55,14 @@ export interface RunConfig {
 
 
 export interface State extends InitialState {
-	[_strict]: boolean | typeof _strictTypes
-	[_path]: Path
-	[_changes]: Partial<InitialState>
-	[_return]?: boolean
+	[strictSymbol]: boolean | typeof strictTypesSymbol
+	[pathSymbol]: Path
+	[changesSymbol]: Partial<InitialState>
+	[returnSymbol]?: boolean
 }
 
 export type StateChanges = Partial<State>
-export type Path = Array<string|number>
+export type Path = Array<RelativeGOTOUnit>
 	
 export type Action = (state: State) => Output
 export type ArraySequence = Array<Sequence>
@@ -89,19 +80,18 @@ export interface SwitchConditional {
 	[Keywords.CS]: Record<string|number, Sequence>
 }
 export type RelativeGOTOUnit = string | number | symbol
-export type Directive = RelativeGOTOUnit | typeof _return
+export type Directive = RelativeGOTOUnit | typeof returnSymbol
 
 
 export type Sequence = ArraySequence | StateMachine | Conditional | SwitchConditional | Directive | Action | null | undefined
 
 export type Parallel = Array<Sequence> & {[Keywords.PL]:true}
 
-export type AbsoluteGOTO = Record<typeof _path, Path>
-export type RelativeGOTO = Record<typeof _path, RelativeGOTOUnit>
-export type Return = { [_return]: any }
+export type AbsoluteGOTO = Record<typeof pathSymbol, Path>
+export type RelativeGOTO = Record<typeof pathSymbol, RelativeGOTOUnit>
+export type Return = { [returnSymbol]: any }
 
 export type Output = Partial<State> | AbsoluteGOTO | RelativeGOTO | Directive | Path | Return | undefined | null
-// export type RawOutput = Directive | StateChanges | Output
 
 export interface NodeType {
 	name: string | symbol;
@@ -119,7 +109,7 @@ export interface TransformerContext {
 }
 
 export type InitialState = Record<string | Keywords.RS, unknown>
-export type InputState = InitialState & Partial<Pick<State, typeof _path | typeof _return>>
+export type InputState = InitialState & Partial<Pick<State, typeof pathSymbol | typeof returnSymbol>>
 
 class ExtensibleFunction extends Function {
 	constructor(f: Function) {
@@ -127,47 +117,49 @@ class ExtensibleFunction extends Function {
 		return Object.setPrototypeOf(f, new.target.prototype);
 	}
 }
+
 export abstract class StateMachineClass extends ExtensibleFunction {
-	public static return			= _return
-	public static changes		 = _changes
-	public static path				= _path
-	public static strict			= _strict
-	public static strictTypes = _strictTypes
-	public static kw: typeof Keywords
-	public static keywords: typeof Keywords
-	public static runConfig: RunConfig
+	public static readonly return:      typeof returnSymbol      = returnSymbol
+	public static readonly changes:     typeof changesSymbol     = changesSymbol
+	public static readonly path:        typeof pathSymbol        = pathSymbol
+	public static readonly strict:      typeof strictSymbol      = strictSymbol
+	public static readonly strictTypes: typeof strictTypesSymbol = strictTypesSymbol
+
+	public static readonly runConfig: RunConfig
+
+	public static readonly kw: typeof Keywords = Keywords
+	public static readonly keywords: typeof Keywords = Keywords
 
 	// Types:
-	public static nodeTypes: typeof NodeTypes
-	public static types: typeof NodeTypes
-	protected static additionalNodetypes: Record<NodeType['name'], NodeType>
-	protected static additionalNodetypesList: Array<NodeType>
-	public static isNode: ((object: unknown, objectType: (typeof object)) => false | NodeType['name'])
-	public static addNode: (name: NodeType['name'], nodeDefinition: Partial<Pick<NodeType, 'execute' | 'nextPath' | 'isNode' | 'advance'| 'advance2'>>) => void
-	public static removeNode: ((name: NodeType['name']) => void)
-	public static isStateMachine: (object: unknown) => boolean
-	public static isParallel: (object: unknown) => boolean
-	public static parallel: (...list: Array<Sequence>) => Parallel
-	public static actionName: (process: Sequence, path: Path) => string | undefined
-	public static lastOf: (process: Sequence, path: Path, condition: ((item: Sequence, path: Path, process: Sequence) => boolean)) => Path | null
-	public static lastNode: (process: Sequence, path: Path, ...nodeTypes: Array<NodeType['name'] | Array<NodeType['name']>>) => Path | null
-	public static lastSequence: (process: Sequence, path: Path) => Path | null
-	public static lastStateMachine: (process: Sequence, path: Path) => Path | null
-	public static nextPath: (state: State, process: Sequence, path: Path) => Path | null
-	public static advance: (state: State, process: Sequence, output: Output) => State
-	public static execute: (state: State, process: Sequence) => Output
-	public static applyChanges: (state: State, changes: Partial<InitialState>) => State
+	public static readonly nodeTypes: typeof NodeTypes = NodeTypes
+	public static readonly types: typeof NodeTypes = NodeTypes
+	public static readonly isNode: ((object: unknown, objectType: (typeof object)) => false | NodeType['name'])
+	public static readonly addNode: (name: NodeType['name'], nodeDefinition: Partial<Pick<NodeType, 'execute' | 'nextPath' | 'isNode' | 'advance'| 'advance2'>>) => void
+	public static readonly removeNode: ((name: NodeType['name']) => void)
+	public static readonly isStateMachine: (object: unknown) => boolean
+	public static readonly isParallel: (object: unknown) => boolean
+	public static readonly parallel: (...list: Array<Sequence>) => Parallel
+	public static readonly actionName: (process: Sequence, path: Path) => string | undefined
+	public static readonly lastOf: (process: Sequence, path: Path, condition: ((item: Sequence, path: Path, process: Sequence) => boolean)) => Path | null
+	public static readonly lastNode: (process: Sequence, path: Path, ...nodeTypes: Array<NodeType['name'] | Array<NodeType['name']>>) => Path | null
+	public static readonly lastSequence: (process: Sequence, path: Path) => Path | null
+	public static readonly lastStateMachine: (process: Sequence, path: Path) => Path | null
+	public static readonly nextPath: (state: State, process: Sequence, path: Path) => Path | null
+	public static readonly advance: (state: State, process: Sequence, output: Output) => State
+	public static readonly execute: (state: State, process: Sequence) => Output
+	public static readonly applyChanges: (state: State, changes: Partial<InitialState>) => State
 
-	public static traverse: (
+	public static readonly traverse: (
 		iterator: ((item: Sequence, path: Path, process: Sequence) => Sequence),
 		post: ((item: Sequence, path: Path, process: Sequence) => Sequence)
 	) => ((process: Sequence, path?: Path) => Sequence)
-	public static exec: (state: State, process: Sequence, runConfig: Partial<RunConfig>, ...input: Array<unknown>) => unknown
-	public static execAsync: (state: State, process: Sequence, runConfig: Partial<RunConfig>, ...input: Array<unknown>) => Promise<unknown>
-	public static run: (state: State, process: Sequence, runConfig: Partial<RunConfig>, ...input: Array<unknown>) => unknown | Promise<unknown>
+	public static readonly exec: (state: State, process: Sequence, runConfig: Partial<RunConfig>, ...input: Array<unknown>) => unknown
+	public static readonly execAsync: (state: State, process: Sequence, runConfig: Partial<RunConfig>, ...input: Array<unknown>) => Promise<unknown>
+	public static readonly run: (state: State, process: Sequence, runConfig: Partial<RunConfig>, ...input: Array<unknown>) => unknown | Promise<unknown>
 
-	public process: Sequence
-	protected _initialState: InitialState = { [Keywords.RS]: null }
+
+	public readonly process: Sequence = null
+	protected _initialState: InitialState
 	protected _runConfig: RunConfig
 
 	public abstract run(...input: Array<unknown>): unknown | Promise<unknown>
