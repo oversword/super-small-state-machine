@@ -85,19 +85,21 @@ export default class S extends StateMachineClass implements StateMachineClass {
 	// protected static additionalNodetypesList: Array<NodeType>
 	static #additionalNodetypes: Record<NodeType['name'], NodeType> = {}
 	static #additionalNodetypesList: Array<NodeType> = []
-	static addNode(name: NodeType['name'], { execute = null, isNode = null, advance = null, nextPath = null, advance2 = null }: Partial<Pick<NodeType, 'execute' | 'nextPath' | 'isNode' | 'advance'| 'advance2'>>): void {
+	static addNode(name: NodeType['name'], { execute = null, isNode = null, nextPath = null, advance = null }: Partial<Pick<NodeType, 'execute' | 'nextPath' | 'isNode' | 'advance'>>): void {
 		const index = this.#additionalNodetypesList.findIndex(node => node.name === name)
 		if (index !== -1 || (name in this.#additionalNodetypes))
 			throw new Error()
-		const val: NodeType = { name, execute, isNode, advance, nextPath, advance2 }
+		const val: NodeType = { name, execute, isNode, nextPath, advance }
 		this.#additionalNodetypes[name] = val
 		this.#additionalNodetypesList.push(val)
 	}
-	static removeNode(name: NodeType['name']): void {
+	static removeNode(name: NodeType['name']): NodeType {
 		const index = this.#additionalNodetypesList.findIndex(node => node.name === name)
 		if (index === -1) throw new Error()
+		const ret = this.#additionalNodetypes[name]
 		delete this.#additionalNodetypes[name]
 		this.#additionalNodetypesList.splice(index, 1)
+		return ret
 	}
 	static isStateMachine(object: unknown): boolean {
 		return S.isNode(object) === S.types.SM
@@ -134,12 +136,12 @@ export default class S extends StateMachineClass implements StateMachineClass {
 	}
 	static nextPath(state: State = ({} as State), process: Sequence = null, path: Path = state[S.path] || []): Path | null {
 		if (path.length === 0) return null
-		const parPath = S.lastNode(process, path.slice(0,-1), this.#additionalNodetypesList.filter(({ advance }) => advance).map(({ name }) => name))
+		const parPath = S.lastNode(process, path.slice(0,-1), this.#additionalNodetypesList.filter(({ nextPath }) => nextPath).map(({ name }) => name))
 		if (!parPath) return null
 		const parActs = get_path_object(process, parPath)
 		const parType = S.isNode(parActs)
-		if (!(parType && (parType in this.#additionalNodetypes) && this.#additionalNodetypes[parType] && this.#additionalNodetypes[parType].advance)) return null
-		const result = this.#additionalNodetypes[parType].advance(state, process, parPath, path)
+		if (!(parType && (parType in this.#additionalNodetypes) && this.#additionalNodetypes[parType] && this.#additionalNodetypes[parType].nextPath)) return null
+		const result = this.#additionalNodetypes[parType].nextPath(state, process, parPath, path)
 		if (result !== undefined)
 			return result
 		return S.nextPath(state, process, parPath)
@@ -189,8 +191,8 @@ export default class S extends StateMachineClass implements StateMachineClass {
 				}
 			}
 			default:
-				if (nodeType && S.#additionalNodetypes[nodeType] && S.#additionalNodetypes[nodeType].advance2)
-					return S.#additionalNodetypes[nodeType].advance2(state, process, output)
+				if (nodeType && S.#additionalNodetypes[nodeType] && S.#additionalNodetypes[nodeType].advance)
+					return S.#additionalNodetypes[nodeType].advance(state, process, output)
 				throw new ActionTypeError(`Unknwown output or action type: ${typeof output}${S.isNode(output) ? `, nodeType: ${String(S.isNode(output))}` : ''} at [ ${path.join(', ')} ]`)
 		}
 	}
@@ -414,7 +416,7 @@ export default class S extends StateMachineClass implements StateMachineClass {
 	}
 }
 S.addNode(S.nodeTypes.SQ, {
-	advance: (_state, process, parPath, path) => {
+	nextPath: (_state, process, parPath, path) => {
 		const parActs = get_path_object<ArraySequence>(process, parPath)
 		const childItem = path[parPath.length] as number
 		if (parActs && childItem+1 < parActs.length)

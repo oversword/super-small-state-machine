@@ -97,9 +97,9 @@ export interface NodeType {
 	name: string | symbol;
 	isNode: ((object: unknown, objectType: typeof object, last: NodeType['name'] | false) => boolean | undefined) | null,
 	execute: ((state: State, process: Sequence, node: Sequence) => Output) | null,
-	advance: ((state: State, process: Sequence, parPath: Path, path: Path) => undefined | null | Path) | null,
-	advance2: ((state: State, process: Sequence, output: Output) => State) | null,
-	nextPath: (() => void) | null
+	nextPath: ((state: State, process: Sequence, parPath: Path, path: Path) => undefined | null | Path) | null,
+	advance: ((state: State, process: Sequence, output: Output) => State) | null,
+	// nextPath: (() => void) | null
 }
 
 export interface TransformerContext {
@@ -127,26 +127,27 @@ export abstract class StateMachineClass extends ExtensibleFunction {
 
 	public static readonly runConfig: RunConfig
 
-	public static readonly kw: typeof Keywords = Keywords
 	public static readonly keywords: typeof Keywords = Keywords
-
-	// Types:
+	public static readonly kw:       typeof Keywords = Keywords
 	public static readonly nodeTypes: typeof NodeTypes = NodeTypes
-	public static readonly types: typeof NodeTypes = NodeTypes
-	public static readonly isNode: ((object: unknown, objectType: (typeof object)) => false | NodeType['name'])
-	public static readonly addNode: (name: NodeType['name'], nodeDefinition: Partial<Pick<NodeType, 'execute' | 'nextPath' | 'isNode' | 'advance'| 'advance2'>>) => void
-	public static readonly removeNode: ((name: NodeType['name']) => void)
+	public static readonly types:     typeof NodeTypes = NodeTypes
+
+	public static readonly isNode: (object: unknown, objectType: (typeof object)) => false | NodeType['name']
+	public static readonly addNode: (name: NodeType['name'], nodeDefinition: Partial<Pick<NodeType, 'execute' | 'nextPath' | 'isNode' | 'advance'>>) => void
+	public static readonly removeNode: (name: NodeType['name']) => NodeType
+
 	public static readonly isStateMachine: (object: unknown) => boolean
 	public static readonly isParallel: (object: unknown) => boolean
 	public static readonly parallel: (...list: Array<Sequence>) => Parallel
-	public static readonly actionName: (process: Sequence, path: Path) => string | undefined
-	public static readonly lastOf: (process: Sequence, path: Path, condition: ((item: Sequence, path: Path, process: Sequence) => boolean)) => Path | null
-	public static readonly lastNode: (process: Sequence, path: Path, ...nodeTypes: Array<NodeType['name'] | Array<NodeType['name']>>) => Path | null
-	public static readonly lastSequence: (process: Sequence, path: Path) => Path | null
-	public static readonly lastStateMachine: (process: Sequence, path: Path) => Path | null
+
+	public static readonly lastOf:                 (process: Sequence, path: Path, condition: ((item: Sequence, path: Path, process: Sequence) => boolean)) => Path | null
+	public static readonly lastNode:               (process: Sequence, path: Path, ...nodeTypes: Array<NodeType['name'] | Array<NodeType['name']>>) => Path | null
+	public static readonly lastSequence:           (process: Sequence, path: Path) => Path | null
+	public static readonly lastStateMachine:       (process: Sequence, path: Path) => Path | null
+	public static readonly actionName:             (process: Sequence, path: Path) => string | undefined
 	public static readonly nextPath: (state: State, process: Sequence, path: Path) => Path | null
-	public static readonly advance: (state: State, process: Sequence, output: Output) => State
-	public static readonly execute: (state: State, process: Sequence) => Output
+	public static readonly advance:  (state: State, process: Sequence, output: Output) => State
+	public static readonly execute:  (state: State, process: Sequence) => Output
 	public static readonly applyChanges: (state: State, changes: Partial<InitialState>) => State
 
 	public static readonly traverse: (

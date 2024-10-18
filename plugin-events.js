@@ -98,7 +98,7 @@ S.addNode(eventHandler, {
     if ('on' in object) return true;
   },
   execute: () => S.return,
-  advance: (_state, _process, path, _lastPath) => path
+  nextPath: (_state, _process, path, _lastPath) => path
 })
 
 S.addNode(eventEmitter, {
