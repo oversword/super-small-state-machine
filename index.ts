@@ -1,3 +1,5 @@
+import { _changes, _path, _return, _strict, _strictTypes, ArraySequence, Keywords, NodeType, NodeTypes, Output, Parallel, PartialPick, Path, RunConfig, Sequence, State, StateMachineClass, TransformerContext } from "./types";
+
 export const clone_object = (obj) => {
 	if (Array.isArray(obj)) return obj.map(clone_object)
 	if (obj === null) return null
@@ -22,39 +24,26 @@ export const wait_time = delay => (delay ? new Promise(resolve => setTimeout(res
 
 export class PathReferenceError extends ReferenceError {}
 export class ContextReferenceError extends ReferenceError {}
+export class ContextTypeError extends TypeError {}
 export class ActionTypeError extends TypeError {}
 export class UndefinedActionError extends ReferenceError {}
 export class MaxIterationsError extends Error {}
 
-class ExtensibleFunction extends Function {
-	constructor(f) {
-		return Object.setPrototypeOf(f, new.target.prototype);
-	}
-}
-export default class S extends ExtensibleFunction {
-	static return      = Symbol('Super Small State Machine Return')
-	static changes     = Symbol('Super Small State Machine Changes')
-	static path        = Symbol('Super Small State Machine Path')
-	static strict      = Symbol('Super Small State Machine Strict')
-	static strictTypes = Symbol('Super Small State Machine Strict Types')
-	static kw = {
-		IF: 'if',
-		TN: 'then',
-		EL: 'else',
-		SW: 'switch',
-		CS: 'case',
-		DF: 'default',
-		IT: 'initial',
-		RS: 'result',
-		PL: 'parallel',
-	}
+export default class S extends StateMachineClass {
+	static return      = _return
+	static changes     = _changes
+	static path        = _path
+	static strict      = _strict
+	static strictTypes = _strictTypes
+	static kw = Keywords
 	static keywords = S.kw
-	static runConfig = {
+	static runConfig: RunConfig = {
 		iterations: 10000,
 		result: true,
 		until: result => S.return in result,
 		strictContext: false,
-		inputModifier: a => a,
+		runMethod: null,
+		inputModifier: a => a as State,
 		outputModifier: a => a,
 		async: false,
 		// Special settings for async
@@ -64,24 +53,13 @@ export default class S extends ExtensibleFunction {
 	}
 
 	// Types:
-	static nodeTypes = {
-		UN: 'undefined',
-		EM: 'empty',
-		DR: 'directive',
-		RT: 'return',
-		AC: 'action',
-		SQ: 'sequence',
-		CD: 'conditional',
-		SC: 'switch-conditional',
-		SM: 'state-machine',
-		CH: 'changes'
-	}
+	static nodeTypes = NodeTypes
 	static types = S.nodeTypes
-	static isNode(object, objectType = typeof object) {
+	static isNode(object: unknown, objectType: (typeof object) = typeof object): false | NodeType['name'] {
 		if (object === S.return)
 			return S.types.RT
 
-		const additionalNode = this.#additionalNodetypesList.reduce((last, current) => {
+		const additionalNode = this.#additionalNodetypesList.reduce((last: false | NodeType['name'], current: NodeType): false | NodeType['name']  => {
 			if (current.isNode && current.isNode(object, objectType, last))
 				return current.name
 			return last
@@ -101,6 +79,9 @@ export default class S extends ExtensibleFunction {
 			case 'object': {
 				if (!object)
 					return S.types.EM
+				// TODO: is this required?
+				if (!(object instanceof Object))
+					return false
 				if (S.kw.IF in object)
 					return S.types.CD
 				if (S.kw.SW in object)
@@ -116,71 +97,73 @@ export default class S extends ExtensibleFunction {
 		}
 		return false
 	}
-	static #additionalNodetypes = {}
-	static #additionalNodetypesList = []
-	static addNode(name, { execute = null, isNode = null, advance = null }) {
+	static #additionalNodetypes: Record<NodeType['name'], NodeType> = {}
+	static #additionalNodetypesList: Array<NodeType> = []
+	static addNode(name: NodeType['name'], { execute = null, isNode = null, advance = null, nextPath = null, advance2 = null }: Partial<Pick<NodeType, 'execute' | 'nextPath' | 'isNode' | 'advance'| 'advance2'>>): void {
 		const index = this.#additionalNodetypesList.findIndex(node => node.name === name)
 		if (index !== -1 || (name in this.#additionalNodetypes))
 			throw new Error()
-		const val = { name, execute, isNode, advance }
+		const val: NodeType = { name, execute, isNode, advance, nextPath, advance2 }
 		this.#additionalNodetypes[name] = val
 		this.#additionalNodetypesList.push(val)
 	}
-	static removeNode(name) {
+	static removeNode(name: NodeType['name']): void {
 		const index = this.#additionalNodetypesList.findIndex(node => node.name === name)
 		if (index === -1) throw new Error()
 		delete this.#additionalNodetypes[name]
 		this.#additionalNodetypesList.splice(index, 1)
 	}
-	static isStateMachine(object) {
+	static isStateMachine(object: unknown): boolean {
 		return S.isNode(object) === S.types.SM
 	}
 	// TODO: make parallel a plugin
-	static isParallel(object) {
-		return S.isNode(object) === S.types.SQ && (S.kw.PL in object)
+	static isParallel(object: unknown): boolean {
+		return S.isNode(object) === S.types.SQ && (S.kw.PL in (object as object))
 	}
-	static parallel(...list) {
+	static parallel(...list: Array<Sequence>): Parallel {
 		list[S.kw.PL] = true
-		return list
+		return list as Parallel
 	}
-	static actionName(process = null, path = []) {
+	static actionName(process: Sequence = null, path: Path = []): string | undefined {
 		const method = get_path_object(process, path)
 		return method && method.name
 	}
-	static lastOf(process = null, path = [], condition = () => true) {
+	static lastOf(process: Sequence = null, path: Path = [], condition: ((item: Sequence, path: Path, process: Sequence) => boolean) = () => true): Path | null {
 		const item = get_path_object(process, path)
 		if (condition(item, path, process)) return path
 		if (path.length === 0) return null
 		return S.lastOf(process, path.slice(0,-1), condition)
 	}
-	static lastNode(process = null, path = [], ...nodeTypes) {
-		const flatNodeTypes = nodeTypes.flat(Infinity)
+	static lastNode(process: Sequence = null, path: Path = [], ...nodeTypes: Array<NodeType['name'] | Array<NodeType['name']>>): Path | null {
+		// TODO: check this is actually working
+		const flatNodeTypes = nodeTypes.flat(Infinity) as Array<NodeType['name'] | false>
 		return S.lastOf(process, path, i => flatNodeTypes.includes(S.isNode(i)))
 	}
-	static lastSequence(process = null, path = []) {
+	static lastSequence(process: Sequence = null, path: Path = []): Path | null {
 		return S.lastNode(process, path, S.types.SQ)
 	}
-	static lastStateMachine(process = null, path = []) {
+	static lastStateMachine(process: Sequence = null, path: Path = []): Path | null {
 		return S.lastNode(process, path, S.types.SM)
 	}
-	static nextPath(state = {}, process = null, path = state[S.path] || []) {
+	static nextPath(state: State = {}, process: Sequence = null, path: Path = state[_path] || []): Path | null {
 		if (path.length === 0) return null
 		const parPath = S.lastNode(process, path.slice(0,-1), this.#additionalNodetypesList.filter(({ advance }) => advance).map(({ name }) => name))
 		if (!parPath) return null
 		const parActs = get_path_object(process, parPath)
 		const parType = S.isNode(parActs)
+		if (!(parType && (parType in this.#additionalNodetypes) && this.#additionalNodetypes[parType] && this.#additionalNodetypes[parType].advance)) return null
 		const result = this.#additionalNodetypes[parType].advance(state, process, parPath, path)
 		if (result !== undefined)
 			return result
 		return S.nextPath(state, process, parPath)
 	}
-	static advance(state = {}, process = null, output = null) {
-		const path = state[S.path] || []
+	static advance(state: State = {}, process: Sequence = null, output: Output = null): State {
+		const path = state[_path] || []
 		let currentState = state
 		const nodeType = S.isNode(output)
 		switch (nodeType) {
 			case S.types.CH:
-				currentState = S.applyChanges(state, output)
+				currentState = S.applyChanges(state, output as Partial<State>)
 			case S.types.UN: // Set and forget action
 			case S.types.EM: // No-op action
 				// Increment path unless handling a directive or return
@@ -202,16 +185,16 @@ export default class S extends ExtensibleFunction {
 					...state,
 					[S.return]: true,
 					[S.path]: path,
-					...(output === S.return ? {} : { [S.kw.RS]: output[S.return] })
+					...(!output || output === _return ? {} : { [S.kw.RS]: output[_return] })
 				}
 			case S.types.DR: {
 				const outputType = typeof output
-				if (outputType === 'object') {
+				if (outputType === 'object' && output) {
 					return S.advance(state, process, output[S.path])
 				} else {
 					const lastOf = outputType === 'number' ? S.lastSequence(process, path.slice(0,-1)) : S.lastStateMachine(process, path.slice(0,-1))
 					if (!lastOf)
-						throw new PathReferenceError(`A relative directive has been provided as a ${outputType} (${output}), but no ${outputType === 'number' ? 'sequence' : 'state machine'} exists that this ${outputType} could be ${outputType === 'number' ? 'an index': 'a state'} of from path [ ${path.join(', ')} ].`)
+						throw new PathReferenceError(`A relative directive has been provided as a ${outputType} (${String(output)}), but no ${outputType === 'number' ? 'sequence' : 'state machine'} exists that this ${outputType} could be ${outputType === 'number' ? 'an index': 'a state'} of from path [ ${path.join(', ')} ].`)
 					return {
 						...state,
 						[S.path]: [...lastOf, output]
@@ -219,13 +202,13 @@ export default class S extends ExtensibleFunction {
 				}
 			}
 			default:
-				if (S.#additionalNodetypes[nodeType] && S.#additionalNodetypes[nodeType].advance)
-					return S.#additionalNodetypes[nodeType].advance(state, process, output)
-				throw new ActionTypeError(`Unknwown output or action type: ${typeof output}${S.isNode(output) ? `, nodeType: ${S.isNode(output)}` : ''} at [ ${path.join(', ')} ]`)
+				if (nodeType && S.#additionalNodetypes[nodeType] && S.#additionalNodetypes[nodeType].advance2)
+					return S.#additionalNodetypes[nodeType].advance2(state, process, output)
+				throw new ActionTypeError(`Unknwown output or action type: ${typeof output}${S.isNode(output) ? `, nodeType: ${String(S.isNode(output))}` : ''} at [ ${path.join(', ')} ]`)
 		}
 	}
-	static execute(state = {}, process = null) {
-		const path = state[S.path] || []
+	static execute(state: State = {}, process: Sequence = null): Output {
+		const path = state[_path] || []
 		// console.log(path)
 		const node = get_path_object(process, path)
 		const nodeType = S.isNode(node)
@@ -250,30 +233,30 @@ export default class S extends ExtensibleFunction {
 			case S.types.SM:
 				return [ ...path, S.kw.IT ]
 			default:
-				if (S.#additionalNodetypes[nodeType] && S.#additionalNodetypes[nodeType].execute)
+				if (nodeType && S.#additionalNodetypes[nodeType] && S.#additionalNodetypes[nodeType].execute)
 					return S.#additionalNodetypes[nodeType].execute(state, process, node)
 				return node
 		}
 	}
-	static applyChanges(state = {}, changes = {}) {
-		if (state[S.strict]) {
+	static applyChanges(state: State = {}, changes: Partial<State> = {}): State {
+		if (state[_strict]) {
 			if (Object.entries(changes).some(([name]) => !(name in state)))
-				throw new ContextReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).join(', ')} ].\nPath: [ ${state[S.path].join(' / ')} ]`)
-			if (strict === strictTypes) {
+				throw new ContextReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).join(', ')} ].\nPath: [ ${state[_path]?.join(' / ')} ]`)
+			if (state[_strict] === _strictTypes) {
 				if (Object.entries(changes).some(([name,value]) => typeof value !== typeof state[name]))
 					throw new ContextTypeError()//`Only properties that exist on the initial context may be updated.\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).join(', ')} ].\nPath: [ ${state[S.path].join(' / ')} ]`)
 			}
 		}
-		const allChanges = deep_merge_object(state[S.changes] || {}, changes)
+		const allChanges = deep_merge_object(state[_changes] || {}, changes)
 		return {
 			...deep_merge_object(state, allChanges),
-			[S.path]: state[S.path],
+			[S.path]: state[_path],
 			[S.changes]: allChanges
 		}
 	}
 
-	static traverse(iterator = a => a, post = b => b) {
-		const iterate = (process, path = []) => {
+	static traverse(iterator: ((item: Sequence, path: Path, process: Sequence) => Sequence) = a => a, post: ((item: Sequence, path: Path, process: Sequence) => Sequence) = b => b): ((process: Sequence, path?: Path) => Sequence) {
+		const iterate = (process: Sequence, path: Path = []): Sequence => {
 			const item = get_path_object(process, path)
 			const itemType = S.isNode(item)
 			switch (itemType) {
@@ -305,19 +288,19 @@ export default class S extends ExtensibleFunction {
 		return iterate
 	}
 
-	static exec(state = {}, process = {}, runConfig = S.runConfig, ...input) {
+	static exec(state: State = {}, process: Sequence = null, runConfig: Partial<RunConfig> = S.runConfig, ...input: Array<unknown>) {
 		const { until, result, iterations, inputModifier, outputModifier, strictContext } = deep_merge_object(S.runConfig, runConfig)
 		const modifiedInput = inputModifier(...input) || {}
 		let r = 0, currentState = S.applyChanges({ ...state, [S.path]: modifiedInput[S.path] || [], [S.strict]: strictContext }, modifiedInput)
 		while (r < iterations) {
 			if (until(currentState)) break;
 			if (++r > iterations)
-				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.path].join(', ')} ]`)
+				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[_path]?.join(', ')} ]`)
 			currentState = S.advance(currentState, process, S.execute(currentState, process))
 		}
 		return outputModifier(result ? currentState[S.kw.RS] : currentState)
 	}
-	static async execAsync(state = {}, process = {}, runConfig = S.runConfig, ...input) {
+	static async execAsync(state: State = {}, process: Sequence = null, runConfig: Partial<RunConfig> = S.runConfig, ...input: Array<unknown>) {
 		const { delay, allow, wait, until, result, iterations, inputModifier, outputModifier, strictContext } = deep_merge_object(S.runConfig, runConfig)
 		const modifiedInput = (await inputModifier(...input)) || {}
 		if (delay) await wait_time(delay)
@@ -325,16 +308,19 @@ export default class S extends ExtensibleFunction {
 		while (r < iterations) {
 			if (until(currentState)) break;
 			if (++r >= iterations)
-				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.path].join(', ')} ]`)
-			const method = get_path_object(process, currentState[S.path])
+				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[_path]?.join(', ')} ]`)
+			const method = get_path_object(process, currentState[_path])
 			if (S.isParallel(method)) {
 				const newChanges = await Promise.all(method.map(parallel => new S(state, parallel, {
 					...runConfig,
 					result: false, async: true,
-					inputModifier: ({ [S.path]:_path, [S.changes]: _changes,  ...pureState }) => pureState,
-					outputModifier: ({ [S.changes]: changes }) => changes,
+					inputModifier: (state) => {
+						const { [_path]:__path, [_changes]: __changes,  ...pureState } = (state as State)
+						return pureState as State
+					},
+					outputModifier: (state) => (state as State)[_changes],
 				})(currentState)))
-				currentState = S.advance(currentState, process, deep_merge_object(currentState[S.changes] || {}, ...newChanges))
+				currentState = S.advance(currentState, process, deep_merge_object(currentState[_changes] || {}, ...newChanges))
 			}
 			else currentState = S.advance(currentState, process, await S.execute(currentState, process))
 			if (allow > 0 && r % 10 === 0) {
@@ -347,35 +333,40 @@ export default class S extends ExtensibleFunction {
 		}
 		return outputModifier(result ? currentState[S.kw.RS] : currentState)
 	}
-	static run(state = {}, process = {}, runConfig = S.runConfig, ...input) {
+	static run(state: State = {}, process: Sequence = null, runConfig: Partial<RunConfig> = S.runConfig, ...input: Array<unknown>) {
 		const { async: isAsync } = deep_merge_object(S.runConfig, runConfig)
 		if (isAsync) return S.execAsync(state, process, runConfig, ...input)
 		return S.exec(state, process, runConfig, ...input)
 	}
 
-	#initialState = { [S.kw.RS]: null }
-	process = null
-	#runConfig = S.runConfig
-	constructor(state = {}, process = null, runConfig = S.runConfig) {
-		super((...argumentsList) => (runConfig.runMethod || this.run).apply(this, argumentsList))
-		this.#runConfig = deep_merge_object(this.#runConfig, runConfig)
-		this.#initialState = deep_merge_object(this.#initialState, state)
+	protected _initialState = { [S.kw.RS]: null }
+	process: Sequence = null
+	protected _runConfig = S.runConfig
+	constructor(state: State = {}, process: Sequence = null, runConfig: Partial<RunConfig> = S.runConfig) {
+		super((...argumentsList: Array<unknown>) => (runConfig.runMethod || this.run).apply(this, argumentsList))
+		this._runConfig = deep_merge_object(this._runConfig, runConfig)
+		this._initialState = deep_merge_object(this._initialState, state)
 		this.process = process
 	}
-	run(...input) {
-		return S.run(this.#initialState, this.process, this.#runConfig, ...input)
+	run(...input: Array<unknown>) {
+		return S.run(this._initialState, this.process, this._runConfig, ...input)
 	}
-	get runConfig() {
-		return clone_object(this.#runConfig)
+	get runConfig(): RunConfig {
+		return clone_object(this._runConfig)
 	}
-	get initialState() {
-		return clone_object(this.#initialState)
+	get initialState(): State {
+		return clone_object(this._initialState)
 	}
-	actionName(path = []) {
+	actionName(path: Path = []): string | undefined {
 		return S.actionName(this.process, path)
 	}
-	plugin(transformer = {}) {
-		let transformed = {state:this.#initialState,process:this.process,runConfig: this.#runConfig}
+
+	plugin(transformer: ((current: TransformerContext) => Partial<TransformerContext>) | {
+		state?: (current: TransformerContext) => State,
+		process?: (current: TransformerContext) => Sequence,
+		runConfig?: (current: TransformerContext) => RunConfig,
+	} = {}): S {
+		let transformed: TransformerContext = {state:this._initialState,process:this.process,runConfig: this._runConfig}
 		if (typeof transformer === 'function') {
 			transformed = {
 				...transformed,
@@ -399,41 +390,41 @@ export default class S extends ExtensibleFunction {
 	}
 
 	// These are effectively runConfig "setters"
-	config(runConfig) {
-		return new S(this.#initialState, this.process, deep_merge_object(this.#runConfig, runConfig))
+	config(runConfig: Partial<RunConfig>): S {
+		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, runConfig))
 	}
-	get unstrict() {
-		return new S(this.#initialState, this.process, deep_merge_object(this.#runConfig, { strictContext: false }))
+	get unstrict(): S {
+		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { strictContext: false }))
 	}
-	get strict() {
-		return new S(this.#initialState, this.process, deep_merge_object(this.#runConfig, { strictContext: true }))
+	get strict(): S {
+		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { strictContext: true }))
 	}
-	get strictTypes() {
-		return new S(this.#initialState, this.process, deep_merge_object(this.#runConfig, { strictContext: S.strictTypes }))
+	get strictTypes(): S {
+		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { strictContext: S.strictTypes }))
 	}
-	get async() {
-		return new S(this.#initialState, this.process, deep_merge_object(this.#runConfig, { async: true }))
+	get async(): S {
+		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { async: true }))
 	}
-	get sync() {
-		return new S(this.#initialState, this.process, deep_merge_object(this.#runConfig, { async: false }))
+	get sync(): S {
+		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { async: false }))
 	}
-	get step() {
-		return new S(this.#initialState, this.process, deep_merge_object(this.#runConfig, { iterations: 1, result: false }))
+	get step(): S {
+		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { iterations: 1, result: false }))
 	}
-	until(until) {
-		return new S(this.#initialState, this.process, deep_merge_object(this.#runConfig, { until }))
+	until(until: RunConfig['until']): S {
+		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { until }))
 	}
-	input(inputModifier) {
-		return new S(this.#initialState, this.process, deep_merge_object(this.#runConfig, { inputModifier }))
+	input(inputModifier: RunConfig['inputModifier']): S {
+		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { inputModifier }))
 	}
-	output(outputModifier) {
-		return new S(this.#initialState, this.process, deep_merge_object(this.#runConfig, { outputModifier }))
+	output(outputModifier: RunConfig['outputModifier']): S {
+		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { outputModifier }))
 	}
 }
 S.addNode(S.nodeTypes.SQ, {
 	advance: (_state, process, parPath, path) => {
 		const parActs = get_path_object(process, parPath)
-		const childItem = path[parPath.length]
+		const childItem = path[parPath.length] as number
 		if (childItem+1 < parActs.length)
 			return [ ...parPath, childItem+1 ]
 	},
@@ -442,8 +433,8 @@ S.addNode(S.nodeTypes.SQ, {
 		return Array.isArray(object)
 	},
 	execute: (state, _process, node) => {
-		const path = state[S.path] || []
-		return node.length ? [ ...path, 0 ] : null
+		const path = state[_path] || []
+		return (node as ArraySequence).length ? [ ...path, 0 ] : null
 	}
 })
 

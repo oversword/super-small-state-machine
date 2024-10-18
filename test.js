@@ -1,6 +1,6 @@
 import pluginDescribed, { a, c, t } from "./plugin-described.js"
 import pluginEvents, { emit } from "./plugin-events.js"
-import S from "./index.js"
+import S from "./index.ts"
 // import S from "./plugin-described.js"
 
 // import S from "@oversword/super-small-state-machine"

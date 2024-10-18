@@ -23,5 +23,9 @@
   "bugs": {
     "url": "https://github.com/oversword/super-small-state-machine/issues"
   },
-  "homepage": "https://github.com/oversword/super-small-state-machine#readme"
+  "homepage": "https://github.com/oversword/super-small-state-machine#readme",
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.1"
+  }
 }
