@@ -1,16 +1,19 @@
 import pluginDescribed, { a, c, t } from "./plugin-described.js"
 import pluginEvents, { emit } from "./plugin-events.js"
 import S from "./index.ts"
+import { parallel } from "./default-nodes.ts"
 // import S from "./plugin-described.js"
 
 // import S from "@oversword/super-small-state-machine"
 	
 const testSymbol = Symbol('Test Symbol')
+//*
 let tests = [
 	// # Requirements
 	{
 		description: 'Requirements',
 		tests: [
+
 			// ## Execution
 			{
 				description: 'Execution',
@@ -593,19 +596,19 @@ let tests = [
 								else: 'nextBatch'
 							},
 							nextBatch: [
-								(new S({
-									result: 1,
-									input: 1,
-								},[
+								(new S([
 									({ result, input }) => ({ result: result * input }),
 									({ input }) => ({ input: input-1 }),
 									{
 										if: ({ input }) => input > 1,
 										then: 0
 									}
-								]))
+								]).defaults({
+									result: 1,
+									input: 1,
+								}))
 								.input(({ realInput }) => ({ input: realInput, result: 1 }))
-								.output((result) => ({ result })),
+								.output(({result}) => ({ result })),
 								({ realInput }) => ({ realInput: realInput - 1}),
 								({ stack,result }) => ({ stack: [...stack,result]}),
 								'testEnd'
@@ -632,23 +635,23 @@ let tests = [
 								'cradle'
 							],
 							cradle: [
-								(new S({
-									result: 1,
-									input: 1,
-									counter: 0,
-								},[
+								(new S([
 									({ counter }) => ({ counter: counter + 1 }),
 									({ result, counter }) => ({ result: result * counter }),
 									{
 										if: ({ input, counter }) => counter < input,
 										then: 0
 									}
-								])).input(({ subState, subPath }) => ({
+								]).defaults({
+									result: 1,
+									input: 1,
+									counter: 0,
+								})).step.input(({ subState, subPath }) => ({
 									...subState,
 									[S.path]: subPath
 								})).output(({ [S.path]: subPath, [S.return]: subDone = false, ...subState }) => ({
 									subPath, subState, subDone
-								})).step,
+								})),
 								'final'
 							],
 							final: [
@@ -785,6 +788,9 @@ let tests = [
 		]
 	}
 ]
+/*/
+let tests = []
+//*/
 
 // Duplicate tests making every action async
 const wait_time = delay => (delay ? new Promise(resolve => setTimeout(resolve, delay)) : Promise.resolve())
@@ -794,14 +800,11 @@ const makeAsync = method => async (...a) => {
 	return method(...a)
 }
 
-const makeTestAsync = (test) => {
-	if ('tests' in test) {
-		return {
-			...test,
-			tests: test.tests.map(makeTestAsync)
-		}
-	}
-	const newSeq = S.traverse((node) => {
+const asyncPlugin = ({
+	process, runConfig
+}) => {
+
+	const traverse = S.traverse((node) => {
 		if (typeof node === 'function')
 			return makeAsync(node)
 		return node
@@ -813,16 +816,40 @@ const makeTestAsync = (test) => {
 			}
 		}
 		return obj
-	})(test.sequence)
+	})
+	
 
 	return {
-		...test,
-		sequence: newSeq,
-		async: true,
+		process: traverse({
+			nodes: runConfig.nodes,
+			process
+		}),
+		runConfig
+	}
+	// return {
+	// 	...test,
+	// 	sequence: newSeq,
+	// 	async: true,
+	// }
+}
+
+const makeTestAsync = (test) => {
+	if ('tests' in test) {
+		return {
+			...test,
+			tests: test.tests.map(makeTestAsync),
+		}
+	} else {
+		return {
+			...test,
+			plugins: [...(test.plugins||[]), asyncPlugin],
+			async: true,
+		}
 	}
 }
 
 tests = tests.concat([{description: 'Async', tests:tests.map(makeTestAsync).concat([
+//*
 	// Parallel
 	{
 		description: 'Can perform parallel actions when using async.',
@@ -837,7 +864,7 @@ tests = tests.concat([{description: 'Async', tests:tests.map(makeTestAsync).conc
 		},
 		sequence: [
 			({ input }) => ({ input: input - 1 }),
-			S.parallel({
+			parallel({
 				if: ({ input }) => input > 5,
 				then: [
 					({ result, input }) => ({ result: [...result,input] }),
@@ -870,7 +897,7 @@ tests = tests.concat([{description: 'Async', tests:tests.map(makeTestAsync).conc
 		},
 		sequence: [
 			({ input }) => ({ input: input - 1 }),
-			S.parallel({
+			parallel({
 				if: ({ input }) => input > 5,
 				then: [
 					({ result, input }) => ({ result: [...result,input] }),
@@ -892,6 +919,7 @@ tests = tests.concat([{description: 'Async', tests:tests.map(makeTestAsync).conc
 		],
 	},
 
+//*/
 	// Events
 	{
 		description: 'Fibonacci numbers (events)',
@@ -1043,10 +1071,13 @@ tests = tests.concat([{description: 'Async', tests:tests.map(makeTestAsync).conc
 			return results.join('_')
 		}
 	},
+//*/
 ])}])
 
 // Testing Framework
 const runTest = async (test) => {
+	let result;
+	try {
 	if ('tests' in test) {
 		const res = (await Promise.all(test.tests.map(childTest => ({
 			...childTest,
@@ -1057,22 +1088,25 @@ const runTest = async (test) => {
 			result: res
 		}
 	}
-	let result;
-	if ('method' in test) {
-		result = await test.method(test.initial)
-	} else {
-		let testMachine = new S({
-			...(test.config || {}),
-			...test.defaults
-		}, test.sequence, { iterations: 1000 })
-		if (test.async)
-			testMachine = testMachine.async
-		if (test.plugins)
-			testMachine = test.plugins.reduce((last, current) => last.plugin(current), testMachine)
-		const instance = testMachine(test.initial)
-		if (test.action)
-			result = await test.action(instance)
-		else result = await instance
+		if ('method' in test) {
+			result = await test.method(test.initial)
+		} else {
+			let testMachine = new S(test.sequence, { iterations: 1000 }).defaults({
+				...(test.config || {}),
+				...test.defaults
+			})
+			if (test.async)
+				testMachine = testMachine.async
+			if (test.plugins)
+				testMachine = test.plugins.reduce((last, current) => last.plugin(current), testMachine)
+			const instance = testMachine(test.initial)
+			if (test.action)
+				result = await test.action(instance)
+			else result = await instance
+		}
+	} catch (error) {
+		// throw error
+		result = error
 	}
 	if (result === test.expected) {
 		return ({ ...test, success: true })
@@ -1116,10 +1150,15 @@ const filterFailures = test => {
 	return !test.success
 }
 
+const parallelTests = (runTest, tests) => Promise.all(tests.map(runTest))
+const sequentialTests = (runTest, tests) => tests.reduce(async (last, test) => [...(await last), await runTest(test)], Promise.resolve([]))
+
 // Run Tests
 console.group('Tests')
-// const results = await Promise.all(tests.map(runTest))
-const results = await tests.reduce(async (last, test) => [...(await last), await runTest(test)], Promise.resolve([]))
+const results = await parallelTests(runTest, tests) 
+// const results = await sequentialTests(runTest, tests)
+
+
 results.forEach(printResult)
 const failed = results.filter(filterFailures)
 
@@ -1132,11 +1171,12 @@ if (failed.length) {
 console.groupEnd()
 
 
-
-const complexInput = new S({
-	a: 0, b: 0,
-}, [
+const complexInput = new S([
 	({ a, b }) => ({ [S.return]: a * b })
-]).input((a,b) => ({ a, b }))
+])
+.defaults({
+	a: 0, b: 0, result: 0
+})
+.input((a, b) => ({ a, b }))
 
 console.log(30 === complexInput(5,6))

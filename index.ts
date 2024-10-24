@@ -1,4 +1,5 @@
-import {  Action, ActionTypeError, ArraySequence, Conditional, ContextReferenceError, ContextTypeError, InitialState, InputState, MaxIterationsError, NodeType, Output, Parallel, Path, PathReferenceError, RunConfig, Sequence, State, StateMachine, StateMachineClass, SwitchConditional, TransformerContext, UndefinedActionError, RelativeGOTOUnit } from "./types";
+import defaultNodes from "./default-nodes";
+import {  InitialState, MaxIterationsError,  Path, RunConfig, SuperSmallStateMachine, TransformerContext,  RelativeGOTOUnit, Plugin, NodeDefinition, NodeDefinitions, SystemState, InputSystemState, Keywords, ProcessNode, ActionTypeError, ContextReferenceError, ContextTypeError } from "./types";
 
 export const clone_object = <T extends unknown = unknown>(obj: T): T => {
 	if (Array.isArray(obj)) return obj.map(clone_object) as T
@@ -22,212 +23,32 @@ const reduce_deep_merge_object = <T extends unknown = unknown>(base: T, override
 export const deep_merge_object = <T extends unknown = unknown>(base: T, ...overrides: Array<unknown>): T => overrides.reduce(reduce_deep_merge_object<T>, base)
 export const wait_time = (delay: number): Promise<void> => (delay ? new Promise(resolve => setTimeout(resolve, delay)) : Promise.resolve())
 
-
-export default class S extends StateMachineClass implements StateMachineClass {
+export default class S<
+	UserState extends InitialState = InitialState,
+	Return extends unknown = UserState[Keywords.RS],
+	Arguments extends Array<unknown> = Array<unknown>,
+	Process extends unknown = ProcessNode<UserState>,
+>
+extends SuperSmallStateMachine<UserState, Return, Arguments, Process>
+implements SuperSmallStateMachine<UserState, Return, Arguments, Process> 
+{
 	static runConfig: RunConfig = {
+		initialState: { [S.kw.RS]: null },
 		iterations: 10000,
-		result: true,
 		until: result => S.return in result,
 		strictContext: false,
 		runMethod: null,
-		inputModifier: a => a as State,
-		outputModifier: a => a,
+		inputModifier: a => a as Partial<InputSystemState<InitialState>>,
+		outputModifier: (a: SystemState<InitialState>) => a[S.kw.RS],
 		async: false,
+		nodes: new NodeDefinitions(defaultNodes.map(node => [node.name,node]) as unknown as []),
 		// Special settings for async
 		delay: 0,
 		allow: 1000,
 		wait: 0,
 	}
-	static isNode(object: unknown, objectType: (typeof object) = typeof object): false | NodeType['name'] {
-		if (object === S.return)
-			return S.types.RT
 
-		const additionalNode = this.#additionalNodetypesList.reduce((last: false | NodeType['name'], current: NodeType): false | NodeType['name'] => {
-			if (current.isNode && current.isNode(object, objectType, last))
-				return current.name
-			return last
-		}, false)
-		if (additionalNode)
-			return additionalNode
-		
-		switch (objectType) {
-			case 'undefined':
-				return S.types.UN
-			case 'number':
-			case 'string':
-			case 'symbol':
-				return S.types.DR
-			case 'function':
-				return S.types.AC
-			case 'object': {
-				if (!object)
-					return S.types.EM
-				// TODO: is this required?
-				if (!(object instanceof Object))
-					return false
-				if (S.kw.IF in object)
-					return S.types.CD
-				if (S.kw.SW in object)
-					return S.types.SC
-				if (S.kw.IT in object)
-					return S.types.SM
-				if (S.path in object)
-					return S.types.DR
-				if (S.return in object)
-					return S.types.RT
-				return S.types.CH
-			}
-		}
-		return false
-	}
-
-	// protected static additionalNodetypes: Record<NodeType['name'], NodeType>
-	// protected static additionalNodetypesList: Array<NodeType>
-	static #additionalNodetypes: Record<NodeType['name'], NodeType> = {}
-	static #additionalNodetypesList: Array<NodeType> = []
-	static addNode(name: NodeType['name'], { execute = null, isNode = null, nextPath = null, advance = null }: Partial<Pick<NodeType, 'execute' | 'nextPath' | 'isNode' | 'advance'>>): void {
-		const index = this.#additionalNodetypesList.findIndex(node => node.name === name)
-		if (index !== -1 || (name in this.#additionalNodetypes))
-			throw new Error()
-		const val: NodeType = { name, execute, isNode, nextPath, advance }
-		this.#additionalNodetypes[name] = val
-		this.#additionalNodetypesList.push(val)
-	}
-	static removeNode(name: NodeType['name']): NodeType {
-		const index = this.#additionalNodetypesList.findIndex(node => node.name === name)
-		if (index === -1) throw new Error()
-		const ret = this.#additionalNodetypes[name]
-		delete this.#additionalNodetypes[name]
-		this.#additionalNodetypesList.splice(index, 1)
-		return ret
-	}
-	static isStateMachine(object: unknown): boolean {
-		return S.isNode(object) === S.types.SM
-	}
-	// TODO: make parallel a plugin
-	static isParallel(object: unknown): boolean {
-		return S.isNode(object) === S.types.SQ && (S.kw.PL in (object as object))
-	}
-	static parallel(...list: Array<Sequence>): Parallel {
-		list[S.kw.PL] = true
-		return list as Parallel
-	}
-	static actionName(process: Sequence = null, path: Path = []): string | undefined {
-		const method = get_path_object(process, path) as {name:string}
-		return method && method.name
-	}
-	static lastOf(process: Sequence = null, path: Path = [], condition: ((item: Sequence, path: Path, process: Sequence) => boolean) = () => true): Path | null {
-		const item = get_path_object<Sequence>(process, path)
-		if (item === undefined) throw new Error()
-		if (condition(item, path, process)) return path
-		if (path.length === 0) return null
-		return S.lastOf(process, path.slice(0,-1), condition)
-	}
-	static lastNode(process: Sequence = null, path: Path = [], ...nodeTypes: Array<NodeType['name'] | Array<NodeType['name']>>): Path | null {
-		// TODO: check this is actually working
-		const flatNodeTypes = nodeTypes.flat(Infinity) as Array<NodeType['name'] | false>
-		return S.lastOf(process, path, i => flatNodeTypes.includes(S.isNode(i)))
-	}
-	static lastSequence(process: Sequence = null, path: Path = []): Path | null {
-		return S.lastNode(process, path, S.types.SQ)
-	}
-	static lastStateMachine(process: Sequence = null, path: Path = []): Path | null {
-		return S.lastNode(process, path, S.types.SM)
-	}
-	static nextPath(state: State = ({} as State), process: Sequence = null, path: Path = state[S.path] || []): Path | null {
-		if (path.length === 0) return null
-		const parPath = S.lastNode(process, path.slice(0,-1), this.#additionalNodetypesList.filter(({ nextPath }) => nextPath).map(({ name }) => name))
-		if (!parPath) return null
-		const parActs = get_path_object(process, parPath)
-		const parType = S.isNode(parActs)
-		if (!(parType && (parType in this.#additionalNodetypes) && this.#additionalNodetypes[parType] && this.#additionalNodetypes[parType].nextPath)) return null
-		const result = this.#additionalNodetypes[parType].nextPath(state, process, parPath, path)
-		if (result !== undefined)
-			return result
-		return S.nextPath(state, process, parPath)
-	}
-	static advance(state: State = ({} as State), process: Sequence = null, output: Output = null): State {
-		const path = state[S.path] || []
-		let currentState = state
-		const nodeType = S.isNode(output)
-		switch (nodeType) {
-			case S.types.CH:
-				currentState = S.applyChanges(state, output as Partial<State>)
-			case S.types.UN: // Set and forget action
-			case S.types.EM: // No-op action
-				// Increment path unless handling a directive or return
-				const nextPath = S.nextPath(state, process, path)
-				return nextPath ? {
-					...currentState,
-					[S.path]: nextPath
-				} : {
-					...currentState,
-					[S.return]: true,
-				}
-			case S.types.SQ: // Arrays are absolute paths when used as output
-				return {
-					...state,
-					[S.path]: output as Path
-				}
-			case S.types.RT:
-				return {
-					...state,
-					[S.return]: true,
-					[S.path]: path,
-					...(!output || output === S.return ? {} : { [S.kw.RS]: output[S.return] })
-				}
-			case S.types.DR: {
-				const outputType = typeof output
-				if (outputType === 'object' && output) {
-					return S.advance(state, process, output[S.path])
-				} else {
-					const lastOf = outputType === 'number' ? S.lastSequence(process, path.slice(0,-1)) : S.lastStateMachine(process, path.slice(0,-1))
-					if (!lastOf)
-						throw new PathReferenceError(`A relative directive has been provided as a ${outputType} (${String(output)}), but no ${outputType === 'number' ? 'sequence' : 'state machine'} exists that this ${outputType} could be ${outputType === 'number' ? 'an index': 'a state'} of from path [ ${path.join(', ')} ].`)
-					return {
-						...state,
-						[S.path]: [...lastOf, output as RelativeGOTOUnit]
-					}
-				}
-			}
-			default:
-				if (nodeType && S.#additionalNodetypes[nodeType] && S.#additionalNodetypes[nodeType].advance)
-					return S.#additionalNodetypes[nodeType].advance(state, process, output)
-				throw new ActionTypeError(`Unknwown output or action type: ${typeof output}${S.isNode(output) ? `, nodeType: ${String(S.isNode(output))}` : ''} at [ ${path.join(', ')} ]`)
-		}
-	}
-	static execute(state: State = ({} as State), process: Sequence = null): Output {
-		const path = state[S.path] || []
-		// console.log(path)
-		const node = get_path_object<Sequence>(process, path)
-		const nodeType = S.isNode(node)
-		switch (nodeType) {
-			case S.types.UN:
-				throw new UndefinedActionError(`There is nothing to execute at path [ ${path.join(', ')} ]`)
-			case S.types.AC:
-				return (node as Action)(state)
-			case S.types.CD:
-				if (normalise_function((node as Conditional)[S.kw.IF])(state))
-					return S.kw.TN in (node as Conditional)
-						? [ ...path, S.kw.TN ] : null
-				return S.kw.EL in (node as Conditional)
-					? [ ...path, S.kw.EL ]
-					: null
-			case S.types.SC:
-				const key = normalise_function((node as SwitchConditional)[S.kw.SW])(state)
-				const fallbackKey = (key in (node as SwitchConditional)[S.kw.CS]) ? key : S.kw.DF
-				return (fallbackKey in (node as SwitchConditional)[S.kw.CS])
-					? [ ...path, S.kw.CS, fallbackKey ]
-					: null
-			case S.types.SM:
-				return [ ...path, S.kw.IT ]
-			default:
-				if (nodeType && S.#additionalNodetypes[nodeType] && S.#additionalNodetypes[nodeType].execute)
-					return S.#additionalNodetypes[nodeType].execute(state, process, node)
-				return node as Output
-		}
-	}
-	static applyChanges(state: State = ({} as State), changes: Partial<State> = {}): State {
+	static applyChanges<UserState extends InitialState = InitialState>(state: SystemState<UserState>, changes: Partial<UserState> = {}): SystemState<UserState> {
 		if (state[S.strict]) {
 			if (Object.entries(changes).some(([name]) => !(name in state)))
 				throw new ContextReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).join(', ')} ].\nPath: [ ${state[S.path]?.join(' / ')} ]`)
@@ -244,43 +65,133 @@ export default class S extends StateMachineClass implements StateMachineClass {
 		}
 	}
 
-	static traverse(iterator: ((item: Sequence, path: Path, process: Sequence) => Sequence) = a => a, post: ((item: Sequence, path: Path, process: Sequence) => Sequence) = b => b): ((process: Sequence, path?: Path) => Sequence) {
-		const iterate = (process: Sequence, path: Path = []): Sequence => {
-			const item = get_path_object<Sequence>(process, path)
-			const itemType = S.isNode(item)
-			switch (itemType) {
-				case S.types.SQ:
-					const ret = (item as ArraySequence).map((_,i) => iterate(process, [...path,i]))
-					return S.isParallel(item) ? S.parallel(...ret) : ret
-				case S.types.CD:
-					return post({
-						...(item as Conditional),
-						[S.kw.IF]: (item as Conditional)[S.kw.IF],
-						...(S.kw.TN in (item as Conditional) ? { [S.kw.TN]: iterate(process, [...path,S.kw.TN]) } : {}),
-						...(S.kw.EL in (item as Conditional) ? { [S.kw.EL]: iterate(process, [...path,S.kw.EL]) } : {})
-					}, path, process)
-				case S.types.SC:
-					return post({
-						...(item as SwitchConditional),
-						[S.kw.SW]: (item as SwitchConditional)[S.kw.SW],
-						[S.kw.CS]: Object.fromEntries(Object.keys((item as SwitchConditional)[S.kw.CS]).map(key => [ key, iterate(process, [...path,S.kw.CS,key]) ])),
-					}, path, process)
-				case S.types.SM:
-					return post({
-						...(item as StateMachine),
-						...Object.fromEntries(Object.keys((item as StateMachine)).map(key => [ key, iterate(process, [...path,key]) ]))
-					}, path, process)
-				default:
-					return iterator(item, path, process)
-			}
+	static actionName<Process extends unknown = ProcessNode>(process: Process, path: Path = []): string | undefined {
+		const method = get_path_object<{name:string}>(process, path)
+		return method && method.name
+	}
+	static lastOf<Process extends unknown = ProcessNode>(process: Process, path: Path = [], condition: ((item: Process, path: Path, process: Process) => boolean) = () => true): Path | null {
+		const item = get_path_object<Process>(process, path)!
+		if (condition(item, path, process)) return path
+		if (path.length === 0) return null
+		return S.lastOf(process, path.slice(0,-1), condition)
+	}
+
+	static lastNode<
+		UserState extends InitialState = InitialState,
+		Return extends unknown = UserState[Keywords.RS],
+		Arguments extends Array<unknown> = Array<unknown>,
+		Process extends unknown = ProcessNode<UserState>,
+	>(instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>, path: Path = [], ...nodeTypes: Array<NodeDefinition['name'] | Array<NodeDefinition['name']>>): Path | null {
+		const flatNodeTypes = nodeTypes.flat(Infinity)
+		return S.lastOf(instance.process, path, i => {
+			const nodeType = instance.nodes.isNode(i)
+			return Boolean(nodeType && flatNodeTypes.includes(nodeType))
+		})
+	}
+	static nextPath<
+		UserState extends InitialState = InitialState,
+		Return extends unknown = UserState[Keywords.RS],
+		Arguments extends Array<unknown> = Array<unknown>,
+		Process extends unknown = ProcessNode<UserState>,
+	>(instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>, state: SystemState<UserState> = ({} as SystemState<UserState>), path: Path = state[S.path] || []): Path | null {
+		if (path.length === 0) return null
+		const parPath = S.lastNode<UserState, Return, Arguments, Process>(instance, path.slice(0,-1), [...instance.nodes.values()].filter(({ nextPath }) => nextPath).map(({ name }) => name))
+		if (!parPath) return null
+		const parActs = get_path_object<Process>(instance.process, parPath)
+		const parType = instance.nodes.isNode(parActs)
+		const nodeDefinition = parType && instance.nodes.get(parType)
+		if (!(nodeDefinition && nodeDefinition.nextPath)) return null
+		const result = nodeDefinition.nextPath(parPath, instance, state, path)
+		if (result !== undefined)
+			return result
+		return S.nextPath(instance, state, parPath)
+	}
+	static advance<
+		UserState extends InitialState = InitialState,
+		Return extends unknown = UserState[Keywords.RS],
+		Arguments extends Array<unknown> = Array<unknown>,
+		Process extends unknown = ProcessNode<UserState>,
+	>(instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>, state: SystemState<UserState>, output: Process = (null as Process)): SystemState<UserState> {
+		const path = state[S.path] || []
+		const nodeType = instance.nodes.isNode(output)
+		const nodeDefinition = nodeType && instance.nodes.get(nodeType)
+		if (nodeDefinition && nodeDefinition.advance)
+			return nodeDefinition.advance(output, instance, state)
+		throw new ActionTypeError(`Unknown output or action type: ${typeof output}${nodeType ? `, nodeType: ${String(nodeType)}` : ''} at [ ${path.join(', ')} ]`)
+	}
+	static execute<
+		UserState extends InitialState = InitialState,
+		Return extends unknown = UserState[Keywords.RS],
+		Arguments extends Array<unknown> = Array<unknown>,
+		Process extends unknown = ProcessNode<UserState>,
+	>(instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes' | 'runConfig'>, state: SystemState<UserState> = ({} as SystemState<UserState>)): Process {
+		const path = state[S.path] || []
+		const node = get_path_object<Process>(instance.process, path)!
+		const nodeType = instance.nodes.isNode(node)
+		const nodeDefinition = nodeType && instance.nodes.get(nodeType)
+		if (nodeDefinition && nodeDefinition.execute)
+			return nodeDefinition.execute(node, instance, state) as Process
+		return node
+	}
+	static traverse<
+		UserState extends InitialState = InitialState,
+		Return extends unknown = UserState[Keywords.RS],
+		Arguments extends Array<unknown> = Array<unknown>,
+		Process extends unknown = ProcessNode<UserState>,
+	>(
+		iterator: ((item: Process, path: Path, instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>) => Process) = a => a,
+		post:     ((item: Process, path: Path, instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>) => Process) = b => b
+	): ((instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>, path?: Path) => Process) {
+		const iterate = (instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>, path: Path = []): Process => {
+			const item = get_path_object<Process>(instance.process, path)!
+			const nodeType = instance.nodes.isNode(item)
+			const nodeDefinition = nodeType && instance.nodes.get(nodeType)
+			if (nodeDefinition && nodeDefinition.traverse)
+				return nodeDefinition.traverse(item, path, instance, iterate, post)
+			return iterator(item, path, instance)
 		}
 		return iterate
 	}
+	static async execAsync<
+		UserState extends InitialState = InitialState,
+		Return extends unknown = UserState[Keywords.RS],
+		Arguments extends Array<unknown> = Array<unknown>,
+		Process extends unknown = ProcessNode<UserState>,
+	>(instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes' | 'runConfig'>, ...input: Arguments): Promise<Return> {
+		const { delay, allow, wait, until, iterations, inputModifier, outputModifier, strictContext, initialState: state } = { ...S.runConfig, ...instance.runConfig }
+		const modifiedInput = (await inputModifier.apply(this, input)) || {}
+		if (delay) await wait_time(delay)
+		let r = 0, startTime = Date.now(), currentState = S.applyChanges<UserState>({
+			[S.changes]: {},
+			...state,
+			[S.path]: modifiedInput[S.path] || [],
+			[S.strict]: strictContext
+		}, modifiedInput)
+		while (r < iterations) {
+			if (until(currentState)) break;
+			if (++r >= iterations)
+				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.path]?.join(', ')} ]`)
+			currentState = S.advance<UserState, Return, Arguments, Process>(instance, currentState, await S.execute<UserState, Return, Arguments, Process>(instance, currentState))
+			if (allow > 0 && r % 10 === 0) {
+				const nowTime = Date.now()
+				if (nowTime - startTime >= allow) {
+					await wait_time(wait)
+					startTime = Date.now()
+				}
+			}
+		}
+		return outputModifier(currentState)
+	}
 
-	static exec(state: InputState = {}, process: Sequence = null, runConfig: Partial<RunConfig> = S.runConfig, ...input: Array<unknown>) {
-		const { until, result, iterations, inputModifier, outputModifier, strictContext } = deep_merge_object(S.runConfig, runConfig)
+	static exec<
+		UserState extends InitialState = InitialState,
+		Return extends unknown = UserState[Keywords.RS],
+		Arguments extends Array<unknown> = Array<unknown>,
+		Process extends unknown = ProcessNode<UserState>,
+	>(instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes' | 'runConfig'>, ...input: Arguments): Return {
+		const { until, iterations, inputModifier, outputModifier, strictContext, initialState: state  } = { ...S.runConfig, ...instance.runConfig }
 		const modifiedInput = inputModifier.apply(this, input) || {}
-		let r = 0, currentState = S.applyChanges({
+		let r = 0, currentState = S.applyChanges<UserState>({
 			[S.changes]: {},
 			...state,
 			[S.path]: modifiedInput[S.path] || [],
@@ -290,147 +201,136 @@ export default class S extends StateMachineClass implements StateMachineClass {
 			if (until(currentState)) break;
 			if (++r > iterations)
 				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.path]?.join(', ')} ]`)
-			currentState = S.advance(currentState, process, S.execute(currentState, process))
+			currentState = S.advance<UserState, Return, Arguments, Process>(instance, currentState, S.execute<UserState, Return, Arguments, Process>(instance, currentState))
 		}
-		return outputModifier(result ? currentState[S.kw.RS] : currentState)
+		return outputModifier(currentState)
 	}
-	static async execAsync(state: InputState = {}, process: Sequence = null, runConfig: Partial<RunConfig> = S.runConfig, ...input) {
-		const { delay, allow, wait, until, result, iterations, inputModifier, outputModifier, strictContext } = deep_merge_object(S.runConfig, runConfig)
-		const modifiedInput = (await inputModifier.apply(this, input)) || {}
-		if (delay) await wait_time(delay)
-		let r = 0, startTime = Date.now(), currentState = S.applyChanges({ [S.changes]: {}, ...state, [S.path]: (modifiedInput[S.path] || []), [S.strict]: strictContext }, modifiedInput)
-		while (r < iterations) {
-			if (until(currentState)) break;
-			if (++r >= iterations)
-				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.path]?.join(', ')} ]`)
-			const method = get_path_object<Sequence>(process, currentState[S.path])
-			if (S.isParallel(method)) {
-				const newChanges: Array<Partial<State>> = await Promise.all((method as ArraySequence).map(parallel => new S(state, parallel, {
-					...runConfig,
-					result: false, async: true,
-					inputModifier: (state) => {
-						const { [S.path]:__path, [S.changes]: __changes, [S.strict]: __strict, [S.return]: __return, ...pureState } = (state as State)
-						return pureState
-					},
-					outputModifier: (state) => (state as State)[S.changes],
-				})(currentState)))
-				currentState = S.advance(currentState, process, deep_merge_object(currentState[S.changes] || {}, ...newChanges))
-			}
-			else currentState = S.advance(currentState, process, await S.execute(currentState, process))
-			if (allow > 0 && r % 10 === 0) {
-				const nowTime = Date.now()
-				if (nowTime - startTime >= allow) {
-					await wait_time(wait)
-					startTime = Date.now()
-				}
-			}
-		}
-		return outputModifier(result ? currentState[S.kw.RS] : currentState)
-	}
-	static run(state: InitialState = {}, process: Sequence = null, runConfig: Partial<RunConfig> = S.runConfig, ...input: Array<unknown>) {
-		const { async: isAsync } = deep_merge_object(S.runConfig, runConfig)
-		if (isAsync) return S.execAsync(state, process, runConfig, ...input)
-		return S.exec(state, process, runConfig, ...input)
+	static run<
+		UserState extends InitialState = InitialState,
+		Return extends unknown = UserState[Keywords.RS],
+		Arguments extends Array<unknown> = Array<unknown>,
+		Process extends unknown = ProcessNode<UserState>,
+	>(instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes' | 'runConfig'>, ...input: Arguments): Return {
+		const { async: isAsync } = { ...S.runConfig, ...instance.runConfig }
+		if (isAsync) return S.execAsync<UserState, Return, Arguments, Process>(instance, ...input) as Return
+		return S.exec<UserState, Return, Arguments, Process>(instance, ...input)
 	}
 
-	process: Sequence = null
-	protected _initialState = { [S.kw.RS]: null }
-	protected _runConfig = S.runConfig
-	constructor(state: InitialState = {}, process: Sequence = null, runConfig: Partial<RunConfig> = S.runConfig) {
-		super((...argumentsList: Array<unknown>) => (runConfig.runMethod || this.run).apply(this, argumentsList))
-		this._runConfig = deep_merge_object(this._runConfig, runConfig)
-		this._initialState = deep_merge_object(this._initialState, state)
+	process: Process
+	protected _runConfig: RunConfig<UserState, Return, Arguments, Process>// = S.runConfig
+	get nodes() {
+		return this._runConfig.nodes
+	}
+	get runConfig(): RunConfig<UserState, Return, Arguments, Process> {
+		return { ...this._runConfig }
+	}
+	get initialState(): UserState {
+		return clone_object(this._runConfig.initialState)
+	}
+
+	constructor(process: Process, runConfig: Partial<RunConfig<UserState, Return, Arguments, Process>> = S.runConfig as unknown as RunConfig<UserState, Return, Arguments, Process>) {
+		super((...argumentsList: Arguments): Return => (runConfig.runMethod || this.run).apply(this, argumentsList))
+		this._runConfig = {
+			...S.runConfig,
+			...this._runConfig,
+			...runConfig
+		}
 		this.process = process
+	};
+
+	isNode(object: unknown, objectType: (typeof object)): false | NodeDefinition['name'] {
+		return this.nodes.isNode(object, objectType)
 	}
-	run(...input: Array<unknown>) {
-		return S.run(this._initialState, this.process, this._runConfig, ...input)
+	applyChanges(state: SystemState<UserState>, changes: Partial<UserState>): SystemState<UserState> {
+		return S.applyChanges<UserState>(state, changes)
 	}
-	get runConfig(): RunConfig {
-		return clone_object(this._runConfig)
-	}
-	get initialState(): InitialState {
-		return clone_object(this._initialState)
-	}
-	actionName(path: Path = []): string | undefined {
+
+	actionName(path: Path): string | undefined {
 		return S.actionName(this.process, path)
 	}
+	lastOf(path: Path, condition: ((item: Process, path: Path, process: Process) => boolean)): Path | null {
+		return S.lastOf<Process>(this.process, path, condition)
+	}
+	
+	lastNode(path: Path, ...nodeTypes: Array<NodeDefinition['name'] | Array<NodeDefinition['name']>>): Path | null {
+		return S.lastNode<UserState, Return, Arguments, Process>(this, path, ...nodeTypes)
+	}
+	nextPath(state: SystemState<UserState>, path: Path = state[S.path] || []):  Path | null {
+		return S.nextPath<UserState, Return, Arguments, Process>(this, state, path)
+	}
+	advance(state: SystemState<UserState>, output: Process): SystemState<UserState> {
+		return S.advance<UserState, Return, Arguments, Process>(this, state, output)
+	}
+	execute(state: SystemState<UserState>): Process {
+		return S.execute<UserState, Return, Arguments, Process>(this, state)
+	}
 
-	plugin(transformer: ((current: TransformerContext) => Partial<TransformerContext>) | {
-		state?: (current: TransformerContext) => InitialState,
-		process?: (current: TransformerContext) => Sequence,
-		runConfig?: (current: TransformerContext) => RunConfig,
-	} = {}): S {
-		let transformed: TransformerContext = {state:this._initialState,process:this.process,runConfig: this._runConfig}
-		if (typeof transformer === 'function') {
-			transformed = {
-				...transformed,
-				...transformer({ ...transformed }),
-			}
-		} else if (typeof transformer === 'object') {
-			transformed = {
-				...transformed,
-				...((typeof transformer.state === 'function') ? {
-					state: transformer.state(transformed)
-				} : (transformer.state ? deep_merge_object(transformed.state, transformer.state) : {})),
-				...((typeof transformer.process === 'function') ? {
-					process: transformer.process(transformed)
-				} : {}),
-				...((typeof transformer.runConfig === 'function') ? {
-					runConfig: transformer.runConfig(transformed)
-				} : {}),
-			}
-		} else throw new Error()
-		return new S(transformed.state, transformed.process, transformed.runConfig)
+	exec(...input: Arguments): Return {
+		return S.exec<UserState, Return, Arguments, Process>(this, ...input)
+	}
+	execAsync(...input: Arguments): Promise<Return> {
+		return S.execAsync<UserState, Return, Arguments, Process>(this, ...input)
+	}
+	run (...input: Arguments): Return {
+		return S.run<UserState, Return, Arguments, Process>(this, ...input)
 	}
 
 	// These are effectively runConfig "setters"
-	config(runConfig: Partial<RunConfig>): S {
-		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, runConfig))
+	plugin(...transformers: Array<Plugin<UserState, Return, Arguments, Process>>): S<UserState, Return, Arguments, Process> {
+		const transformed = transformers.reduce((transformed: TransformerContext<UserState, Return, Arguments, Process>, transformer: Plugin<UserState, Return, Arguments, Process>): TransformerContext<UserState, Return, Arguments, Process> => {
+			if (typeof transformer === 'function') {
+				return {
+					...transformed,
+					...transformer({ ...transformed }),
+				}
+			} else if (typeof transformer === 'object') {
+				return {
+					...transformed,
+					...((typeof transformer.process === 'function') ? {
+						process: transformer.process(transformed)
+					} : {}),
+					...((typeof transformer.runConfig === 'function') ? {
+						runConfig: transformer.runConfig(transformed)
+					} : {}),
+				}
+			} else throw new Error()
+		}, { process: this.process, runConfig: this._runConfig })
+		return new S<UserState, Return, Arguments, Process>(transformed.process, transformed.runConfig)
 	}
-	get unstrict(): S {
-		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { strictContext: false }))
+	config(runConfig: Partial<RunConfig<UserState, Return, Arguments, Process>>): S<UserState, Return, Arguments, Process> {
+		return new S<UserState, Return, Arguments, Process>(this.process, { ...this._runConfig, ...runConfig })
 	}
-	get strict(): S {
-		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { strictContext: true }))
+	get unstrict(): S<UserState, Return, Arguments, Process> {
+		return new S<UserState, Return, Arguments, Process>(this.process, { ...this._runConfig, strictContext: false })
 	}
-	get strictTypes(): S {
-		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { strictContext: S.strictTypes }))
+	get strict(): S<UserState, Return, Arguments, Process> {
+		return new S<UserState, Return, Arguments, Process>(this.process, { ...this._runConfig, strictContext: true })
 	}
-	get async(): S {
-		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { async: true }))
+	get strictTypes(): S<UserState, Return, Arguments, Process> {
+		return new S<UserState, Return, Arguments, Process>(this.process, { ...this._runConfig, strictContext: S.strictTypes })
 	}
-	get sync(): S {
-		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { async: false }))
+	get async(): S<UserState, Promise<Return>, Arguments, Process> {
+		return new S<UserState, Promise<Return>, Arguments, Process>(this.process, { ...this._runConfig, async: true } as unknown as RunConfig<UserState, Promise<Return>, Arguments, Process>)
 	}
-	get step(): S {
-		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { iterations: 1, result: false }))
+	get sync(): S<UserState, Awaited<Return>, Arguments, Process> {
+		return new S<UserState, Awaited<Return>, Arguments, Process>(this.process, { ...this._runConfig, async: false } as unknown as RunConfig<UserState, Awaited<Return>, Arguments, Process>)
 	}
-	until(until: RunConfig['until']): S {
-		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { until }))
+	get step(): S<UserState, SystemState<UserState>, Arguments, Process> {
+		return new S<UserState, SystemState<UserState>, Arguments, Process>(this.process, { ...this._runConfig, iterations: 1, outputModifier: a => a } as unknown as RunConfig<UserState, SystemState<UserState>, Arguments, Process>)
 	}
-	input(inputModifier: RunConfig['inputModifier']): S {
-		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { inputModifier }))
+	until(until: RunConfig<UserState, Return, Arguments, Process>['until']): S<UserState, Return, Arguments, Process> {
+		return new S<UserState, Return, Arguments, Process>(this.process, { ...this._runConfig, until })
 	}
-	output(outputModifier: RunConfig['outputModifier']): S {
-		return new S(this._initialState, this.process, deep_merge_object(this._runConfig, { outputModifier }))
+	input<NewArguments extends Array<unknown> = Arguments>(inputModifier: (...input: NewArguments) => Partial<InputSystemState<UserState>>): S<UserState, Return, NewArguments, Process> {
+		return new S<UserState, Return, NewArguments, Process>(this.process, { ...this._runConfig, inputModifier } as unknown as RunConfig<UserState, Return, NewArguments, Process>)
+	}
+	output<NewReturn extends unknown = Return>(outputModifier: (state: SystemState<UserState>) => NewReturn): S<UserState, NewReturn, Arguments, Process> {
+		return new S<UserState, NewReturn, Arguments, Process>(this.process, { ...this._runConfig, outputModifier } as unknown as RunConfig<UserState, NewReturn, Arguments, Process>)
+	}
+	defaults<NewUserState extends UserState = UserState>(initialState: NewUserState): S<NewUserState, NewUserState[Keywords.RS], Arguments, Process> {
+		return new S<NewUserState, NewUserState[Keywords.RS], Arguments, Process>(this.process, { ...this._runConfig, initialState } as unknown as RunConfig<NewUserState, NewUserState[Keywords.RS], Arguments, Process>)
+	}
+	addNode(...nodes: Array<NodeDefinition>): S<UserState, Return, Arguments, Process> {
+		return new S<UserState, Return, Arguments, Process>(this.process, { ...this._runConfig, nodes: new NodeDefinitions<UserState, Return, Arguments, Process>([...this._runConfig.nodes.values(), ...nodes].map(node => [node.name, node]) as unknown as []) })
 	}
 }
-S.addNode(S.nodeTypes.SQ, {
-	nextPath: (_state, process, parPath, path) => {
-		const parActs = get_path_object<ArraySequence>(process, parPath)
-		const childItem = path[parPath.length] as number
-		if (parActs && childItem+1 < parActs.length)
-			return [ ...parPath, childItem+1 ]
-	},
-	isNode: (object, objectType) => {
-		if (objectType !== 'object') return;
-		return Array.isArray(object)
-	},
-	execute: (state, _process, node) => {
-		const path = state[S.path] || []
-		return (node as ArraySequence).length ? [ ...path, 0 ] : null
-	}
-})
-
-// export const StateMachine = S
-export const SuperSmallStateMachine = S

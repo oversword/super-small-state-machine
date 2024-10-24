@@ -10,8 +10,7 @@ export const changesSymbol     = Symbol('Super Small State Machine Changes')
 export const pathSymbol        = Symbol('Super Small State Machine Path')
 export const strictSymbol      = Symbol('Super Small State Machine Strict')
 export const strictTypesSymbol = Symbol('Super Small State Machine Strict Types')
-
-export type PartialPick<O, K extends keyof O> = Pick<O, K> & Partial<O>;
+export const parallelSymbol    = Symbol('Super Small State Machine Parallel')
 
 export enum Keywords {
 	IF = 'if',
@@ -22,103 +21,161 @@ export enum Keywords {
 	DF = 'default',
 	IT = 'initial',
 	RS = 'result',
-	PL = 'parallel',
 }
 
-export enum NodeTypes {
-	UN = 'undefined',
-	EM = 'empty',
-	DR = 'directive',
-	RT = 'return',
-	AC = 'action',
-	SQ = 'sequence',
-	CD = 'conditional',
-	SC = 'switch-conditional',
-	SM = 'state-machine',
-	CH = 'changes'
+export class NodeDefinition<
+	SelfType extends unknown = never,
+	UserState extends InitialState = InitialState,
+	Return extends unknown = UserState[Keywords.RS],
+	Arguments extends Array<unknown> = Array<unknown>,
+	Process extends unknown = ProcessNode<UserState>,
+> {
+	public readonly name: string | symbol = Symbol('Unnamed node')
+	public readonly isNode:   ((object: unknown, objectType: typeof object, last: NodeDefinition['name'] | false) => object is SelfType) | null = null
+	public readonly execute:  ((node: SelfType,  instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes' | 'runConfig'>, state: SystemState<UserState>) => Process | Promise<Process>) | null = null
+	public readonly nextPath: ((parPath: Path,   instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>, state: SystemState<UserState>, path: Path) => undefined | null | Path) | null = null
+	public readonly advance:  ((output: SelfType,  instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>, state: SystemState<UserState>) => SystemState<UserState>) | null = null
+	public readonly traverse: ((
+		item: SelfType,
+		path: Path,
+		instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>,
+		iterate: ((instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>, path: Path) => SelfType),
+		post: ((item: SelfType, path: Path, instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>) => SelfType)
+	) => SelfType) | null = null
+
+	constructor(name: NodeDefinition['name'], { execute = null, isNode = null, nextPath = null, advance = null, traverse = null }: Partial<Pick<NodeDefinition<SelfType, UserState, Return, Arguments, Process>, 'execute' | 'nextPath' | 'isNode' | 'advance' | 'traverse'>>) {
+		this.name = name
+		this.execute = execute
+		this.isNode = isNode
+		this.nextPath = nextPath
+		this.advance = advance
+		this.traverse = traverse
+	}
+}
+export class NodeDefinitions<
+	UserState extends InitialState = InitialState,
+	Return extends unknown = UserState[Keywords.RS],
+	Arguments extends Array<unknown> = Array<unknown>,
+	Process extends unknown = ProcessNode<UserState>,
+> extends Map<NodeDefinition<Process>['name'], NodeDefinition<Process, UserState, Return, Arguments, Process>>  {
+	isNode(object: unknown, objectType: (typeof object) = typeof object): false | NodeDefinition['name'] {
+		return [...this.values()].reduce((last: false | NodeDefinition['name'], current): false | NodeDefinition['name'] => {
+			if (current.isNode && current.isNode(object, objectType, last))
+				return current.name
+			return last
+		}, false)
+	}
+}
+export const N = NodeDefinition
+
+
+export class ExtensibleFunction extends Function {
+	constructor(f: Function) {
+		super()
+		return Object.setPrototypeOf(f, new.target.prototype);
+	};
 }
 
-export interface RunConfig {
+
+export interface InitialState {
+	[Keywords.RS]: unknown,
+	[key: string]: unknown,
+}
+export type SystemState<UserState extends InitialState = InitialState> = UserState & {
+	[strictSymbol]: boolean | typeof strictTypesSymbol
+	[pathSymbol]: Path
+	[changesSymbol]: Partial<UserState>
+	[returnSymbol]?: boolean
+}
+export type InputSystemState<UserState extends InitialState = InitialState> = UserState & Partial<Pick<SystemState<UserState>, typeof pathSymbol | typeof returnSymbol>>
+
+
+export interface RunConfig<
+	UserState extends InitialState = InitialState,
+	Return extends unknown = UserState[Keywords.RS],
+	Arguments extends Array<unknown> = Array<unknown>,
+	Process extends unknown = ProcessNode<UserState>,
+> {
+	initialState: UserState,
 	iterations: number,
-	result: boolean,
-	until: (state: State) => boolean,
+	until: (state: SystemState<UserState>) => boolean,
 	strictContext: boolean | typeof strictTypesSymbol,
 	runMethod: null,
-	inputModifier: (...input: Array<unknown>) => InputState,
-	outputModifier: (output: State | unknown) => unknown,
+	inputModifier: (...input: Arguments) => Partial<InputSystemState<UserState>>,
+	outputModifier: (state: SystemState<UserState>) => Return,
 	async: boolean,
+	nodes: NodeDefinitions<UserState, Return, Arguments, Process>,
 	// Special settings for async
 	delay: number,
 	allow: number,
 	wait: number,
 }
 
-
-export interface State extends InitialState {
-	[strictSymbol]: boolean | typeof strictTypesSymbol
-	[pathSymbol]: Path
-	[changesSymbol]: Partial<InitialState>
-	[returnSymbol]?: boolean
-}
-
-export type StateChanges = Partial<State>
+// Process types
+export type StateChanges<UserState extends InitialState = InitialState> = Partial<UserState>
 export type Path = Array<RelativeGOTOUnit>
 	
-export type Action = (state: State) => Output
-export type ArraySequence = Array<Sequence>
-export interface StateMachine {
-	[Keywords.IT]: Sequence
-	[key: string]: Sequence
+export type ActionNode<UserState extends InitialState = InitialState> = (state: SystemState<UserState>) => Output | Promise<Output>
+export type SequenceNode<UserState extends InitialState = InitialState> = Array<ProcessNode<UserState>>
+export interface MachineNode<UserState extends InitialState = InitialState> {
+	[Keywords.IT]: ProcessNode<UserState>
+	[key: string | number | symbol]: ProcessNode<UserState>
 }
-export interface Conditional {
-	[Keywords.IF]: (state: State) => boolean,
-	[Keywords.TN]?: Sequence
-	[Keywords.EL]?: Sequence
+export interface ConditionNode<UserState extends InitialState = InitialState> {
+	[Keywords.IF]: (state: SystemState<UserState>) => boolean,
+	[Keywords.TN]?: ProcessNode<UserState>
+	[Keywords.EL]?: ProcessNode<UserState>
 }
-export interface SwitchConditional {
-	[Keywords.SW]: (state: State) => string | number,
-	[Keywords.CS]: Record<string|number, Sequence>
+export interface SwitchNode<UserState extends InitialState = InitialState> {
+	[Keywords.SW]: (state: SystemState<UserState>) => string | number,
+	[Keywords.CS]: Record<string|number, ProcessNode<UserState>>
 }
 export type RelativeGOTOUnit = string | number | symbol
 export type Directive = RelativeGOTOUnit | typeof returnSymbol
-
-
-export type Sequence = ArraySequence | StateMachine | Conditional | SwitchConditional | Directive | Action | null | undefined
-
-export type Parallel = Array<Sequence> & {[Keywords.PL]:true}
-
+export type ProcessNode<UserState extends InitialState = InitialState> =  SequenceNode<UserState> | MachineNode<UserState> | ConditionNode<UserState> | SwitchNode<UserState> | Directive | Return | Path | ActionNode<UserState> | null | undefined |void | StateChanges<UserState>
+export type ParallelNode<UserState extends InitialState = InitialState> = SequenceNode<UserState> & {[parallelSymbol]:true}
 export type AbsoluteGOTO = Record<typeof pathSymbol, Path>
 export type RelativeGOTO = Record<typeof pathSymbol, RelativeGOTOUnit>
 export type Return = { [returnSymbol]: any }
+export type Output<UserState extends InitialState = InitialState> = StateChanges<UserState> | OutputDirective | undefined | null | void
+export type OutputDirective =  AbsoluteGOTO | RelativeGOTO | Directive | Path | Return
 
-export type Output = Partial<State> | AbsoluteGOTO | RelativeGOTO | Directive | Path | Return | undefined | null
-
-export interface NodeType {
-	name: string | symbol;
-	isNode: ((object: unknown, objectType: typeof object, last: NodeType['name'] | false) => boolean | undefined) | null,
-	execute: ((state: State, process: Sequence, node: Sequence) => Output) | null,
-	nextPath: ((state: State, process: Sequence, parPath: Path, path: Path) => undefined | null | Path) | null,
-	advance: ((state: State, process: Sequence, output: Output) => State) | null,
-	// nextPath: (() => void) | null
+export type Plugin<
+	UserState extends InitialState = InitialState,
+	Return extends unknown = UserState[Keywords.RS],
+	Arguments extends Array<unknown> = Array<unknown>,
+	Process extends unknown = ProcessNode<UserState>,
+> = ((current: TransformerContext<UserState, Return, Arguments, Process>) => Partial<TransformerContext<UserState, Return, Arguments, Process>>) | {
+	state?: (current: TransformerContext<UserState, Return, Arguments, Process>) => InitialState,
+	process?: (current: TransformerContext<UserState, Return, Arguments, Process>) => Process,
+	runConfig?: (current: TransformerContext<UserState, Return, Arguments, Process>) => RunConfig<UserState, Return, Arguments, Process>,
+}
+export interface TransformerContext<
+	UserState extends InitialState = InitialState,
+	Return extends unknown = UserState[Keywords.RS],
+	Arguments extends Array<unknown> = Array<unknown>,
+	Process extends unknown = ProcessNode<UserState>,
+> {
+	process: Process,
+	runConfig: RunConfig<UserState, Return, Arguments, Process>,
 }
 
-export interface TransformerContext {
-	state: InitialState,
-	process: Sequence,
-	runConfig: RunConfig,
+
+export interface SuperSmallStateMachine<
+	UserState extends InitialState = InitialState,
+	Return extends unknown = UserState[Keywords.RS],
+	Arguments extends Array<unknown> = Array<unknown>,
+	Process extends unknown = ProcessNode<UserState>,
+> {
+	process: Process
+	(...args: Arguments): Return;
 }
-
-export type InitialState = Record<string | Keywords.RS, unknown>
-export type InputState = InitialState & Partial<Pick<State, typeof pathSymbol | typeof returnSymbol>>
-
-class ExtensibleFunction extends Function {
-	constructor(f: Function) {
-		super()
-		return Object.setPrototypeOf(f, new.target.prototype);
-	}
-}
-
-export abstract class StateMachineClass extends ExtensibleFunction {
+export abstract class SuperSmallStateMachine<
+	UserState extends InitialState = InitialState,
+	Return extends unknown = UserState[Keywords.RS],
+	Arguments extends Array<unknown> = Array<unknown>,
+	Process extends unknown = ProcessNode<UserState>,
+> extends ExtensibleFunction {
 	public static readonly return:      typeof returnSymbol      = returnSymbol
 	public static readonly changes:     typeof changesSymbol     = changesSymbol
 	public static readonly path:        typeof pathSymbol        = pathSymbol
@@ -129,65 +186,97 @@ export abstract class StateMachineClass extends ExtensibleFunction {
 
 	public static readonly keywords: typeof Keywords = Keywords
 	public static readonly kw:       typeof Keywords = Keywords
-	public static readonly nodeTypes: typeof NodeTypes = NodeTypes
-	public static readonly types:     typeof NodeTypes = NodeTypes
 
-	public static readonly isNode: (object: unknown, objectType: (typeof object)) => false | NodeType['name']
-	public static readonly addNode: (name: NodeType['name'], nodeDefinition: Partial<Pick<NodeType, 'execute' | 'nextPath' | 'isNode' | 'advance'>>) => void
-	public static readonly removeNode: (name: NodeType['name']) => NodeType
+	public static readonly applyChanges:<UserState extends InitialState = InitialState>(state: SystemState<UserState>, changes: Partial<UserState>) => SystemState<UserState>
 
-	public static readonly isStateMachine: (object: unknown) => boolean
-	public static readonly isParallel: (object: unknown) => boolean
-	public static readonly parallel: (...list: Array<Sequence>) => Parallel
+	public static readonly actionName:<Process extends unknown = ProcessNode>(process: Process, path: Path) => string | undefined
+	public static readonly lastOf:    <Process extends unknown = ProcessNode>(process: Process, path: Path, condition: ((item: Process, path: Path, process: Process) => boolean)) => Path | null
+	
+	public static readonly lastNode:<
+		UserState extends InitialState = InitialState,
+		Return extends unknown = UserState[Keywords.RS],
+		Arguments extends Array<unknown> = Array<unknown>,
+		Process extends unknown = ProcessNode<UserState>,
+	>(instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>, path: Path, ...nodeTypes: Array<NodeDefinition['name'] | Array<NodeDefinition['name']>>) => Path | null
+	public static readonly nextPath:<
+		UserState extends InitialState = InitialState,
+		Return extends unknown = UserState[Keywords.RS],
+		Arguments extends Array<unknown> = Array<unknown>,
+		Process extends unknown = ProcessNode<UserState>,
+	>(instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>, state: SystemState<UserState>, path: Path) => Path | null
+	public static readonly advance:<
+		UserState extends InitialState = InitialState,
+		Return extends unknown = UserState[Keywords.RS],
+		Arguments extends Array<unknown> = Array<unknown>,
+		Process extends unknown = ProcessNode<UserState>,
+	>(instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>, state: SystemState<UserState>, output: Process) => SystemState<UserState>
+	public static readonly execute:<
+		UserState extends InitialState = InitialState,
+		Return extends unknown = UserState[Keywords.RS],
+		Arguments extends Array<unknown> = Array<unknown>,
+		Process extends unknown = ProcessNode<UserState>,
+	>(instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes' | 'runConfig'>, state: SystemState<UserState>) => Process
+	public static readonly traverse:<
+		UserState extends InitialState = InitialState,
+		Return extends unknown = UserState[Keywords.RS],
+		Arguments extends Array<unknown> = Array<unknown>,
+		Process extends unknown = ProcessNode<UserState>,
+	> (
+		iterator: ((item: Process, path: Path, instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>) => Process),
+		post: ((item: Process, path: Path, instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>) => Process)
+	) => ((instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes'>, path?: Path) => Process)
 
-	public static readonly lastOf:                 (process: Sequence, path: Path, condition: ((item: Sequence, path: Path, process: Sequence) => boolean)) => Path | null
-	public static readonly lastNode:               (process: Sequence, path: Path, ...nodeTypes: Array<NodeType['name'] | Array<NodeType['name']>>) => Path | null
-	public static readonly lastSequence:           (process: Sequence, path: Path) => Path | null
-	public static readonly lastStateMachine:       (process: Sequence, path: Path) => Path | null
-	public static readonly actionName:             (process: Sequence, path: Path) => string | undefined
-	public static readonly nextPath: (state: State, process: Sequence, path: Path) => Path | null
-	public static readonly advance:  (state: State, process: Sequence, output: Output) => State
-	public static readonly execute:  (state: State, process: Sequence) => Output
-	public static readonly applyChanges: (state: State, changes: Partial<InitialState>) => State
+	public static readonly exec:<
+		UserState extends InitialState = InitialState,
+		Return extends unknown = UserState[Keywords.RS],
+		Arguments extends Array<unknown> = Array<unknown>,
+		Process extends unknown = ProcessNode<UserState>,
+	>(instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes' | 'runConfig'>, ...input: Arguments) => Return
+	public static readonly execAsync:<
+		UserState extends InitialState = InitialState,
+		Return extends unknown = UserState[Keywords.RS],
+		Arguments extends Array<unknown> = Array<unknown>,
+		Process extends unknown = ProcessNode<UserState>,
+	>(instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes' | 'runConfig'>, ...input: Arguments) => Promise<Return>
+	public static readonly run:<
+		UserState extends InitialState = InitialState,
+		Return extends unknown = UserState[Keywords.RS],
+		Arguments extends Array<unknown> = Array<unknown>,
+		Process extends unknown = ProcessNode<UserState>,
+	>(instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Process>, 'process' | 'nodes' | 'runConfig'>, ...input: Arguments) => Return
 
-	public static readonly traverse: (
-		iterator: ((item: Sequence, path: Path, process: Sequence) => Sequence),
-		post: ((item: Sequence, path: Path, process: Sequence) => Sequence)
-	) => ((process: Sequence, path?: Path) => Sequence)
-	public static readonly exec: (state: State, process: Sequence, runConfig: Partial<RunConfig>, ...input: Array<unknown>) => unknown
-	public static readonly execAsync: (state: State, process: Sequence, runConfig: Partial<RunConfig>, ...input: Array<unknown>) => Promise<unknown>
-	public static readonly run: (state: State, process: Sequence, runConfig: Partial<RunConfig>, ...input: Array<unknown>) => unknown | Promise<unknown>
+	public abstract nodes: NodeDefinitions<UserState, Return, Arguments, Process>
+	public abstract runConfig: RunConfig<UserState, Return, Arguments, Process>
+	public abstract initialState: UserState
 
+	public abstract isNode(object: unknown, objectType: (typeof object)): false | NodeDefinition['name']
+	public abstract applyChanges(state: SystemState<UserState>, changes: Partial<SystemState<UserState>>): SystemState<UserState>
 
-	public readonly process: Sequence = null
-	protected _initialState: InitialState
-	protected _runConfig: RunConfig
-
-	public abstract run(...input: Array<unknown>): unknown | Promise<unknown>
-	public abstract runConfig: RunConfig
-	public abstract initialState: InitialState
 	public abstract actionName(path: Path): string | undefined
+	public abstract lastOf(path: Path, condition: ((item: Process, path: Path, process: Process) => boolean)): Path | null
+	
+	public abstract lastNode(path: Path, ...nodeTypes: Array<NodeDefinition['name'] | Array<NodeDefinition['name']>>): Path | null
+	public abstract nextPath(state: SystemState<UserState>, path: Path):  Path | null
+	public abstract advance (state: SystemState<UserState>, output: Process): SystemState<UserState>
+	public abstract execute (state: SystemState<UserState>): Process
 
-	public abstract plugin(transformer: ((current: TransformerContext) => Partial<TransformerContext>) | {
-		state?: (current: TransformerContext) => InitialState,
-		process?: (current: TransformerContext) => Sequence,
-		runConfig?: (current: TransformerContext) => RunConfig,
-	}): StateMachineClass
+	public abstract exec     (...input: Arguments): Return
+	public abstract execAsync(...input: Arguments): Promise<Return>
+	public abstract run      (...input: Arguments): Return
 
 	// These are effectively runConfig "setters"
-	public abstract config(runConfig: Partial<RunConfig>): StateMachineClass
-	public abstract unstrict: StateMachineClass
-	public abstract strict: StateMachineClass
-	public abstract strictTypes: StateMachineClass
-	public abstract async: StateMachineClass
-	public abstract sync: StateMachineClass
-	public abstract step: StateMachineClass
-	public abstract until(until: RunConfig['until']): StateMachineClass
-	public abstract input(inputModifier: RunConfig['inputModifier']): StateMachineClass
-	public abstract output(outputModifier: RunConfig['outputModifier']): StateMachineClass
+	public abstract plugin(...plugins: Array<Plugin<UserState, Return, Arguments, Process>>): SuperSmallStateMachine<UserState, Return, Arguments, Process>
+	public abstract config(runConfig: Partial<RunConfig<UserState, Return, Arguments, Process>>): SuperSmallStateMachine<UserState, Return, Arguments, Process>
+	public abstract unstrict: SuperSmallStateMachine<UserState, Return, Arguments, Process>
+	public abstract strict: SuperSmallStateMachine<UserState, Return, Arguments, Process>
+	public abstract strictTypes: SuperSmallStateMachine<UserState, Return, Arguments, Process>
+	public abstract async: SuperSmallStateMachine<UserState, Promise<Return>, Arguments, Process>
+	public abstract sync: SuperSmallStateMachine<UserState, Awaited<Return>, Arguments, Process>
+	public abstract step: SuperSmallStateMachine<UserState, SystemState<UserState>, Arguments, Process>
+	public abstract until(until: RunConfig<UserState, Return, Arguments, Process>['until']): SuperSmallStateMachine<UserState, Return, Arguments, Process>
+	public abstract input<NewArguments extends Array<unknown> = Array<unknown>>(inputModifier: (...input: NewArguments) => Partial<InputSystemState<UserState>>): SuperSmallStateMachine<UserState, Return, NewArguments, Process>
+	public abstract output<NewReturn extends unknown = Return>(outputModifier: (state: SystemState<UserState>) => NewReturn): SuperSmallStateMachine<UserState, NewReturn, Arguments, Process>
+	public abstract addNode(...nodes: Array<NodeDefinition>): SuperSmallStateMachine<UserState, Return, Arguments, Process>
+	public abstract defaults<NewUserState extends UserState = UserState>(initialState: NewUserState): SuperSmallStateMachine<NewUserState, NewUserState[Keywords.RS], Arguments, Process>
 }
 
-// declare module '@oversword/super-small-state-machine' {
-//	 export default S
-//	 export const SuperSmallStateMachine = S
-// }
