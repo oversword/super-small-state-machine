@@ -1,22 +1,21 @@
 import S, { deep_merge_object, get_path_object, normalise_function } from ".";
-import { ActionNode, SequenceNode, ConditionNode, Path, PathReferenceError, ProcessNode, MachineNode, SwitchNode, UndefinedActionError, RelativeGOTOUnit, N, SuperSmallStateMachine, Keywords, OutputDirective, Return, returnSymbol, ParallelNode, SystemState, InitialState, parallelSymbol } from "./types";
+import { ActionNode, SequenceNode, ConditionNode, Path, PathReferenceError, ProcessNode, MachineNode, SwitchNode, UndefinedNodeError, PathUnit, N, SuperSmallStateMachine, returnSymbol, ParallelNode, SystemState, InitialState, parallelSymbol, DirectiveNode, StateChanges, ReturnNode, OutputNode } from "./types";
 
 export enum NodeTypes {
 	UN = 'undefined',
 	EM = 'empty',
 	DR = 'directive',
-	RD = 'relative-directive',
 	RT = 'return',
 	AC = 'action',
 	SQ = 'sequence',
-	CD = 'conditional',
-	SC = 'switch-conditional',
-	SM = 'state-machine',
+	CD = 'condition',
+	SW = 'switch',
+	MC = 'machine',
 	CH = 'changes',
 	PL = 'parallel-sequence'
 }
 
-const exitFindNext = (output: ProcessNode, instance: Pick<SuperSmallStateMachine, 'process' | 'nodes'>, state: SystemState<InitialState>) => {
+const exitFindNext = (output: OutputNode, instance: Pick<SuperSmallStateMachine, 'process' | 'nodes'>, state: SystemState<InitialState>) => {
 	const nextPath = S.nextPath(instance, state)
 	return nextPath ? {
 		...state,
@@ -28,7 +27,7 @@ const exitFindNext = (output: ProcessNode, instance: Pick<SuperSmallStateMachine
 }
 
 
-const contextChangesNode = new N<Record<string,unknown>>(NodeTypes.CH, {
+const contextChangesNode = new N<StateChanges,StateChanges>(NodeTypes.CH, {
 	isNode: (object, objectType): object is Record<string,unknown> =>
 		Boolean(object && objectType === 'object'),
 	advance: (output, instance, state) => {
@@ -37,7 +36,7 @@ const contextChangesNode = new N<Record<string,unknown>>(NodeTypes.CH, {
 	},
 })
 
-const sequenceNode = new N<SequenceNode>(NodeTypes.SQ, {
+const sequenceNode = new N<SequenceNode, Path>(NodeTypes.SQ, {
 	nextPath: (parPath, instance, state, path) => {
 		const parActs = get_path_object<SequenceNode>(instance.process, parPath)
 		const childItem = path[parPath.length] as number
@@ -55,7 +54,7 @@ const sequenceNode = new N<SequenceNode>(NodeTypes.SQ, {
 	advance: (output, instance, state) => {
 		return {
 			...state,
-			[S.path]: output as Path
+			[S.path]: output
 		}
 	},
 	traverse: (item, path, instance, iterate, post) => {
@@ -64,7 +63,6 @@ const sequenceNode = new N<SequenceNode>(NodeTypes.SQ, {
 	}
 	
 })
-
 export const parallel = <Process extends unknown = ProcessNode>(...list: Array<Process>): ParallelNode => {
 	list[parallelSymbol] = true
 	return list as unknown as ParallelNode
@@ -81,8 +79,8 @@ const parallelNode = new N<ParallelNode>(NodeTypes.PL, {
 		return Array.isArray(object) && (parallelSymbol in object) && Boolean(object[parallelSymbol])
 	},
 	execute: (node, instance, state) => {
-		if (!instance.runConfig.async) return node.length ? [ ...state[S.path], 0 ] : null
-		return Promise.all(node.map(parallel => new S(parallel, instance.runConfig).async.input((state) => {
+		if (!instance.config.async) return node.length ? [ ...state[S.path], 0 ] : null
+		return Promise.all(node.map(parallel => new S(parallel, instance.config).async.input((state) => {
 			const { [S.path]:__path, [S.changes]: __changes, [S.strict]: __strict, [S.return]: __return, ...pureState } = (state as SystemState<InitialState>)
 			return pureState
 		}).output((state) => state[S.changes])(state)))
@@ -99,14 +97,14 @@ const actionNode = new N<ActionNode>(NodeTypes.AC, {
 	isNode: (object, objectType): object is ActionNode => objectType === 'function',
 	execute: (node, instance, state) => (node as ActionNode)(state),
 })
-const undefinedNode = new N<undefined>(NodeTypes.UN, {
+const undefinedNode = new N<undefined,undefined>(NodeTypes.UN, {
 	isNode: (object, objectType): object is undefined => objectType === 'undefined',
 	execute: (node, instance, state) => {
-		throw new UndefinedActionError(`There is nothing to execute at path [ ${state[S.path].join(', ')} ]`)
+		throw new UndefinedNodeError(`There is nothing to execute at path [ ${state[S.path].join(', ')} ]`)
 	},
 	advance: exitFindNext
 })
-const emptyNode = new N<null>(NodeTypes.EM, {
+const emptyNode = new N<null,null>(NodeTypes.EM, {
 	isNode: (object, objectType): object is null => object === null,
 	advance: exitFindNext
 })
@@ -130,7 +128,7 @@ const conditionNode = new N<ConditionNode>(NodeTypes.CD, {
 		}, path, instance)
 	}
 })
-const switchNode = new N<SwitchNode>(NodeTypes.SC, {
+const switchNode = new N<SwitchNode>(NodeTypes.SW, {
 	isNode: (object, objectType): object is SwitchNode =>
 		Boolean(object && objectType === 'object' && (S.kw.SW in (object as object))),
 	execute: (node, instance, state) => {
@@ -148,7 +146,7 @@ const switchNode = new N<SwitchNode>(NodeTypes.SC, {
 		}, path, instance)
 	}
 })
-const machineNode = new N<MachineNode>(NodeTypes.SM, {
+const machineNode = new N<MachineNode>(NodeTypes.MC, {
 	isNode: (object, objectType): object is MachineNode =>
 		Boolean(object && objectType === 'object' && (S.kw.IT in (object as object))),
 	execute: (node, instance, state) => {
@@ -161,8 +159,8 @@ const machineNode = new N<MachineNode>(NodeTypes.SM, {
 		}, path, instance)
 	}
 })
-const directiveNode = new N<OutputDirective>(NodeTypes.DR, {
-	isNode: (object, objectType): object is OutputDirective =>
+const directiveNode = new N<DirectiveNode,DirectiveNode>(NodeTypes.DR, {
+	isNode: (object, objectType): object is DirectiveNode =>
 		Boolean(objectType === 'number' || objectType === 'string' || objectType === 'symbol' ||
 			(object && objectType === 'object' && (S.path in (object as object)))),
 	advance: (output, instance, state) => {
@@ -173,19 +171,19 @@ const directiveNode = new N<OutputDirective>(NodeTypes.DR, {
 			const lastOf = S.lastNode(
 				instance,
 				state[S.path].slice(0,-1),
-				outputType === 'number' ? NodeTypes.SQ : NodeTypes.SM
+				outputType === 'number' ? NodeTypes.SQ : NodeTypes.MC
 			)
 			if (!lastOf)
 				throw new PathReferenceError(`A relative directive has been provided as a ${outputType} (${String(output)}), but no ${outputType === 'number' ? 'sequence' : 'state machine'} exists that this ${outputType} could be ${outputType === 'number' ? 'an index': 'a state'} of from path [ ${state[S.path].join(', ')} ].`)
 			return {
 				...state,
-				[S.path]: [...lastOf, output as RelativeGOTOUnit]
+				[S.path]: [...lastOf, output as PathUnit]
 			}
 		}
 	},
 })
-const returnNode = new N<Return | typeof returnSymbol>(NodeTypes.RT, {
-	isNode: (object, objectType): object is (Return | typeof returnSymbol) => {
+const returnNode = new N<ReturnNode,ReturnNode>(NodeTypes.RT, {
+	isNode: (object, objectType): object is ReturnNode => {
 		if (object === S.return) return true
 		return Boolean(object && objectType === 'object' && (S.return in (object as object)))
 	},

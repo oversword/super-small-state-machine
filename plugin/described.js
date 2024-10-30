@@ -1,8 +1,7 @@
-import S from './index.ts'
-import { Keywords, Plugin } from './types.ts'
+import S from "../index.js"
 
 export const actionMarker = Symbol('Super Small State Machine Action')
-export const action = (name: string | symbol) => {
+export const action = (name) => {
 	return {
 		[actionMarker]: true,
 		name,
@@ -11,7 +10,7 @@ export const action = (name: string | symbol) => {
 export const a = action
 
 export const conditionMarker = Symbol('Super Small State Machine Condition')
-export const condition = (name: string | symbol) => {
+export const condition = (name) => {
 	return {
 		[conditionMarker]: true,
 		name,
@@ -20,7 +19,7 @@ export const condition = (name: string | symbol) => {
 export const c = condition
 
 export const transitionMarker = Symbol('Super Small State Machine Transition')
-export const transition = (name: string | symbol) => {
+export const transition = (name) => {
 	return {
 		[transitionMarker]: true,
 		name,
@@ -28,11 +27,11 @@ export const transition = (name: string | symbol) => {
 }
 export const t = transition
 
-const transformProcess = ({ actions, conditions, transitions }) =>  {
+const transformProcess = ({ actions, conditions, transitions }) => {
 	const recur = S.traverse((item, path, instance) => {
 		if (item && typeof item === 'object'){
 			let action;
-			const name = (item as any).name;
+			const name = item.name;
 			if (item[actionMarker]) {
 				action = actions[name]
 			}
@@ -60,7 +59,7 @@ const transformProcess = ({ actions, conditions, transitions }) =>  {
 				if (conditionString && typeof conditionString === 'object' && conditionString[conditionMarker])
 					return {
 						...conditional,
-						[S.kw.IF]: conditions[(conditionString as any).name]
+						[S.kw.IF]: conditions[conditionString.name]
 					}
 			} else
 			if (S.kw.SW in conditional) {
@@ -68,7 +67,7 @@ const transformProcess = ({ actions, conditions, transitions }) =>  {
 				if (conditionString && typeof conditionString === 'object' && conditionString[conditionMarker])
 					return {
 						...conditional,
-						[S.kw.SW]: conditions[(conditionString as any).name]
+						[S.kw.SW]: conditions[conditionString.name]
 					}
 			}
 		}
@@ -77,18 +76,9 @@ const transformProcess = ({ actions, conditions, transitions }) =>  {
 	return recur
 }
 
-const pluginDescribed: Plugin = ({
-	process,
-	runConfig: { initialState: { actions = {}, conditions = {}, transitions = {}, ...initialState }, ...runConfig }
-}) => ({
-	process: transformProcess({ actions, conditions, transitions })({
+export const describedPlugin = ({ actions, conditions, transitions }) =>
+	instance => instance.adapt(process => transformProcess({ actions, conditions, transitions })({
 		process,
-		nodes: runConfig.nodes
-	}),
-	runConfig: {
-		...runConfig,
-		initialState
-	}
-})
-
-export default pluginDescribed
+		nodes: instance.nodes
+	}))
+export default describedPlugin

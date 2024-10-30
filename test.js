@@ -1,10 +1,8 @@
-import pluginDescribed, { a, c, t } from "./plugin-described.js"
-import pluginEvents, { emit } from "./plugin-events.js"
-import S from "./index.ts"
-import { parallel } from "./default-nodes.ts"
-// import S from "./plugin-described.js"
+import S from "./index.js"
 
-// import S from "@oversword/super-small-state-machine"
+import pluginDescribed, { a, c, t } from "./plugin/described.js"
+import pluginEvents, { emit } from "./plugin/events.js"
+import { parallel, parallelPlugin } from "./plugin/parallel.js"
 	
 const testSymbol = Symbol('Test Symbol')
 //*
@@ -736,7 +734,15 @@ let tests = [
 			{
 				description: '12th fibonacci number is 144 (described)',
 				expected: 144,
-				config: {
+				initial: {
+					input: 12,
+				},
+				defaults: {
+					input: 1,
+					result: 0,
+					result2: 0,
+				},
+				plugins: [pluginDescribed({
 					transitions: {
 						exitOrLoop: {
 							if: ({ input }) => input > 1,
@@ -759,16 +765,7 @@ let tests = [
 					conditions: {
 						startAtZero: ({ result }) => result === 0
 					}
-				},
-				initial: {
-					input: 12,
-				},
-				defaults: {
-					input: 1,
-					result: 0,
-					result2: 0,
-				},
-				plugins: [pluginDescribed],
+				})],
 				sequence: {
 					initial: 'testStart',
 					testStart: [
@@ -800,10 +797,7 @@ const makeAsync = method => async (...a) => {
 	return method(...a)
 }
 
-const asyncPlugin = ({
-	process, runConfig
-}) => {
-
+const asyncPlugin = (instance) => {
 	const traverse = S.traverse((node) => {
 		if (typeof node === 'function')
 			return makeAsync(node)
@@ -817,20 +811,12 @@ const asyncPlugin = ({
 		}
 		return obj
 	})
-	
-
-	return {
-		process: traverse({
-			nodes: runConfig.nodes,
-			process
-		}),
-		runConfig
-	}
-	// return {
-	// 	...test,
-	// 	sequence: newSeq,
-	// 	async: true,
-	// }
+	return instance.async.adapt(function (process) {
+		return traverse({
+			process,
+			nodes: this.nodes
+		})
+	})
 }
 
 const makeTestAsync = (test) => {
@@ -862,6 +848,7 @@ tests = tests.concat([{description: 'Async', tests:tests.map(makeTestAsync).conc
 		initial: {
 			input: 10 
 		},
+		plugins: [parallelPlugin],
 		sequence: [
 			({ input }) => ({ input: input - 1 }),
 			parallel({
@@ -895,6 +882,7 @@ tests = tests.concat([{description: 'Async', tests:tests.map(makeTestAsync).conc
 		initial: {
 			input: 10 
 		},
+		plugins: [parallelPlugin],
 		sequence: [
 			({ input }) => ({ input: input - 1 }),
 			parallel({
@@ -926,11 +914,6 @@ tests = tests.concat([{description: 'Async', tests:tests.map(makeTestAsync).conc
 		expected: '144_233_233_377',
 		initial: {input:12},
 		defaults:{
-				events: {
-					nextNumber: {},
-					getResult: {},
-					kill: {},
-				},
 			input: 1,
 			result: 0,
 			result2: 0,
@@ -971,7 +954,11 @@ tests = tests.concat([{description: 'Async', tests:tests.map(makeTestAsync).conc
 			}
 		},
 		async: true,
-		plugins: [pluginEvents],
+		plugins: [pluginEvents({
+			nextNumber: {},
+			getResult: {},
+			kill: {},
+		})],
 		action: async (instance) => {
 			let results = []
 			instance.subscribe((event) => {
@@ -995,26 +982,6 @@ tests = tests.concat([{description: 'Async', tests:tests.map(makeTestAsync).conc
 		expected: '144_233_233_377',
 		initial: {input:12},
 		defaults:{
-				actions:{
-					startAtOne: () => ({ result: 1 }),
-					fibb: ({ result, result2 }) => ({
-						result2: result,
-						result: result + result2
-					}),
-					decrementCounter: ({ input }) => ({ input: input-1 }),
-					fibonacci: [
-						a('fibb'),
-					],
-				},
-				conditions: {
-					startAtZero: ({ result }) => result === 0,
-					moreRepetitions: ({ input }) => input > 1
-				},
-				events: {
-					nextNumber: {},
-					getResult: {},
-					kill: {},
-				},
 			input: 1,
 			result: 0,
 			result2: 0,
@@ -1052,7 +1019,27 @@ tests = tests.concat([{description: 'Async', tests:tests.map(makeTestAsync).conc
 			}
 		},
 		async: true,
-		plugins: [pluginDescribed, pluginEvents],
+		plugins: [pluginDescribed({
+			actions:{
+				startAtOne: () => ({ result: 1 }),
+				fibb: ({ result, result2 }) => ({
+					result2: result,
+					result: result + result2
+				}),
+				decrementCounter: ({ input }) => ({ input: input-1 }),
+				fibonacci: [
+					a('fibb'),
+				],
+			},
+			conditions: {
+				startAtZero: ({ result }) => result === 0,
+				moreRepetitions: ({ input }) => input > 1
+			},
+		}), pluginEvents({
+			nextNumber: {},
+			getResult: {},
+			kill: {},
+		})],
 		action: async (instance) => {
 			let results = []
 			instance.subscribe((event) => {
@@ -1092,13 +1079,13 @@ const runTest = async (test) => {
 			result = await test.method(test.initial)
 		} else {
 			let testMachine = new S(test.sequence, { iterations: 1000 }).defaults({
-				...(test.config || {}),
+				// ...(test.config || {}),
 				...test.defaults
 			})
 			if (test.async)
 				testMachine = testMachine.async
 			if (test.plugins)
-				testMachine = test.plugins.reduce((last, current) => last.plugin(current), testMachine)
+				testMachine = testMachine.with(...test.plugins)
 			const instance = testMachine(test.initial)
 			if (test.action)
 				result = await test.action(instance)
@@ -1138,6 +1125,8 @@ const printResult = test => {
 	if (test.success) {
 		console.log(test.description)
 	} else {
+		if (test.result instanceof Error)
+			console.error(test.result)
 		console.log(`FAILED: ${test.description}. Got ${test.result}, expected ${test.expected}`)
 	}
 }

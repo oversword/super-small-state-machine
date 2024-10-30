@@ -1,5 +1,4 @@
-import { N, NodeDefinitions } from './types.ts'
-import S, { get_path_object } from './index.ts'
+import S, { get_path_object, N } from '../index.js'
 
 export class StateMachineInstance /*extends Promise*/ {
 	#resolve = () => {}
@@ -20,8 +19,8 @@ export class StateMachineInstance /*extends Promise*/ {
 		this.#resolve = promiseResolve
 		this.#reject = promiseReject
 
-		this.#runner = runner.config({ runMethod: null }).output(a => a).input(a => a).async
-		const modifiedInput = runner.runConfig.inputModifier(...input)
+		this.#runner = runner.override(null).output(a => a).input(a => a).async
+		const modifiedInput = runner.config.input(...input)
 		this.#partialPromise = this.#runner(modifiedInput)
 		try {
 			this.#progressUtilWaitingForEvents()
@@ -110,17 +109,24 @@ const eventEmitterNode = new N(eventEmitter, {
 	execute: () => S.return,
 })
 
-export default ({ process, runConfig: { initialState: { events = {}, ...initialState }, ...runConfig } }) => {
-	return {
-		process,
-		runConfig: {
-			...runConfig,
-			initialState: {
-				...initialState,
-				event: null,
-			},
-			runMethod: function (...input) { return new StateMachineInstance(this, ...input) },
-			nodes: new NodeDefinitions([...runConfig.nodes.values(), eventEmitterNode, eventHandlerNode].map(node => [node.name,node]))
-		}
-	}
+
+export default events => instance => {
+  return instance
+    .override(function (...input) { return new StateMachineInstance(this, ...input) })
+    .addNode(eventEmitterNode, eventHandlerNode)
+    .adaptInput(state => ({ event: null, ...state }))
 }
+// export default ({ process, config: { initialState: { events = {}, ...initialState }, ...config } }) => {
+// 	return {
+// 		process,
+// 		config: {
+// 			...config,
+// 			initialState: {
+// 				...initialState,
+// 				event: null,
+// 			},
+// 			method: function (...input) { return new StateMachineInstance(this, ...input) },
+// 			nodes: new NodeDefinitions([...config.nodes.values(), eventEmitterNode, eventHandlerNode].map(node => [node.name,node]))
+// 		}
+// 	}
+// }
