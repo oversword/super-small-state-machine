@@ -63,6 +63,8 @@ const sequenceNode = new N<SequenceNode, Path>(NodeTypes.SQ, {
 	}
 	
 })
+
+// TODO: DELETE
 export const parallel = <Process extends unknown = ProcessNode>(...list: Array<Process>): ParallelNode => {
 	list[parallelSymbol] = true
 	return list as unknown as ParallelNode
@@ -94,13 +96,13 @@ const parallelNode = new N<ParallelNode>(NodeTypes.PL, {
 
 
 const actionNode = new N<ActionNode>(NodeTypes.AC, {
-	isNode: (object, objectType): object is ActionNode => objectType === 'function',
+	isNode: (object, objectType, isOutput): object is ActionNode => objectType === 'function',
 	execute: (node, instance, state) => (node as ActionNode)(state),
 })
 const undefinedNode = new N<undefined,undefined>(NodeTypes.UN, {
 	isNode: (object, objectType): object is undefined => objectType === 'undefined',
 	execute: (node, instance, state) => {
-		throw new UndefinedNodeError(`There is nothing to execute at path [ ${state[S.path].join(', ')} ]`)
+		throw new UndefinedNodeError(`There is nothing to execute at path [ ${state[S.path].map(s => s.toString()).join(', ')} ]`, { instance, state, data: {node}, path: state[S.path] })
 	},
 	advance: exitFindNext
 })
@@ -109,8 +111,8 @@ const emptyNode = new N<null,null>(NodeTypes.EM, {
 	advance: exitFindNext
 })
 const conditionNode = new N<ConditionNode>(NodeTypes.CD, {
-	isNode: (object, objectType): object is ConditionNode =>
-		Boolean(object && objectType === 'object' && (S.kw.IF in (object as object))),
+	isNode: (object, objectType, isOutput): object is ConditionNode =>
+		Boolean((!isOutput) && object && objectType === 'object' && (S.kw.IF in (object as object))),
 	execute: (node, instance, state) => {
 		if (normalise_function(node[S.kw.IF])(state))
 			return S.kw.TN in node
@@ -129,8 +131,8 @@ const conditionNode = new N<ConditionNode>(NodeTypes.CD, {
 	}
 })
 const switchNode = new N<SwitchNode>(NodeTypes.SW, {
-	isNode: (object, objectType): object is SwitchNode =>
-		Boolean(object && objectType === 'object' && (S.kw.SW in (object as object))),
+	isNode: (object, objectType, isOutput): object is SwitchNode =>
+		Boolean((!isOutput) && object && objectType === 'object' && (S.kw.SW in (object as object))),
 	execute: (node, instance, state) => {
 			const key = normalise_function(node[S.kw.SW])(state)
 			const fallbackKey = (key in node[S.kw.CS]) ? key : S.kw.DF
@@ -147,8 +149,8 @@ const switchNode = new N<SwitchNode>(NodeTypes.SW, {
 	}
 })
 const machineNode = new N<MachineNode>(NodeTypes.MC, {
-	isNode: (object, objectType): object is MachineNode =>
-		Boolean(object && objectType === 'object' && (S.kw.IT in (object as object))),
+	isNode: (object, objectType, isOutput): object is MachineNode =>
+		Boolean((!isOutput) && object && objectType === 'object' && (S.kw.IT in (object as object))),
 	execute: (node, instance, state) => {
 		return [ ...state[S.path], S.kw.IT ]
 	},
@@ -174,7 +176,7 @@ const directiveNode = new N<DirectiveNode,DirectiveNode>(NodeTypes.DR, {
 				outputType === 'number' ? NodeTypes.SQ : NodeTypes.MC
 			)
 			if (!lastOf)
-				throw new PathReferenceError(`A relative directive has been provided as a ${outputType} (${String(output)}), but no ${outputType === 'number' ? 'sequence' : 'state machine'} exists that this ${outputType} could be ${outputType === 'number' ? 'an index': 'a state'} of from path [ ${state[S.path].join(', ')} ].`)
+				throw new PathReferenceError(`A relative directive has been provided as a ${outputType} (${String(output)}), but no ${outputType === 'number' ? 'sequence' : 'state machine'} exists that this ${outputType} could be ${outputType === 'number' ? 'an index': 'a state'} of from path [ ${state[S.path].map(s => s.toString()).join(', ')} ].`, { instance, state, data: {output}, path: state[S.path] })
 			return {
 				...state,
 				[S.path]: [...lastOf, output as PathUnit]
@@ -182,9 +184,11 @@ const directiveNode = new N<DirectiveNode,DirectiveNode>(NodeTypes.DR, {
 		}
 	},
 })
+
 const returnNode = new N<ReturnNode,ReturnNode>(NodeTypes.RT, {
 	isNode: (object, objectType): object is ReturnNode => {
 		if (object === S.return) return true
+		// console.log(object, S.return)
 		return Boolean(object && objectType === 'object' && (S.return in (object as object)))
 	},
 	advance: (output, instance, state) => {

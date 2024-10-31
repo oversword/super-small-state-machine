@@ -1,4 +1,5 @@
 import S from "./index.js"
+// import S from "./index.ts" 
 
 import pluginDescribed, { a, c, t } from "./plugin/described.js"
 import pluginEvents, { emit } from "./plugin/events.js"

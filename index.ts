@@ -56,17 +56,18 @@ implements SuperSmallStateMachine<UserState, Return, Arguments, Output, Process>
 	static applyChanges<UserState extends InitialState = InitialState>(state: SystemState<UserState>, changes: Partial<UserState> = {}): SystemState<UserState> {
 		if (state[S.strict]) {
 			if (Object.entries(changes).some(([name]) => !(name in state)))
-				throw new ContextReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).join(', ')} ].\nPath: [ ${state[S.path]?.join(' / ')} ]`)
+				throw new ContextReferenceError<UserState>(`Only properties that exist on the initial context may be updated.\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).map(s => s.toString()).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).join(', ')} ].\nPath: [ ${state[S.path]?.map(s => s.toString()).join(' / ')} ]`, {state, data: {changes}})
 			if (state[S.strict] === S.strictTypes) {
 				if (Object.entries(changes).some(([name,value]) => typeof value !== typeof state[name])) {
 					const errs = Object.entries(changes).filter(([name,value]) => typeof value !== typeof state[name])
-					throw new ContextTypeError(`Properties must have the same type as their initial value. ${errs.map(([name,value]) => `${typeof value} given for '${name}', should be ${typeof state[name]}`).join('. ')}.`)
+					throw new ContextTypeError<UserState>(`Properties must have the same type as their initial value. ${errs.map(([name,value]) => `${typeof value} given for '${name}', should be ${typeof state[name]}`).join('. ')}.`, {state, data: {changes}})
 				}
 			}
 		}
 		const allChanges = deep_merge_object(state[S.changes] || {}, changes)
 		return {
 			...deep_merge_object(state, allChanges),
+			[S.strict]: state[S.strict],
 			[S.path]: state[S.path],
 			[S.changes]: allChanges
 		}
@@ -123,11 +124,11 @@ implements SuperSmallStateMachine<UserState, Return, Arguments, Output, Process>
 		Process extends unknown = ProcessNode<UserState, Return, Output>,
 	>(instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Output, Process>, 'process' | 'nodes'>, state: SystemState<UserState>, output: Output = (null as Output)): SystemState<UserState> {
 		const path = state[S.path] || []
-		const nodeType = instance.nodes.isNode(output)
+		const nodeType = instance.nodes.isNode(output, typeof output, true)
 		const nodeDefinition = nodeType && instance.nodes.get(nodeType)
 		if (nodeDefinition && nodeDefinition.advance)
 			return nodeDefinition.advance(output, instance, state)
-		throw new NodeTypeError(`Unknown output or action type: ${typeof output}${nodeType ? `, nodeType: ${String(nodeType)}` : ''} at [ ${path.join(', ')} ]`)
+		throw new NodeTypeError<UserState, Return, Arguments, Output, Process>(`Unknown output or action type: ${typeof output}${nodeType ? `, nodeType: ${String(nodeType)}` : ''} at [ ${path.map(s => s.toString()).map(s => s.toString()).join(', ')} ]`, { instance, state, data: {output}, path })
 	}
 	static execute<
 		UserState extends InitialState = InitialState,
@@ -183,7 +184,7 @@ implements SuperSmallStateMachine<UserState, Return, Arguments, Output, Process>
 		while (r < iterations) {
 			if (until(currentState)) break;
 			if (++r >= iterations)
-				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.path]?.join(', ')} ]`)
+				throw new MaxIterationsError<UserState, Return, Arguments, Output, Process>(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.path]?.map(s => s.toString()).join(', ')} ]`, { instance, state: currentState, data: { iterations }, path: currentState[S.path] })
 			currentState = S.advance<UserState, Return, Arguments, Output, Process>(instance, currentState, await S.execute<UserState, Return, Arguments, Output, Process>(instance, currentState))
 			if (allow > 0 && r % 10 === 0) {
 				const nowTime = Date.now()
@@ -214,7 +215,7 @@ implements SuperSmallStateMachine<UserState, Return, Arguments, Output, Process>
 		while (r < iterations) {
 			if (until(currentState)) break;
 			if (++r > iterations)
-				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.path]?.join(', ')} ]`)
+				throw new MaxIterationsError<UserState, Return, Arguments, Output, Process>(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.path]?.map(s => s.toString()).join(', ')} ]`, { instance, state: currentState, data: { iterations }, path: currentState[S.path] })
 			currentState = S.advance<UserState, Return, Arguments, Output, Process>(instance, currentState, S.execute<UserState, Return, Arguments, Output, Process>(instance, currentState))
 		}
 		return outputModifier.call(instance, (outputModifiers.reduce((prev, modifier) => modifier.call(instance, prev), currentState)))
@@ -253,8 +254,8 @@ implements SuperSmallStateMachine<UserState, Return, Arguments, Output, Process>
 		this.process = process
 	};
 
-	isNode(object: unknown, objectType: (typeof object)): false | NodeDefinition['name'] {
-		return this.nodes.isNode(object, objectType)
+	isNode(object: unknown, objectType: (typeof object), isOutput: boolean = false): false | NodeDefinition['name'] {
+		return this.nodes.isNode(object, objectType, isOutput)
 	}
 	applyChanges(state: SystemState<UserState>, changes: Partial<UserState>): SystemState<UserState> {
 		return S.applyChanges<UserState>(state, changes)
@@ -332,7 +333,7 @@ implements SuperSmallStateMachine<UserState, Return, Arguments, Output, Process>
 		return new S<UserState, Awaited<Return>, Arguments, Output, Process>(this.process, { ...this._config, async: false } as unknown as Config<UserState, Awaited<Return>, Arguments, Output, Process>)
 	}
 	get step(): S<UserState, SystemState<UserState>, Arguments, Output, Process> {
-		return new S<UserState, SystemState<UserState>, Arguments, Output, Process>(this.process, { ...this._config, iterations: 1, outputModifier: a => a } as unknown as Config<UserState, SystemState<UserState>, Arguments, Output, Process>)
+		return new S<UserState, SystemState<UserState>, Arguments, Output, Process>(this.process, { ...this._config, iterations: 1, output: a => a } as unknown as Config<UserState, SystemState<UserState>, Arguments, Output, Process>)
 	}
 	until(until: Config<UserState, Return, Arguments, Output, Process>['until']): S<UserState, Return, Arguments, Output, Process> {
 		return new S<UserState, Return, Arguments, Output, Process>(this.process, { ...this._config, until })
@@ -355,5 +356,6 @@ implements SuperSmallStateMachine<UserState, Return, Arguments, Output, Process>
 			{
 		return new S<NewUserState, NewUserState[Keywords.RS], Arguments, OutputNode<NewUserState, Return>, ProcessNode<NewUserState, Return, OutputNode<NewUserState, Return>>>(this.process as unknown as ProcessNode<NewUserState, Return, OutputNode<NewUserState, Return>>, { ...this._config, initialState } as unknown as Config<NewUserState, NewUserState[Keywords.RS], Arguments, OutputNode<NewUserState, Return>, ProcessNode<NewUserState, Return, OutputNode<NewUserState, Return>>>)
 	}
+	addNode(...nodes)       { return new S(this.process, { ...this._config, nodes: new NodeDefinitions([...this._config.nodes.values(),...nodes].map(node => [node.name, node])) } as unknown as Config<UserState, Return, Arguments, Output, Process>) }
 }
 

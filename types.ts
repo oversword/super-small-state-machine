@@ -1,9 +1,77 @@
-export class PathReferenceError extends ReferenceError {}
-export class ContextReferenceError extends ReferenceError {}
-export class ContextTypeError extends TypeError {}
-export class NodeTypeError extends TypeError {}
-export class UndefinedNodeError extends ReferenceError {}
-export class MaxIterationsError extends Error {}
+export class SuperSmallStateMachineError<
+	UserState extends InitialState = InitialState,
+	Return extends unknown = UserState[Keywords.RS],
+	Arguments extends Array<unknown> = [Partial<InputSystemState<UserState>>] | [],
+	Output extends unknown = OutputNode<UserState, Return>,
+	Process extends unknown = ProcessNode<UserState, Return, Output>,
+> extends Error {
+	public instance?: Partial<SuperSmallStateMachine<UserState, Return, Arguments, Output, Process>>
+	public state?: SystemState<UserState>
+	public data?: any
+	public path?: Path
+	constructor(message: string, { instance, state, data, path }: Partial<SuperSmallStateMachineError<UserState, Return, Arguments, Output, Process>>) {
+		super(message)
+		Object.assign(this, { instance, state, data, path })
+	}
+}
+export class SuperSmallStateMachineReferenceError<
+	UserState extends InitialState = InitialState,
+	Return extends unknown = UserState[Keywords.RS],
+	Arguments extends Array<unknown> = [Partial<InputSystemState<UserState>>] | [],
+	Output extends unknown = OutputNode<UserState, Return>,
+	Process extends unknown = ProcessNode<UserState, Return, Output>,
+> extends SuperSmallStateMachineError<UserState, Return, Arguments, Output, Process> {}
+export class SuperSmallStateMachineTypeError<
+	UserState extends InitialState = InitialState,
+	Return extends unknown = UserState[Keywords.RS],
+	Arguments extends Array<unknown> = [Partial<InputSystemState<UserState>>] | [],
+	Output extends unknown = OutputNode<UserState, Return>,
+	Process extends unknown = ProcessNode<UserState, Return, Output>,
+> extends SuperSmallStateMachineError<UserState, Return, Arguments, Output, Process> {}
+
+export class ContextReferenceError<
+	UserState extends InitialState = InitialState,
+	Return extends unknown = UserState[Keywords.RS],
+	Arguments extends Array<unknown> = [Partial<InputSystemState<UserState>>] | [],
+	Output extends unknown = OutputNode<UserState, Return>,
+	Process extends unknown = ProcessNode<UserState, Return, Output>,
+> extends SuperSmallStateMachineReferenceError<UserState, Return, Arguments, Output, Process> {}
+export class ContextTypeError<
+	UserState extends InitialState = InitialState,
+	Return extends unknown = UserState[Keywords.RS],
+	Arguments extends Array<unknown> = [Partial<InputSystemState<UserState>>] | [],
+	Output extends unknown = OutputNode<UserState, Return>,
+	Process extends unknown = ProcessNode<UserState, Return, Output>,
+> extends SuperSmallStateMachineTypeError<UserState, Return, Arguments, Output, Process> {}
+export class NodeTypeError<
+	UserState extends InitialState = InitialState,
+	Return extends unknown = UserState[Keywords.RS],
+	Arguments extends Array<unknown> = [Partial<InputSystemState<UserState>>] | [],
+	Output extends unknown = OutputNode<UserState, Return>,
+	Process extends unknown = ProcessNode<UserState, Return, Output>,
+> extends SuperSmallStateMachineTypeError<UserState, Return, Arguments, Output, Process> {}
+export class UndefinedNodeError<
+	UserState extends InitialState = InitialState,
+	Return extends unknown = UserState[Keywords.RS],
+	Arguments extends Array<unknown> = [Partial<InputSystemState<UserState>>] | [],
+	Output extends unknown = OutputNode<UserState, Return>,
+	Process extends unknown = ProcessNode<UserState, Return, Output>,
+> extends SuperSmallStateMachineReferenceError<UserState, Return, Arguments, Output, Process> {}
+export class MaxIterationsError<
+	UserState extends InitialState = InitialState,
+	Return extends unknown = UserState[Keywords.RS],
+	Arguments extends Array<unknown> = [Partial<InputSystemState<UserState>>] | [],
+	Output extends unknown = OutputNode<UserState, Return>,
+	Process extends unknown = ProcessNode<UserState, Return, Output>,
+> extends SuperSmallStateMachineError<UserState, Return, Arguments, Output, Process> {}
+
+export class PathReferenceError<
+	UserState extends InitialState = InitialState,
+	Return extends unknown = UserState[Keywords.RS],
+	Arguments extends Array<unknown> = [Partial<InputSystemState<UserState>>] | [],
+	Output extends unknown = OutputNode<UserState, Return>,
+	Process extends unknown = ProcessNode<UserState, Return, Output>,
+> extends SuperSmallStateMachineReferenceError<UserState, Return, Arguments, Output, Process> {}
 
 export const returnSymbol      = Symbol('Super Small State Machine Return')
 export const changesSymbol     = Symbol('Super Small State Machine Changes')
@@ -33,7 +101,7 @@ export class NodeDefinition<
 	Process extends unknown = ProcessNode<UserState, Return, Output>,
 > {
 	public readonly name: string | symbol = Symbol('Unnamed node')
-	public readonly isNode:   ((object: unknown, objectType: typeof object, last: NodeDefinition['name'] | false) => object is SelfType) | null = null
+	public readonly isNode:   ((object: unknown, objectType: typeof object, isOutput: boolean) => object is SelfType) | null = null
 	public readonly execute:  ((node: SelfType,  instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Output, Process>, 'process' | 'nodes' | 'config'>, state: SystemState<UserState>) => Output | Promise<Output>) | null = null
 	public readonly nextPath: ((parPath: Path,   instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Output, Process>, 'process' | 'nodes'>, state: SystemState<UserState>, path: Path) => undefined | null | Path) | null = null
 	public readonly advance:  ((output: SelfOutputType,  instance: Pick<SuperSmallStateMachine<UserState, Return, Arguments, Output, Process>, 'process' | 'nodes'>, state: SystemState<UserState>) => SystemState<UserState>) | null = null
@@ -60,13 +128,10 @@ export class NodeDefinitions<
 	Arguments extends Array<unknown> = [Partial<InputSystemState<UserState>>] | [],
 	Output extends unknown = OutputNode<UserState, Return>,
 	Process extends unknown = ProcessNode<UserState, Return, Output>,
-> extends Map<NodeDefinition['name'], NodeDefinition<Process, Output, UserState, Return, Arguments, Output, Process>>  {
-	isNode(object: unknown, objectType: (typeof object) = typeof object): false | NodeDefinition['name'] {
-		return [...this.values()].reduce((last: false | NodeDefinition['name'], current): false | NodeDefinition['name'] => {
-			if (current.isNode && current.isNode(object, objectType, last))
-				return current.name
-			return last
-		}, false)
+> extends Map<NodeDefinition['name'], NodeDefinition<Process, Output, UserState, Return, Arguments, Output, Process>> {
+	isNode(object: unknown, objectType: (typeof object) = typeof object, isOutput: boolean = false): false | NodeDefinition['name'] {
+		const foundType = [...this.values()].reverse().find(current => current.isNode && current.isNode(object, objectType, isOutput))
+		return foundType ? foundType.name : false
 	}
 }
 export const N = NodeDefinition
@@ -289,7 +354,7 @@ export abstract class SuperSmallStateMachine<
 	public abstract config: Config<UserState, Return, Arguments, Output, Process>
 	public abstract initialState: UserState
 
-	public abstract isNode(object: unknown, objectType: (typeof object)): false | NodeDefinition['name']
+	public abstract isNode(object: unknown, objectType: (typeof object), isOutput: boolean): false | NodeDefinition['name']
 	public abstract applyChanges(state: SystemState<UserState>, changes: Partial<UserState>): SystemState<UserState>
 
 	public abstract actionName(path: Path): string | undefined

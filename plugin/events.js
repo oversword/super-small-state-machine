@@ -113,7 +113,8 @@ const eventEmitterNode = new N(eventEmitter, {
 export default events => instance => {
   return instance
     .override(function (...input) { return new StateMachineInstance(this, ...input) })
-    .addNode(eventEmitterNode, eventHandlerNode)
+    .addNode(eventEmitterNode)
+		.addNode(eventHandlerNode)
     .adaptInput(state => ({ event: null, ...state }))
 }
 // export default ({ process, config: { initialState: { events = {}, ...initialState }, ...config } }) => {

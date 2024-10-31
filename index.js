@@ -19,13 +19,25 @@ const reduce_deep_merge_object = (base, override) => {
 }
 export const deep_merge_object = (base, ...overrides) => overrides.reduce(reduce_deep_merge_object, base)
 export const wait_time = (delay) => (delay ? new Promise(resolve => setTimeout(resolve, delay)) : Promise.resolve())
+export class SuperSmallStateMachineError extends Error {
+	instance
+	state
+	data
+	path
+	constructor(message, { instance, state, data, path } = {}) {
+		super(message)
+		Object.assign(this, { instance, state, data, path })
+	}
+}
+export class SuperSmallStateMachineReferenceError extends SuperSmallStateMachineError {}
+export class SuperSmallStateMachineTypeError extends SuperSmallStateMachineError {}
 
-export class PathReferenceError extends ReferenceError {}
-export class ContextReferenceError extends ReferenceError {}
-export class ContextTypeError extends TypeError {}
-export class NodeTypeError extends TypeError {}
-export class UndefinedNodeError extends ReferenceError {}
-export class MaxIterationsError extends Error {}
+export class ContextReferenceError extends SuperSmallStateMachineReferenceError {}
+export class ContextTypeError extends SuperSmallStateMachineTypeError {}
+export class NodeTypeError extends SuperSmallStateMachineTypeError {}
+export class UndefinedNodeError extends SuperSmallStateMachineReferenceError {}
+export class MaxIterationsError extends SuperSmallStateMachineError {}
+export class PathReferenceError extends SuperSmallStateMachineReferenceError {}
 
 export class NodeDefinition {
 	name = Symbol('Unnamed node')
@@ -44,12 +56,9 @@ export class NodeDefinition {
 	}
 }
 export class NodeDefinitions extends Map  {
-	isNode(object, objectType = typeof object) {
-		return [...this.values()].reduce((last, current) => {
-			if (current.isNode && current.isNode(object, objectType, last))
-				return current.name
-			return last
-		}, false)
+	isNode(object, objectType = typeof object, isOutput = false) {
+		const foundType = [...this.values()].findLast(current => current.isNode && current.isNode(object, objectType, isOutput))
+		return foundType ? foundType.name : false
 	}
 }
 export const N = NodeDefinition
@@ -88,16 +97,12 @@ const sequenceNode = new N(NodeTypes.SQ, {
 		if (parActs && childItem+1 < parActs.length)
 			return [ ...parPath, childItem+1 ]
 	},
-	isNode: (object, objectType) => (objectType === 'object' && Array.isArray(object)),
+	isNode: (object, objectType, isOutput) => ((!isOutput) && objectType === 'object' && Array.isArray(object)),
 	execute: (node, instance, state) => node.length ? [ ...state[S.path], 0 ] : null,
-	advance: (output, instance, state) => ({
-		...state,
-		[S.path]: output
-	}),
 	traverse: (item, path, instance, iterate, post) => item.map((_,i) => iterate(instance, [...path,i])),
 })
 const actionNode = new N(NodeTypes.AC, {
-	isNode: (object, objectType) => objectType === 'function',
+	isNode: (object, objectType, isOutput) => (!isOutput) && objectType === 'function',
 	execute: (node, instance, state) => node(state),
 })
 const undefinedNode = new N(NodeTypes.UN, {
@@ -110,7 +115,7 @@ const emptyNode = new N(NodeTypes.EM, {
 	advance: exitFindNext
 })
 const conditionNode = new N(NodeTypes.CD, {
-	isNode: (object, objectType) => Boolean(object && objectType === 'object' && (S.kw.IF in object)),
+	isNode: (object, objectType, isOutput) => Boolean((!isOutput) && object && objectType === 'object' && (S.kw.IF in object)),
 	execute: (node, instance, state) => {
 		if (normalise_function(node[S.kw.IF])(state))
 			return S.kw.TN in node
@@ -127,8 +132,7 @@ const conditionNode = new N(NodeTypes.CD, {
 	}, path, instance)
 })
 const switchNode = new N(NodeTypes.SW, {
-	isNode: (object, objectType) =>
-		Boolean(object && objectType === 'object' && (S.kw.SW in object)),
+	isNode: (object, objectType, isOutput) => Boolean((!isOutput) && object && objectType === 'object' && (S.kw.SW in object)),
 	execute: (node, instance, state) => {
 			const key = normalise_function(node[S.kw.SW])(state)
 			const fallbackKey = (key in node[S.kw.CS]) ? key : S.kw.DF
@@ -143,18 +147,28 @@ const switchNode = new N(NodeTypes.SW, {
 	}, path, instance)
 })
 const machineNode = new N(NodeTypes.MC, {
-	isNode: (object, objectType) => Boolean(object && objectType === 'object' && (S.kw.IT in object)),
+	isNode: (object, objectType, isOutput) => {
+		return Boolean((!isOutput) && object && objectType === 'object' && (S.kw.IT in object))
+	},
 	execute: (node, instance, state) =>  [ ...state[S.path], S.kw.IT ],
 	traverse: (item, path, instance, iterate, post) => post({
 		...item,
 		...Object.fromEntries(Object.keys(item).map(key => [ key, iterate(instance, [...path,key]) ]))
 	}, path, instance)
 })
+// TODO: separate out directives. Absolute, relative, wrapped
 const directiveNode = new N(NodeTypes.DR, {
-	isNode: (object, objectType) => Boolean(
+	isNode: (object, objectType, isOutput) => Boolean(
 			objectType === 'number' || objectType === 'string' || objectType === 'symbol' ||
+			(isOutput && Array.isArray(object)) ||
 			(object && objectType === 'object' && (S.path in object))),
 	advance: (output, instance, state) => {
+		if (Array.isArray(output)) {
+			return {
+				...state,
+				[S.path]: output
+			}
+		}
 		const outputType = typeof output
 		if (outputType === 'object' && output) {
 			return S.advance(instance, state, output[S.path])
@@ -253,6 +267,7 @@ export default class S extends ExtensibleFunction {
 		const allChanges = deep_merge_object(state[S.changes] || {}, changes)
 		return {
 			...deep_merge_object(state, allChanges),
+			[S.strict]: state[S.strict],
 			[S.path]: state[S.path],
 			[S.changes]: allChanges
 		}
@@ -288,7 +303,7 @@ export default class S extends ExtensibleFunction {
 	}
 	static advance(instance, state, output = null) {
 		const path = state[S.path] || []
-		const nodeType = instance.nodes.isNode(output)
+		const nodeType = instance.nodes.isNode(output, typeof output, true)
 		const nodeDefinition = nodeType && instance.nodes.get(nodeType)
 		if (nodeDefinition && nodeDefinition.advance)
 			return nodeDefinition.advance(output, instance, state)
@@ -327,7 +342,7 @@ export default class S extends ExtensibleFunction {
 		while (r < iterations) {
 			if (until(currentState)) break;
 			if (++r >= iterations)
-				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.path]?.join(', ')} ]`)
+				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.path]?.join(', ')} ]`, { instance, state: currentState, data: { iterations } })
 			currentState = S.advance(instance, currentState, await S.execute(instance, currentState))
 			if (allow > 0 && r % 10 === 0) {
 				const nowTime = Date.now()
@@ -351,7 +366,7 @@ export default class S extends ExtensibleFunction {
 		while (r < iterations) {
 			if (until(currentState)) break;
 			if (++r > iterations)
-				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.path]?.join(', ')} ]`)
+				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.path]?.join(', ')} ]`, { instance, state: currentState, data: { iterations } })
 			currentState = S.advance(instance, currentState, S.execute(instance, currentState))
 		}
 		return outputModifier.call(instance, outputModifiers.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
@@ -376,42 +391,42 @@ export default class S extends ExtensibleFunction {
 		}
 		this.process = process
 	};
-	isNode(object, objectType) { return this.nodes.isNode(object, objectType) }
+	isNode(object, objectType = typeof object, isOutput = false) { return this.nodes.isNode(object, objectType, isOutput) }
 	applyChanges(state, changes) { return S.applyChanges(state, changes) }
-	actionName(path) { return S.actionName(this.process, path) }
+	actionName(path)        { return S.actionName(this.process, path) }
 	
 	lastOf(path, condition) { return S.lastOf(this.process, path, condition) }
 	lastNode(path, ...nodeTypes) { return S.lastNode(this, path, ...nodeTypes) }
 	nextPath(state, path = state[S.path] || []) { return S.nextPath(this, state, path) }
-	advance(state, output) { return S.advance(this, state, output) }
-	execute(state) { return S.execute(this, state) }
+	advance(state, output)  { return S.advance(this, state, output) }
+	execute(state)          { return S.execute(this, state) }
 	
-	exec(...input) { return S.exec(this, ...input) }
-	execAsync(...input) { return S.execAsync(this, ...input) }
-	run (...input) { return S.run(this, ...input) }
-	do(process) { return new S(this.#config.processModifiers.reduce((prev, modifier) => modifier.call(this, prev), process), this.#config) }
-	override(method) { return new S(this.process, { ...this.#config, method }) }
+	exec(...input)          { return S.exec(this, ...input) }
+	execAsync(...input)     { return S.execAsync(this, ...input) }
+	run (...input)          { return S.run(this, ...input) }
+	do(process)             { return new S(this.#config.processModifiers.reduce((prev, modifier) => modifier.call(this, prev), process), this.#config) }
+	override(method)        { return new S(this.process, { ...this.#config, method }) }
 	
-	get unstrict() { return new S(this.process, { ...this.#config, strictContext: false }) }
-	get strict() { return new S(this.process, { ...this.#config, strictContext: true }) }
-	get strictTypes() { return new S(this.process, { ...this.#config, strictContext: S.strictTypes }) }
-	get forever(){ return new S(this.process, { ...this.#config, iterations: Infinity }) }
-	get async() { return new S(this.process, { ...this.#config, async: true }) }
-	get sync() { return new S(this.process, { ...this.#config, async: false }) }
-	get step() { return new S(this.process, { ...this.#config, iterations: 1, outputModifier: a => a }) }
-	defaults(initialState) { return new S(this.process, { ...this.#config, initialState }) }
+	get unstrict()          { return new S(this.process, { ...this.#config, strictContext: false }) }
+	get strict()            { return new S(this.process, { ...this.#config, strictContext: true }) }
+	get strictTypes()       { return new S(this.process, { ...this.#config, strictContext: S.strictTypes }) }
+	get forever()           { return new S(this.process, { ...this.#config, iterations: Infinity }) }
+	get async()             { return new S(this.process, { ...this.#config, async: true }) }
+	get sync()              { return new S(this.process, { ...this.#config, async: false }) }
+	get step()              { return this.for(1).output(a => a) }
+	defaults(initialState)  { return new S(this.process, { ...this.#config, initialState }) }
 	for(iterations = 10000) { return new S(this.process, { ...this.#config, iterations }) }
-	delay(delay = 0) { return new S(this.process, { ...this.#config, delay }) }
-	allow(allow = 1000) { return new S(this.process, { ...this.#config, allow }) }
-	wait(wait = 0) { return new S(this.process, { ...this.#config, wait }) }
-	until(until) { return new S(this.process, { ...this.#config, until }) }
-	with(...transformers) { return transformers.reduce((prev, transformer) => transformer(prev), this) }
-	adapt(adapter) { return new S(adapter.call(this, this.process), { ...this.#config, processModifiers: [...this.#config.processModifiers,adapter] }) }
-	input(input) { return new S(this.process, { ...this.#config, input }) }
-	output(output) { return new S(this.process, { ...this.#config, output }) }
-	adaptInput(inputModifier) { return new S(this.process, { ...this.#config, inputModifiers: [ ...this.#config.inputModifiers, inputModifier ] }) }
-	adaptOutput(outputModifier) { return new S(this.process, { ...this.#config, outputModifiers: [ ...this.#config.outputModifiers, outputModifier ] }) }
-	addNode(...nodes) { return new S(this.process, { ...this.#config, nodes: new NodeDefinitions([...this.#config.nodes.values(), ...nodes].map(node => [node.name, node])) }) }
+	delay(delay = 0)        { return new S(this.process, { ...this.#config, delay }) }
+	allow(allow = 1000)     { return new S(this.process, { ...this.#config, allow }) }
+	wait(wait = 0)          { return new S(this.process, { ...this.#config, wait }) }
+	until(until)            { return new S(this.process, { ...this.#config, until }) }
+	with(...transformers)   { return transformers.reduce((prev, transformer) => transformer(prev), this) }
+	adapt(...adapters)      { return new S(adapters.reduce((prev, adapter) => adapter.call(this, prev), this.process), { ...this.#config, processModifiers: [ ...this.#config.processModifiers, ...adapters ] }) }
+	input(input)            { return new S(this.process, { ...this.#config, input }) }
+	output(output)          { return new S(this.process, { ...this.#config, output }) }
+	adaptInput(...inputModifiers) { return new S(this.process, { ...this.#config, inputModifiers: [ ...this.#config.inputModifiers, ...inputModifiers ] }) }
+	adaptOutput(...outputModifiers) { return new S(this.process, { ...this.#config, outputModifiers: [ ...this.#config.outputModifiers, ...outputModifiers ] }) }
+	addNode(...nodes)       { return new S(this.process, { ...this.#config, nodes: new NodeDefinitions([...this.#config.nodes.values(),...nodes].map(node => [node.name, node])) }) }
 }
 
 export const StateMachine = S
