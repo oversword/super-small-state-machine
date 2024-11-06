@@ -28,7 +28,7 @@ export const transition = (name) => {
 export const t = transition
 
 const transformProcess = ({ actions, conditions, transitions }) => {
-	const recur = S.traverse((item, path, instance) => {
+	const recur = S.traverse(function (item, path) {
 		if (item && typeof item === 'object'){
 			let action;
 			const name = item.name;
@@ -43,7 +43,7 @@ const transformProcess = ({ actions, conditions, transitions }) => {
 				if (actionType === 'function')
 					return action
 				const processed = recur({
-					...instance,
+					config: this.config,
 					process: action
 				})
 				if (typeof processed === 'object')
@@ -79,6 +79,6 @@ const transformProcess = ({ actions, conditions, transitions }) => {
 export const describedPlugin = ({ actions, conditions, transitions }) =>
 	instance => instance.adapt(process => transformProcess({ actions, conditions, transitions })({
 		process,
-		nodes: instance.nodes
+		config: instance.config
 	}))
 export default describedPlugin

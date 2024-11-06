@@ -19,7 +19,7 @@ export class StateMachineInstance /*extends Promise*/ {
 		this.#resolve = promiseResolve
 		this.#reject = promiseReject
 
-		this.#runner = runner.override(null).output(a => a).input(a => a).async
+		this.#runner = runner.override(null).result(a => a).input(a => a).async
 		const modifiedInput = runner.config.input(...input)
 		this.#partialPromise = this.#runner(modifiedInput)
 		try {
@@ -31,14 +31,14 @@ export class StateMachineInstance /*extends Promise*/ {
 	async #progressUtilWaitingForEvents() {
 		while (true) {
 			const res = await this.#partialPromise
-			const node = get_path_object(this.#runner.process, res[S.path])
-			const nodeType = this.#runner.nodes.isNode(node)
+			const node = get_path_object(this.#runner.process, res[S.Path])
+			const nodeType = this.#runner.config.nodes.typeof(node)
 			if (nodeType === eventEmitter) {
 				const event = typeof node.callback === 'function' ? node.callback(res) : node.callback
 				this.#subscriptions.forEach(callback => {
 					callback(event)
 				})
-				this.#partialPromise = this.#runner(S.advance(this.#runner, res))
+				this.#partialPromise = this.#runner.perform(res)
 			} else
 			if (nodeType === eventHandler) {
 					const event = this.#queuedEvents.length
@@ -51,7 +51,7 @@ export class StateMachineInstance /*extends Promise*/ {
 					this.#partialPromise = this.#runner({
 						...res,
 						event,
-						[S.path]: [...res[S.path],'on',event.name]
+						[S.Path]: [...res[S.Path],'on',event.name]
 					})
 			} else {
 				this.#resolve(res[S.kw.RS])
@@ -92,42 +92,30 @@ export const emit = callback => ({
 	callback
 })
 
-const eventHandlerNode = new N(eventHandler, {
-	isNode: (object, objectType) => {
+export class EventHandlerNode extends N {
+	static name = eventHandler
+	static typeof(object, objectType) {
 		if (objectType !== 'object' || !object) return;
 		if ('on' in object) return true;
-	},
-	execute: () => S.return,
-	nextPath: (path) => path
-})
+	}
+	static execute() { return S.Return }
+	static proceed(path) { return path }
+}
 
-const eventEmitterNode = new N(eventEmitter, {
-	isNode: (object, objectType) => {
+export class EventEmitterNode extends N {
+	static name = eventEmitter
+	static typeof(object, objectType) {
 		if (objectType !== 'object' || !object) return;
 		if (eventEmitter in object) return true;
-	},
-	execute: () => S.return,
-})
+	}
+	static execute() { return S.Return }
+}
 
-
-export default events => instance => {
+const eventsPlugin = events => instance => {
   return instance
     .override(function (...input) { return new StateMachineInstance(this, ...input) })
-    .addNode(eventEmitterNode)
-		.addNode(eventHandlerNode)
-    .adaptInput(state => ({ event: null, ...state }))
+    .addNode(EventEmitterNode)
+		.addNode(EventHandlerNode)
+    .adaptStart(state => ({ event: null, ...state }))
 }
-// export default ({ process, config: { initialState: { events = {}, ...initialState }, ...config } }) => {
-// 	return {
-// 		process,
-// 		config: {
-// 			...config,
-// 			initialState: {
-// 				...initialState,
-// 				event: null,
-// 			},
-// 			method: function (...input) { return new StateMachineInstance(this, ...input) },
-// 			nodes: new NodeDefinitions([...config.nodes.values(), eventEmitterNode, eventHandlerNode].map(node => [node.name,node]))
-// 		}
-// 	}
-// }
+export default eventsPlugin
