@@ -9,16 +9,19 @@ const reduce_get_path_object = (obj, step) => obj ? obj[step] : undefined
 export const get_path_object = (object, path) => (path.reduce(reduce_get_path_object, object))
 export const normalise_function = (functOrReturn) => (typeof functOrReturn === 'function') ? functOrReturn : () => functOrReturn
 const reduce_deep_merge_object = (base, override) => {
-	if (!((base && typeof base === 'object') && !Array.isArray(base) && (override && typeof override === 'object') && !Array.isArray(override))) return override;
+	if (!((base && typeof base === 'object') && !Array.isArray(base) && (override && typeof override === 'object') && !Array.isArray(override)))
+		return override;
 	const allKeys = unique_list_strings(Object.keys(base).concat(Object.keys(override)));
-	return Object.fromEntries(allKeys.map(key => [ key, key in override ? deep_merge_object(base[key], override[key]) : base[key] ]));
+	return Object.fromEntries(allKeys.map(key => [
+		key, key in override ? deep_merge_object(base[key], override[key]) : base[key]
+	]));
 }
 export const deep_merge_object = (base, ...overrides) => overrides.reduce(reduce_deep_merge_object, base)
-export const get_closest_object = (object, path = [], condition = () => true) => {
+export const get_closest_path = (object, path = [], condition = () => true) => {
 	const item = get_path_object(object, path)
 	if (condition(item, path, object)) return path
 	if (path.length === 0) return null
-	return get_closest_object(object, path.slice(0,-1), condition)
+	return get_closest_path(object, path.slice(0,-1), condition)
 }
 export const wait_time = delay => (delay ? new Promise(resolve => setTimeout(resolve, delay)) : Promise.resolve())
 export class SuperSmallStateMachineError extends Error {
@@ -30,8 +33,8 @@ export class SuperSmallStateMachineError extends Error {
 }
 export class SuperSmallStateMachineReferenceError extends SuperSmallStateMachineError {}
 export class SuperSmallStateMachineTypeError extends SuperSmallStateMachineError {}
-export class ContextReferenceError extends SuperSmallStateMachineReferenceError {}
-export class ContextTypeError extends SuperSmallStateMachineTypeError {}
+export class StateReferenceError extends SuperSmallStateMachineReferenceError {}
+export class StateTypeError extends SuperSmallStateMachineTypeError {}
 export class NodeTypeError extends SuperSmallStateMachineTypeError {}
 export class UndefinedNodeError extends SuperSmallStateMachineReferenceError {}
 export class MaxIterationsError extends SuperSmallStateMachineError {}
@@ -63,8 +66,8 @@ export const KeyWords = {
 }
 export class NodeDefinitions extends Map {
 	constructor(...nodes) { super(nodes.flat(Infinity).map(node => [node.name,node])) }
-	typeof(object, objectType = typeof object, isOutput = false) {
-		const foundType = [...this.values()].findLast(current => current.typeof && current.typeof(object, objectType, isOutput))
+	typeof(object, objectType = typeof object, isAction = false) {
+		const foundType = [...this.values()].findLast(current => current.typeof && current.typeof(object, objectType, isAction))
 		return foundType ? foundType.name : false
 	}
 }
@@ -93,13 +96,13 @@ export class SequenceNode extends NodeDefinition {
 		const childItem = path[parPath.length]
 		if (parActs && childItem+1 < parActs.length) return [ ...parPath, childItem+1 ]
 	}
-	static typeof(object, objectType, isOutput) { return ((!isOutput) && objectType === 'object' && Array.isArray(object)) }
+	static typeof(object, objectType, isAction) { return ((!isAction) && objectType === 'object' && Array.isArray(object)) }
 	static execute(node, state) { return node.length ? [ ...state[S.Path], 0 ] : null }
 	static traverse(item, path, iterate, post) { return item.map((_,i) => iterate([...path,i])) }
 }
 export class FunctionNode extends NodeDefinition {
 	static name = NodeTypes.FN
-	static typeof(object, objectType, isOutput) { return (!isOutput) && objectType === 'function' }
+	static typeof(object, objectType, isAction) { return (!isAction) && objectType === 'function' }
 	static execute(node, state) { return node(state) }
 }
 export class UndefinedNode extends NodeDefinition {
@@ -115,50 +118,50 @@ export class EmptyNode extends NodeDefinition {
 }
 export class ConditionNode extends NodeDefinition {
 	static name = NodeTypes.CD
-	static typeof(object, objectType, isOutput) { return Boolean((!isOutput) && object && objectType === 'object' && (KeyWords.IF in object)) }
+	static typeof(object, objectType, isAction) { return Boolean((!isAction) && object && objectType === 'object' && (KeyWords.IF in object)) }
 	static execute(node, state) {
-	if (normalise_function(node[KeyWords.IF])(state))
-	return KeyWords.TN in node ? [ ...state[S.Path], KeyWords.TN ] : null
-	return KeyWords.EL in node ? [ ...state[S.Path], KeyWords.EL ] : null
+		if (normalise_function(node[KeyWords.IF])(state))
+		return KeyWords.TN in node ? [ ...state[S.Path], KeyWords.TN ] : null
+		return KeyWords.EL in node ? [ ...state[S.Path], KeyWords.EL ] : null
 	}
 	static traverse(item, path, iterate, post) { return post({
-	...item,
-	[KeyWords.IF]: item[KeyWords.IF],
-	...(KeyWords.TN in item ? { [KeyWords.TN]: iterate([...path,KeyWords.TN]) } : {}),
-	...(KeyWords.EL in item ? { [KeyWords.EL]: iterate([...path,KeyWords.EL]) } : {})
+		...item,
+		[KeyWords.IF]: item[KeyWords.IF],
+		...(KeyWords.TN in item ? { [KeyWords.TN]: iterate([...path,KeyWords.TN]) } : {}),
+		...(KeyWords.EL in item ? { [KeyWords.EL]: iterate([...path,KeyWords.EL]) } : {})
 	}, path) }
 }
 export class SwitchNode extends NodeDefinition {
 	static name = NodeTypes.SW
-	static typeof(object, objectType, isOutput) { return Boolean((!isOutput) && object && objectType === 'object' && (KeyWords.SW in object)) }
+	static typeof(object, objectType, isAction) { return Boolean((!isAction) && object && objectType === 'object' && (KeyWords.SW in object)) }
 	static execute(node, state) {
-	const key = normalise_function(node[KeyWords.SW])(state)
-	const fallbackKey = key in node[KeyWords.CS] ? key : KeyWords.DF
-	return fallbackKey in node[KeyWords.CS] ? [ ...state[S.Path], KeyWords.CS, fallbackKey ] : null
+		const key = normalise_function(node[KeyWords.SW])(state)
+		const fallbackKey = (key in node[KeyWords.CS]) ? key : KeyWords.DF
+		return (fallbackKey in node[KeyWords.CS]) ? [ ...state[S.Path], KeyWords.CS, fallbackKey ] : null
 	}
 	static traverse(item, path, iterate, post) { return post({
-	...item,
-	[KeyWords.SW]: item[KeyWords.SW],
-	[KeyWords.CS]: Object.fromEntries(Object.keys(item[KeyWords.CS]).map(key => [ key, iterate([...path,KeyWords.CS,key]) ])),
+		...item,
+		[KeyWords.SW]: item[KeyWords.SW],
+		[KeyWords.CS]: Object.fromEntries(Object.keys(item[KeyWords.CS]).map(key => [ key, iterate([...path,KeyWords.CS,key]) ])),
 	}, path) }
 }
 export class MachineNode extends NodeDefinition {
 	static name = NodeTypes.MC
-	static typeof(object, objectType, isOutput) { return Boolean((!isOutput) && object && objectType === 'object' && (KeyWords.IT in object)) }
+	static typeof(object, objectType, isAction) { return Boolean((!isAction) && object && objectType === 'object' && (KeyWords.IT in object)) }
 	static execute(node, state) { return [ ...state[S.Path], KeyWords.IT ] }
 	static traverse(item, path, iterate, post) { return post({
-	...item,
-	...Object.fromEntries(Object.keys(item).map(key => [ key, iterate([...path,key]) ]))
+		...item,
+		...Object.fromEntries(Object.keys(item).map(key => [ key, iterate([...path,key]) ]))
 	}, path) }
 }
 export class DirectiveNode extends NodeDefinition {
 	static name = NodeTypes.DR
-	static typeof(object, objectType, isOutput) { return Boolean(object && objectType === 'object' && (S.Path in object)) }
+	static typeof(object, objectType, isAction) { return Boolean(object && objectType === 'object' && (S.Path in object)) }
 	static perform(action, state) { return S._perform(this, state, action[S.Path]) }
 }
 export class SequenceDirectiveNode extends DirectiveNode {
 	static name = NodeTypes.SD
-	static typeof(object, objectType, isOutput) { return objectType === 'number' }
+	static typeof(object, objectType, isAction) { return objectType === 'number' }
 	static perform(action, state) {
 		const lastOf = S._closest(this, state[S.Path].slice(0,-1), NodeTypes.SQ)
 		if (!lastOf) throw new PathReferenceError(`A relative directive has been provided as a number (${String(action)}), but no sequence exists that this number could be an index of from path [ ${state[S.Path].map(key => key.toString()).join(', ')} ].`, { instance: this, state, path: state[S.Path], data: { action } })
@@ -167,7 +170,7 @@ export class SequenceDirectiveNode extends DirectiveNode {
 }
 export class MachineDirectiveNode extends DirectiveNode {
 	static name = NodeTypes.MD
-	static typeof(object, objectType, isOutput) { return objectType === 'string' || objectType === 'symbol' }
+	static typeof(object, objectType, isAction) { return objectType === 'string' || objectType === 'symbol' }
 	static perform(action, state) {
 		const lastOf = S._closest(this, state[S.Path].slice(0,-1), NodeTypes.MC)
 		if (!lastOf) throw new PathReferenceError(`A relative directive has been provided as a ${typeof action} (${String(action)}), but no state machine exists that this ${typeof action} could be a state of from path [ ${state[S.Path].map(key => key.toString()).join(', ')} ].`, { instance: this, state, path: state[S.Path], data: { action } })
@@ -176,7 +179,7 @@ export class MachineDirectiveNode extends DirectiveNode {
 }
 export class AbsoluteDirectiveNode extends DirectiveNode {
 	static name = NodeTypes.AD
-	static typeof(object, objectType, isOutput) { return isOutput && Array.isArray(object) }
+	static typeof(object, objectType, isAction) { return isAction && Array.isArray(object) }
 	static perform(action, state) { return { ...state, [S.Path]: action } }
 }
 export class ReturnNode extends NodeDefinition {
@@ -206,20 +209,18 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 		result: a => a[KeyWords.RS],
 		strict: false,
 		iterations: 10000,
-		until: result => this.Return in result,
+		until: state => S.Return in state,
+		pause: () => false,
 		async: false,
-			delay: 0,
-			allow: 1000,
-			wait: 0,
 		override: null,
-		nodes: new NodeDefinitions(nodes),
+		nodes: new NodeDefinitions(...nodes),
 		adapt: [],
 		adaptStart: [],
 		adaptEnd: [],
 	}
 	static _closest (instance, path = [], ...nodeTypes) {
 		const flatNodeTypes = nodeTypes.flat(Infinity)
-		return get_closest_object(instance.process, path, i => {
+		return get_closest_path(instance.process, path, i => {
 			const nodeType = instance.config.nodes.typeof(i)
 			return Boolean(nodeType && flatNodeTypes.includes(nodeType))
 		})
@@ -227,22 +228,22 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 	static _changes (instance, state = {}, changes = {}) {
 		if (instance.config.strict) {
 			if (Object.entries(changes).some(([name]) => !(name in state)))
-				throw new ContextReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).map(key => key.toString()).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).map(key => key.toString()).join(', ')} ].\nPath: [ ${state[this.Path].map(key => key.toString()).join(' / ')} ]`, { instance, state, path: state[S.Path], data: { changes } })
+				throw new StateReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).map(key => key.toString()).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).map(key => key.toString()).join(', ')} ].\nPath: [ ${state[S.Path].map(key => key.toString()).join(' / ')} ]`, { instance, state, path: state[S.Path], data: { changes } })
 			if (instance.config.strict === this.StrictTypes) {
 				if (Object.entries(changes).some(([name,value]) => typeof value !== typeof state[name])) {
 					const errs = Object.entries(changes).filter(([name,value]) => typeof value !== typeof state[name])
-					throw new ContextTypeError(`Properties must have the same type as their initial value. ${errs.map(([name,value]) => `${typeof value} given for '${name}', should be ${typeof state[name]}`).join('. ')}.`, { instance, state, path: state[S.Path], data: { changes } })
+					throw new StateTypeError(`Properties must have the same type as their initial value. ${errs.map(([name,value]) => `${typeof value} given for '${name}', should be ${typeof state[name]}`).join('. ')}.`, { instance, state, path: state[S.Path], data: { changes } })
 				}
 			}
 		}
-		const allChanges = deep_merge_object(state[this.Changes] || {}, changes)
+		const allChanges = deep_merge_object(state[S.Changes] || {}, changes)
 		return {
 			...deep_merge_object(state, allChanges),
-			[this.Path]: state[this.Path],
-			[this.Changes]: allChanges
+			[S.Path]: state[S.Path],
+			[S.Changes]: allChanges
 		}
 	}
-	static _proceed (instance, state = {}, path = state[this.Path] || []) {
+	static _proceed (instance, state = {}, path = state[S.Path] || []) {
 		if (path.length === 0) return null
 		const parPath = this._closest(instance, path.slice(0,-1), [...instance.config.nodes.values()].filter(({ proceed }) => proceed).map(({ name }) => name))
 		if (!parPath) return null
@@ -254,20 +255,20 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 		if (result !== undefined) return result
 		return this._proceed(instance, state, parPath)
 	}
-	static _perform (instance, state = {}, action = null) { // Perform actions on the state
-		const path = state[this.Path] || []
+	static _perform (instance, state = {}, action = null) {
+		const path = state[S.Path] || []
 		const nodeType = instance.config.nodes.typeof(action, typeof action, true)
 		const nodeDefinition = nodeType && instance.config.nodes.get(nodeType)
 		if (nodeDefinition && nodeDefinition.perform)
-		return nodeDefinition.perform.call(instance, action, state)
+			return nodeDefinition.perform.call(instance, action, state)
 		throw new NodeTypeError(`Unknown action or action type: ${typeof action}${nodeType ? `, nodeType: ${String(nodeType)}` : ''} at [ ${path.map(key => key.toString()).join(', ')} ]`, { instance, state, path, data: { action } })
 	}
-	static _execute (instance, state = {}, path = state[this.Path] || []) { // Execute a node in the process, return an action
+	static _execute (instance, state = {}, path = state[S.Path] || []) {
 		const node = get_path_object(instance.process, path)
 		const nodeType = instance.config.nodes.typeof(node)
 		const nodeDefinition = nodeType && instance.config.nodes.get(nodeType)
 		if (nodeDefinition && nodeDefinition.execute)
-		return nodeDefinition.execute.call(instance, node, state)
+			return nodeDefinition.execute.call(instance, node, state)
 		return node
 	}
 	static _traverse(instance, iterator = a => a, post = b => b) {
@@ -277,7 +278,7 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 			const nodeType = instance.config.nodes.typeof(item)
 			const nodeDefinition = nodeType && instance.config.nodes.get(nodeType)
 			if (nodeDefinition && nodeDefinition.traverse)
-			return nodeDefinition.traverse.call(instance, item, path, iterate, boundPost)
+				return nodeDefinition.traverse.call(instance, item, path, iterate, boundPost)
 			return iterator.call(instance, item, path)
 		}
 		return iterate()
@@ -290,41 +291,35 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 		const { until, iterations, input: inputModifier, result: adaptResult, adaptStart, adaptEnd, defaults } = { ...this.config, ...instance.config }
 		const modifiedInput = inputModifier.apply(instance, input) || {}
 		let r = 0, currentState = adaptStart.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
-			[this.Changes]: {},
+			[S.Changes]: {},
 			...defaults,
-			[this.Path]: modifiedInput[this.Path] || [],
+			[S.Path]: modifiedInput[S.Path] || [],
 		}, modifiedInput))
 		while (r < iterations) {
 			if (until(currentState)) break;
-			if (++r > iterations)
-				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[this.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, data: { iterations } })
+			if (++r >= iterations)
+				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
 			currentState = this._perform(instance, currentState, this._execute(instance, currentState))
 		}
 		return adaptResult.call(instance, adaptEnd.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
 	}
 	static async _runAsync (instance, ...input) {
-		const { delay, allow, wait, until, iterations, input: inputModifier, result: adaptResult, adaptStart, adaptEnd, defaults } = { ...this.config, ...instance.config }
+		const { pause, until, iterations, input: inputModifier, result: adaptResult, adaptStart, adaptEnd, defaults } = { ...this.config, ...instance.config }
 		const modifiedInput = (await inputModifier.apply(instance, input)) || {}
-		if (delay) await wait_time(delay)
-		let r = 0, startTime = Date.now(), currentState = adaptStart.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
-		[this.Changes]: {},
-		...defaults,
-		[this.Path]: modifiedInput[this.Path] || [],
+		let r = 0, currentState = adaptStart.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
+			[S.Changes]: {},
+			...defaults,
+			[S.Path]: modifiedInput[S.Path] || [],
 		}, modifiedInput))
 		while (r < iterations) {
+			const pauseExecution = pause.call(instance, currentState, r)
+			if (pauseExecution) await pauseExecution;
 			if (until(currentState)) break;
 			if (++r >= iterations)
-			throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[this.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, data: { iterations } })
+				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
 			currentState = this._perform(instance, currentState, await this._execute(instance, currentState))
-			if (allow > 0 && r % 10 === 0) {
-				const nowTime = Date.now()
-				if (nowTime - startTime >= allow) {
-					await wait_time(wait)
-					startTime = Date.now()
-				}
-			}
 		}
-	return adaptResult.call(instance, adaptEnd.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
+		return adaptResult.call(instance, adaptEnd.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
 	}
 }
 export class SuperSmallStateMachineChain extends SuperSmallStateMachineCore {
@@ -343,16 +338,13 @@ export class SuperSmallStateMachineChain extends SuperSmallStateMachineCore {
 	static result(result)          { return instance => ({ process: instance.process, config: { ...instance.config, result }, }) }
 	static unstrict                 (instance) { return ({ process: instance.process, config: { ...instance.config, strict: false }, }) }
 	static strict                   (instance) { return ({ process: instance.process, config: { ...instance.config, strict: true }, }) }
-	static strictTypes              (instance) { return ({ process: instance.process, config: { ...instance.config, strict: this.StrictTypes }, }) }
+	static strictTypes              (instance) { return ({ process: instance.process, config: { ...instance.config, strict: S.StrictTypes }, }) }
 	static for(iterations = 10000) { return instance => ({ process: instance.process, config: { ...instance.config, iterations }, }) }
 	static until(until)            { return instance => ({ process: instance.process, config: { ...instance.config, until }, }) }
 	static forever                  (instance) { return ({ process: instance.process, config: { ...instance.config, iterations: Infinity }, }) }
-	static step                     (instance) { return ({ process: instance.process, config: { ...instance.config, iterations: 1, result: a => a }, }) }
 	static sync                     (instance) { return ({ process: instance.process, config: { ...instance.config, async: false }, }) }
 	static async                    (instance) { return ({ process: instance.process, config: { ...instance.config, async: true }, }) }
-	static delay(delay = 0)        { return instance => ({ process: instance.process, config: { ...instance.config, delay }, }) }
-	static allow(allow = 1000)     { return instance => ({ process: instance.process, config: { ...instance.config, allow }, }) }
-	static wait(wait = 0)          { return instance => ({ process: instance.process, config: { ...instance.config, wait }, }) }
+	static pause(pause = S.config.pause){ return instance => ({ process: instance.process, config: { ...instance.config, pause }, }) }
 	static override(override)      { return instance => ({ process: instance.process, config: { ...instance.config, override } }) }
 	static addNode(...nodes)       { return instance => ({ process: instance.process, config: { ...instance.config, nodes: new NodeDefinitions(...instance.config.nodes.values(),...nodes) }, }) }
 	static adapt(...adapters)      { return instance => ({ process: adapters.reduce((prev, adapter) => adapter.call(instance, prev), instance.process), config: { ...instance.config, adapt: [ ...instance.config.adapt, ...adapters ] }, }) }
@@ -394,12 +386,9 @@ export default class S extends SuperSmallStateMachineChain {
 	for(iterations)         { return this.with(S.for(iterations)) }
 	until(until)            { return this.with(S.until(until)) }
 	get forever()           { return this.with(S.forever) }
-	get step()              { return this.with(S.step) }
 	get sync()              { return this.with(S.sync) }
 	get async()             { return this.with(S.async) }
-	delay(delay)            { return this.with(S.delay(delay)) }
-	allow(allow)            { return this.with(S.allow(allow)) }
-	wait(wait)              { return this.with(S.wait(wait)) }
+	pause(pause)            { return this.with(S.pause(pause)) }
 	override(override)      { return this.with(S.override(override)) }
 	addNode(...nodes)       { return this.with(S.addNode(...nodes)) }
 	adapt(...adapters)      { return this.with(S.adapt(...adapters)) }

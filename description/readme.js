@@ -1,5 +1,5 @@
-import { readme } from "../d.js";
-import description from "./description.js";
+import { readme } from "./d.js";
+import description from "./index.js";
 import fs  from 'node:fs';
 const output = await readme(description)
 fs.writeFile('./README.md', output, err => {

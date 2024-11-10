@@ -1,4 +1,4 @@
-import { test } from "../d.js";
-import description from "./description.js";
+import { test } from "./d.js";
+import description from "./index.js";
 
 await test(description)

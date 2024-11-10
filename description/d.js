@@ -70,6 +70,8 @@ export const toString = (obj, symbols = []) => {
 				)
 				.map(([ key, value ]) => `${keyToString(key, symbols)}: ${toString(value, symbols)}`)
 				.join(', ') + ' }'
+		case 'function':
+			return String(obj)
 		default:
 			console.error(`Unknown type cannot be converted to string: ${typeof obj}`)
 			return String(obj)
@@ -79,15 +81,22 @@ export class ExtensibleFunction extends Function { constructor(f) { super(); ret
 
 const withFunctionContets = doThing => funct => {
 	const originalString = funct.toString()
-	const originalLines = originalString.split('\n')
-	return originalLines[0] + '\n' +
-		doThing(originalLines.slice(1,-1).join('\n'))
+	const startPoint = originalString.indexOf('{')
+	const isNL = originalString[startPoint+1] === '\n'
+	const originalLines = originalString.slice(startPoint+1+(isNL ? 1:0)).split('\n')
+	return originalString.slice(0, startPoint+1+(isNL ? 1:0)) +
+		doThing(originalLines.slice(0,-1).join('\n'))
 		+ '\n' + rebase_string(originalLines[originalLines.length-1])
 }
 const getFunctionContents = funct => {
 	const originalString = funct.toString()
-	const originalLines = originalString.split('\n')
-	return originalLines.slice(1,-1).join('\n')
+	const startPoint = originalString.indexOf('{')
+	const isNL = originalString[startPoint+1] === '\n'
+	const originalLines = originalString.slice(startPoint+1+(isNL ? 1:0)).split('\n')
+	return originalLines.slice(0,-1).join('\n')
+	// const originalString = funct.toString()
+	// const originalLines = originalString.split('\n')
+	// return originalLines.slice(1,-1).join('\n')
 }
 
 const rebase_functionString = withFunctionContets(contents => rebase_string(contents, '\t'))
@@ -101,24 +110,23 @@ export class TransformedFunction extends ExtensibleFunction {
 		this.#toString = toString
 	}
 	toString() {
+		// console.log(this.#original.toString())
 		return this.#toString(rebase_functionString(this.#original))
 	}
 }
 
 export const E = {
-	exports: (exportName, exportObj, exportFile) => new TransformedFunction(Function(`() => {\nreturn ${exportName};\n}`), () => {
+	exports: (exportName, exportObj, exportFile) => new TransformedFunction(Function(`return ${exportName};`), () => {
 		if (exportObj[exportName] === undefined)
 			throw new DescriptionError(`Expected ${exportName} to be exported from '${exportFile}'.`)
 	}, string => {
-		const lines = [`import { ${exportName} } from '${exportFile}'`].concat(string.split('\n'))
-		return lines.join('\n')
+		return withFunctionContets((contents) => `import { ${exportName} } from '${exportFile}'\n${rebase_functionString(contents)} // success`)(string)
 	}),
-	notExports: (exportName, exportObj, exportFile) => new TransformedFunction(Function(`() => {\nreturn ${exportName};\n}`), () => {
+	notExports: (exportName, exportObj, exportFile) => new TransformedFunction(Function(`return ${exportName};`), () => {
 		if (exportObj[exportName] !== undefined)
 			throw new DescriptionError(`Expected ${exportName} not to be exported from '${exportFile}'.`)
 	}, string => {
-		const lines = [`import { ${exportName} } from '${exportFile}'`].concat(string.split('\n'))
-		return lines.join('\n')
+		return withFunctionContets((contents) => `import { ${exportName} } from '${exportFile}'\n${rebase_functionString(contents)} // nope`)(string)
 	}),
 	todo: method => new TransformedFunction(method, () => {
 		throw new DescriptionError('TODO incomplete')
@@ -148,6 +156,8 @@ export const E = {
 				await method()
 				throw new DescriptionError(`Method should have failed, succeeded instead.`)
 			} catch (error) {
+				if (error instanceof DescriptionError)
+					throw error
 				if (typeof errorType === 'string' && error.message !== errorType)
 					throw new DescriptionError(`Method should have failed with message: "${errorType}", failed with message "${error.message}" instead.`)
 				if (!errorType) return;
@@ -173,6 +183,18 @@ export const E = {
 			return lines.join('\n')
 		})
 	},
+	notEquals: (method, value, symbols) => {
+		return new TransformedFunction(method, async () => {
+			const result = await method()
+			if (!matches(result, value, symbols)) return;
+			throw new DescriptionError(`Expected anything except ${toString(value, symbols)}, got ${toString(result, symbols)}.`)
+		}, string => {
+			const lines = string.split('\n')
+			const returnLine = lines.length-2
+			lines[returnLine] = `${lines[returnLine]} // not ${toString(value, symbols)}`
+			return lines.join('\n')
+		})
+	},
 	is: (method, value, symbols) => {
 		return new TransformedFunction(method, async () => {
 			const result = await method()
@@ -182,6 +204,18 @@ export const E = {
 			const lines = string.split('\n')
 			const returnLine = lines.length-2
 			lines[returnLine] = `${lines[returnLine]} // ${toString(value, symbols)}`
+			return lines.join('\n')
+		})
+	},
+	isNot: (method, value, symbols) => {
+		return new TransformedFunction(method, async () => {
+			const result = await method()
+			if (result !== value) return;
+			throw new DescriptionError(`Expected anything except ${toString(value, symbols)}, got ${toString(result, symbols)}.`)
+		}, string => {
+			const lines = string.split('\n')
+			const returnLine = lines.length-2
+			lines[returnLine] = `${lines[returnLine]} // not ${toString(value, symbols)}`
 			return lines.join('\n')
 		})
 	},
@@ -235,16 +269,24 @@ export const test = async description => {
 
 
 	const runTest = async ({ code, path }) => {
+		let log = []
+		let existing_log = console.log
+		console.log = (...args) => {
+			log.push(args)
+		}
 		try {
 			const result = await code()
+			console.log = existing_log
 			return {
 				success: true,
 				result,
 				path,
 			}
 		} catch (error) {
+			console.log = existing_log
 			return {
 				success: false,
+				log,
 				error,
 				path,
 			}
@@ -264,7 +306,9 @@ export const test = async description => {
 		return results.reduce((printingPath, result) => {
 			const indent = '  '
 			const parent = get_path_object(description, result.path.slice(0,-1))
-			const { offset, path } = nextPath(printingPath, parent.length === 1 ? result.path.slice(0,-1) : result.path)
+			// console.log({ parent })
+			const isAlone = parent.filter(o => !o[D_processed]).length <= 1
+			const { offset, path } = nextPath(printingPath, isAlone ? result.path.slice(0,-1) : result.path)
 			const basePath = result.path.slice(0, offset)
 			let offsetStr = ''
 			for (let i=0; i < offset; i++) {
@@ -307,6 +351,10 @@ export const test = async description => {
 				console.error(`\x1b[31m${printedPath}\tCrash: ${result.error.constructor.name}\x1b[0m`)
 				console.error(result.error)
 			}
+			if (result.log && result.log.length) {
+				console.error('LOGS:')
+				result.log.forEach(args => console.log(...args.map(arg => typeof arg === 'string' ? arg : toString(arg))))
+			}
 		})
 		throw new Error('Tests Failed')
 	}
@@ -314,8 +362,10 @@ export const test = async description => {
 export const readme = async description => {
 	const lines = []
 	traverse((node, path, description) => {
+		// console.log(node)
+		if (node.code) return node;
 		const header = repeat_string('#', Math.ceil(path.length / 2))
-		const isHeader = node.children && node.children.some(child => child[D_processed])
+		const isHeader = node.children && node.children.some(child => child[D_processed] && !child.code)
 		lines.push((isHeader ? header+' ' : '')+node.description)
 		lines.push('')
 		return node
@@ -331,17 +381,28 @@ export const readme = async description => {
 
 
 export const JS = str => ({
+	code: 'javascript',
+	[D_processed]: true,
+	description: str
+})
+export const TS = str => ({
+	code: 'typescript',
+	[D_processed]: true,
+	description: str
+})
+export const CS = str => ({
 	code: true,
 	[D_processed]: true,
 	description: str
 })
 
-export const code = async description => {
+export const code = async (description, codeType = 'javascript') => {
 	const lines = []
 	let lastIndent = Infinity
 	let count = 0
 	traverse((node, path, description) => {
-		if (!(node[D_processed] && node.code)) return node;
+		if (!(node[D_processed] && node.code
+		&& (node.code === true || node.code === codeType))) return node;
 		const currentIndent = Math.ceil(path.length / 2)
 		let toReset = false
 		count += 1
