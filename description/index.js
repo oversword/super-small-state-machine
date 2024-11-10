@@ -17,7 +17,7 @@ const symbols = {
 }
 
 const commonGenericDefinitionInner = `
-	State extends InitialState = InitialState,
+	State extends InitialState = { [KeyWords.RS]: null },
 	Result extends unknown = State[KeyWords.RS],
 	Input extends Array<unknown> = [Partial<InputSystemState<State>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
@@ -36,7 +36,7 @@ D('Language',
 	'The state may be given special system symbols containing execution information',
 	'Machines have multiple stages, refered to by strings or symbols',
 	'Sequences have multiple indexes, refered to by numbers',
-	'Conditions (including switch) have clauses'
+	'Conditions (including switch) have clauses',
 ),
 D('Library Methods',
 	D('clone_object (obj)',
@@ -655,15 +655,15 @@ D('Extra types',
 	[KeyWords.RS]: unknown,
 	[key: string]: unknown,
 }
-export type SystemState<State extends InitialState = InitialState> = State & {
+export type SystemState<State extends InitialState = { [KeyWords.RS]: null }> = State & {
 	[S.Path]: Path
 	[S.Changes]: Partial<State>
 	[S.Return]?: boolean
 }
-export type InputSystemState<State extends InitialState = InitialState> = State & Partial<Pick<SystemState<State>, typeof S.Path | typeof S.Return>>
+export type InputSystemState<State extends InitialState = { [KeyWords.RS]: null }> = State & Partial<Pick<SystemState<State>, typeof S.Path | typeof S.Return>>
 
 export interface Config<
-	State extends InitialState = InitialState,
+	State extends InitialState = { [KeyWords.RS]: null },
 	Result extends unknown = State[KeyWords.RS],
 	Input extends Array<unknown> = [Partial<InputSystemState<State>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
@@ -711,7 +711,7 @@ D('Default Nodes',
 		D('This definition is exported by the library as `{ ChangesNode }`',
 			E.exports('ChangesNode', testModule, './index.js'),
 		),
-		TS("export type ChangesNode<State extends InitialState = InitialState> = Partial<State>"),
+		TS("export type ChangesNode<State extends InitialState = { [KeyWords.RS]: null }> = Partial<State>"),
 		JS("export class ChangesNode extends NodeDefinition {"),
 		TS("const ChangesNode = new N<ChangesNode,ChangesNode>(NodeTypes.CH, {"),
 		D('Use the `NodeTypes.CH` (changes) value as the name.',
@@ -742,7 +742,7 @@ D('Default Nodes',
 		D('This definition is exported by the library as `{ SequenceNode }`',
 			E.exports('SequenceNode', testModule, './index.js'),
 		),
-		TS("export type SequenceNode<State extends InitialState = InitialState, Result extends unknown = State[KeyWords.RS], Action extends unknown = ActionNode<State, Result>> = Array<ProcessNode<State, Result, Action>>"),
+		TS("export type SequenceNode<State extends InitialState = { [KeyWords.RS]: null }, Result extends unknown = State[KeyWords.RS], Action extends unknown = ActionNode<State, Result>> = Array<ProcessNode<State, Result, Action>>"),
 		JS("export class SequenceNode extends NodeDefinition {"),
 		TS("const SequenceNode = new N<SequenceNode, Path>(NodeTypes.SQ, {"),
 		D('Use the `NodeTypes.SQ` (sequence) value as the name.',
@@ -819,7 +819,7 @@ D('Default Nodes',
 		D('This definition is exported by the library as `{ FunctionNode }`',
 			E.exports('FunctionNode', testModule, './index.js'),
 		),
-		TS("export type FunctionNode<State extends InitialState = InitialState, Result extends unknown = State[KeyWords.RS], Action extends unknown = ActionNode<State, Result>> = (state: SystemState<State>) => Action | Promise<Action>"),
+		TS("export type FunctionNode<State extends InitialState = { [KeyWords.RS]: null }, Result extends unknown = State[KeyWords.RS], Action extends unknown = ActionNode<State, Result>> = (state: SystemState<State>) => Action | Promise<Action>"),
 		JS("export class FunctionNode extends NodeDefinition {"),
 		TS("const FunctionNode = new N<FunctionNode>(NodeTypes.FN, {"),
 		D('Use the `NodeTypes.FN` (function) value as the name.',
@@ -894,7 +894,7 @@ D('Default Nodes',
 	),
 	D('Condition Node',
 		TS(`export interface ConditionNode<
-			State extends InitialState = InitialState,
+			State extends InitialState = { [KeyWords.RS]: null },
 			Result extends unknown = State[KeyWords.RS],
 			Action extends unknown = ActionNode<State, Result>,
 		> {
@@ -989,7 +989,7 @@ D('Default Nodes',
 			E.exports('SwitchNode', testModule, './index.js'),
 		),
 		TS(`export interface SwitchNode<
-			State extends InitialState = InitialState,
+			State extends InitialState = { [KeyWords.RS]: null },
 			Result extends unknown = State[KeyWords.RS],
 			Action extends unknown = ActionNode<State, Result>,
 		> {
@@ -1052,7 +1052,7 @@ D('Default Nodes',
 			E.exports('MachineNode', testModule, './index.js'),
 		),
 		TS(`export interface MachineNode<
-			State extends InitialState = InitialState,
+			State extends InitialState = { [KeyWords.RS]: null },
 			Result extends unknown = State[KeyWords.RS],
 			Action extends unknown = ActionNode<State, Result>,
 		> {
@@ -1360,7 +1360,8 @@ D('Default Nodes',
 				CS("[S.Path]: state[S.Path],"),
 			),
 			D('Update the result if one was passed in as the return value.',
-				CS("...(!action || action === S.Return ? {} : { [KeyWords.RS]: action[S.Return] })"),
+				JS("...(!action || action === S.Return ? {} : { [KeyWords.RS]: action[S.Return] })"),
+				TS("...(!action || action === S.Return ? {} : { [KeyWords.RS]: action[S.Return] as null })"),
 			),
 			JS("} }"),
 			TS("})")
@@ -1372,7 +1373,7 @@ D('Default Nodes',
 export type Path = Array<PathUnit>
 
 export type ProcessNode<
-	State extends InitialState = InitialState,
+	State extends InitialState = { [KeyWords.RS]: null },
 	Result extends unknown = State[KeyWords.RS],
 	Action extends unknown = ActionNode<State, Result>,
 > =
@@ -1387,7 +1388,7 @@ export type ProcessNode<
 | null
 
 export type ActionNode<
-	State extends InitialState = InitialState,
+	State extends InitialState = { [KeyWords.RS]: null },
 	Result extends unknown = State[KeyWords.RS],
 > = DirectiveNode | AbsoluteDirectiveNode | SequenceDirectiveNode | MachineDirectiveNode | ReturnNode<Result>| ChangesNode<State> | null | undefined | void
 `),
@@ -2256,7 +2257,7 @@ D('Chain',
 		'Allows an async execution to be paused between steps.',
 		'Returns a function that will modify a given instance.',
 		JS("static pause(pause = S.config.pause){ return instance => ({ process: instance.process, config: { ...instance.config, pause }, }) }"),
-		TS(`static pause${commonGenericDefinition}(pause: Config${commonGenericArguments}['pause'] = S.config.pause) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, pause }, }) }`)
+		TS(`static pause${commonGenericDefinition}(pause: Config${commonGenericArguments}['pause'] = (S.config.pause as Config${commonGenericArguments}['pause'])) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, pause }, }) }`)
 	),
 	// D('S.delay(delay = 0) <default: 0>',
 	// 	'Defines an initial delay before starting to execute the process.',
