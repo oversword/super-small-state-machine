@@ -194,10 +194,6 @@ export interface Config<
 	nodes: NodeDefinitions<State, Result, Input, Action, Process>,
 	async: boolean,
 	pause: (state: SystemState<State>, runs: number) => false | Promise<any>
-	// // Special settings for async
-	// delay: number,
-	// allow: number,
-	// wait: number,
 }
 	export type ChangesNode<State extends InitialState = { [KeyWords.RS]: null }> = Partial<State>
 	const ChangesNode = new N<ChangesNode,ChangesNode>(NodeTypes.CH, {

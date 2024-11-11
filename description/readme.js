@@ -1,7 +1,15 @@
-import { readme } from "./d.js";
+import D, { readme, Q } from "./d.js";
 import description from "./index.js";
 import fs  from 'node:fs';
-const output = await readme(description)
+const readmeDescription = D('Super Small State Machine',
+  Q(description, ['Language']),
+  Q(description, ['Instance']),
+  Q(description, ['Chain']),
+  Q(description, ['Core']),
+  Q(description, ['Default Nodes']),
+  Q(description, ['Errors']),
+)
+const output = await readme(readmeDescription)
 fs.writeFile('./README.md', output, err => {
   if (err) {
     console.error(err);

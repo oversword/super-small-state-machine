@@ -221,6 +221,15 @@ export const E = {
 	},
 }
 
+export const Q = (description, path) => {
+	if (path.length === 0) return description
+	let found
+	if (typeof path[0] === 'function')
+		found = description.children.find(node => node[D_processed] && path[0](node.description))
+	else found = description.children.find(node => node[D_processed] && node.description === path[0])
+	// if (path.length === 1) return found
+	return found ? Q(found, path.slice(1)) : null
+}
 
 export const traverse = (forNode = a => a, forCode = a => a) => {
 	const iterate = (description, path = []) => {
@@ -362,8 +371,12 @@ export const test = async description => {
 export const readme = async description => {
 	const lines = []
 	traverse((node, path, description) => {
-		// console.log(node)
 		if (node.code) return node;
+		if (path.length === 0) {
+			lines.push(`<img alt="${node.description}" src="./logo.svg" width=800 />`)
+			lines.push('')
+			return node
+		}
 		const header = repeat_string('#', Math.ceil(path.length / 2))
 		const isHeader = node.children && node.children.some(child => child[D_processed] && !child.code)
 		lines.push((isHeader ? header+' ' : '')+node.description)

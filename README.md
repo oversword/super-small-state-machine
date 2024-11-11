@@ -1,4 +1,4 @@
- Super Small State Machine
+<img alt="Super Small State Machine" src="./logo.svg" width=800 />
 
 # Language
 
@@ -20,604 +20,1213 @@ Sequences have multiple indexes, refered to by numbers
 
 Conditions (including switch) have clauses
 
-# Library Methods
+# Instance
 
-## clone_object (obj)
-
-Deep clones objects.
+Process
 
 ```javascript
-const obj = {a:{b:3},c:5}
-const clone = clone_object(obj)
-return clone !== obj
-	&& JSON.stringify(clone) === JSON.stringify(obj)
-	&& clone.a !== obj.a
-	&& clone.c === obj.c // true
+const instance = new S({ result: 'value' })
+return instance.process // { result: 'value' }
 ```
 
-This method is exported by the library as `{ clone_object }`
+Config
 
 ```javascript
-import { clone_object } from './index.js'
-	
-return clone_object; // success
+const instance = new S()
+return instance.config // { defaults: { result: null }, iterations: 10000, strict: false, async: false }
 ```
 
-Can clone arrays
-
 ```javascript
-const obj = [{a:{b:3},c:5},2,3,{d:6}]
-const clone = clone_object(obj)
-return clone !== obj
-	&& clone[0] !== obj[0]
-	&& clone[1] === obj[1]
-	&& clone[3] !== obj[3]
-	&& JSON.stringify(clone) === JSON.stringify(obj) // true
+const instance = new S()
+const modifiedInstance = instance
+	.async
+	.for(10)
+	.defaults({ result: 'other' })
+	.strict
+return modifiedInstance.config // { defaults: { result: 'other' }, iterations: 10, strict: true, async: true }
 ```
 
-Returns null if given null
+## Instance Constructor
+
+### Basics
+
+The primary way of interacting with this library is to create a new instance
 
 ```javascript
-return clone_object(null) // null
+const instance = new S() // Succeeds
 ```
 
-Returns input if not object
+Instances are executable, like functions
 
 ```javascript
-return clone_object('hello') // 'hello'
+const instance = new S()
+return instance() === undefined // Succeeds
 ```
 
-Deep clones properties of an object
+The constructor takes two arguments, the `process` and the `config`
 
 ```javascript
-const obj = {a:{b:3}}
-const clone = clone_object(obj)
-return clone !== obj
-	&& JSON.stringify(clone) === JSON.stringify(obj)
-	&& clone.a !== obj.a
-	&& clone.a.b === obj.a.b // true
+const instance = new S({}, {})
+return instance() // Succeeds
 ```
 
-## unique_list_strings (list, getId)
-
-Takes a list of strings and returns a list containing the unique strings only
+Neither of these arguments are required, and it is not recommended to configure them config via the constructor. Instead you should update the config using the various chainable methods and properties.
 
 ```javascript
-return unique_list_strings(['a','a','b','c','d','c','a','b']) // [ 'a', 'b', 'c', 'd' ]
+const instance = new S(process)
+	.defaults({})
+	.input()
+	.result() // Succeeds
 ```
 
-### Takes a transformer function that can extract a string identifier from objects
+Create an ExtensibleFunction that can execute the `run` or `override` method in scope of the new SuperSmallStateMachine instance.
+
+### Create the config by merging the passed config with the defaults.
+
+This is private so it cannot be mutated at runtime
+
+The process must be public, it cannot be deep merged or cloned as it may contain symbols.
+
+## instance.closest (path = [], ...nodeTypes)
+
+Returns the path of the closest ancestor to the node at the given `path` that matches one of the given `nodeTypes`.
+
+Returns `null` if no ancestor matches the one of the given `nodeTypes`.
 
 ```javascript
-const objA = {
-	id: 'a',
-	val: 1,
+const instance = new S([
+	{
+		if: ({ result }) => result === 'start',
+		then: [
+			{ result: 'second' },
+			S.Return,
+		]
+	}
+])
+return instance.closest([0, 'then', 1], 'sequence') // [ 0, 'then' ]
+```
+
+## instance.changes (state = {}, changes = {})
+
+Safely apply the given `changes` to the given `state`.
+
+Merges the `changes` with the given `state` and returns it.
+
+This will ignore any symbols in `changes`, and forward the important symbols of the given `state`.
+
+```javascript
+const instance = new S()
+const result = instance.changes({
+	[S.Path]: ['preserved'],
+	[S.Changes]: {},
+	preserved: 'value',
+	common: 'initial',
+}, {
+	[S.Path]: ['ignored'],
+	[S.Changes]: { ignored: true },
+	common: 'changed',
+})
+return result // { common: 'changed', preserved: 'value', [S.Path]: [ 'preserved' ], [S.Changes]: { ignored: undefined, common: 'changed' } }
+```
+
+## instance.proceed (state = {}, path = state[S.Path] || [])
+
+Proceed to the next execution path.
+
+Performs fallback logic when a node exits.
+
+## instance.perform (state = {}, action = null)
+
+Perform actions on the state.
+
+Applies any changes in the given `action` to the given `state`.
+
+Proceeds to the next node if the action is not itself a directive or return.
+
+## instance.execute (state = {}, path = state[S.Path] || [])
+
+Execute a node in the process, return an action.
+
+Executes the node in the process at the state's current path and returns it's action.
+
+If the node is not executable it will be returned as the action.
+
+## instance.traverse(iterator = a => a, post = b => b)
+
+TODO: traverse and adapt same thing?
+
+## instance.run (...input)
+
+Execute the entire process either synchronously or asynchronously depending on the config.
+
+## instance.runSync (...input)
+
+Execute the entire process synchronously.
+
+## instance.runAsync (...input)
+
+Execute the entire process asynchronously. Always returns a promise.
+
+## instance.do(process) <default: null>
+
+Defines a process to execute, overrides the existing process.
+
+Returns a new instance.
+
+```javascript
+const instance = new S({ result: 'old' })
+	.do({ result: 'new' })
+return instance() // 'new'
+```
+
+## instance.defaults(defaults) <default: { result: null }>
+
+Defines the initial state to be used for all executions.
+
+Returns a new instance.
+
+```javascript
+const instance = new S()
+	.defaults({ result: 'default' })
+return instance() // 'default'
+```
+
+## instance.input(input) <default: (state => state)>
+
+Allows the definition of the arguments the executable will use, and how they will be applied to the initial state.
+
+Returns a new instance.
+
+```javascript
+const instance = new S(({ first, second }) => ({ [S.Return]: `${first} then ${second}` }))
+	.defaults({ first: '', second: '' })
+	.input((first, second) => ({ first, second }))
+return instance('this', 'that') // 'this then that'
+```
+
+## instance.result(result) <default: (state => state.result)>
+
+Allows the modification of the value the executable will return.
+
+Returns a new instance.
+
+```javascript
+const instance = new S(({ myReturnValue }) => ({ myReturnValue: myReturnValue + ' extra' }))
+	.result(state => state.myReturnValue)
+return instance({ myReturnValue: 'start' }) // 'start extra'
+```
+
+## instance.unstrict <default>
+
+Execute without checking state properties when a state change is made.
+
+Creates a new instance.
+
+```javascript
+const instance = new S(() => ({ unknownVariable: false}))
+	.defaults({ knownVariable: true })
+	.strict
+return instance() // StateReferenceError
+```
+
+```javascript
+const instance = new S(() => ({ unknownVariable: false}))
+	.defaults({ knownVariable: true })
+	.strict
+	.unstrict
+return instance() // Succeeds
+```
+
+## instance.strict
+
+Checks state properties when an state change is made.
+
+Creates a new instance.
+
+```javascript
+const instance = new S(() => ({ unknownVariable: false}))
+	.defaults({ knownVariable: true })
+return instance() // Succeeds
+```
+
+```javascript
+const instance = new S(() => ({ unknownVariable: false}))
+	.defaults({ knownVariable: true })
+	.strict
+return instance() // StateReferenceError
+```
+
+## instance.strictTypes
+
+Checking state property types when an state change is made.
+
+Creates a new instance.
+
+```javascript
+const instance = new S([() => ({ knownVariable: 45 }), ({ knownVariable }) => ({ result: knownVariable })])
+	.defaults({ knownVariable: true })
+	.strictTypes
+return instance() // StateTypeError
+```
+
+## instance.for(iterations = 10000) <default: 10000>
+
+Defines the maximum iteration limit.
+
+Returns a new instance.
+
+```javascript
+const instance = new S([
+	({ result }) => ({ result: result + 1}),
+	0
+])
+	.defaults({ result: 0 })
+	.for(10)
+return instance() // MaxIterationsError
+```
+
+## instance.until(until) <default: (state => S.Return in state)>
+
+Stops execution of the machine once the given condition is met, and attempts to return.
+
+```javascript
+const instance = new S([
+	({ result }) => ({ result: result + 1 }),
+	{
+		if: ({ result }) => result > 4,
+		then: [{ result: 'exit' }, { result:'ignored' }],
+		else: 0
+	}
+])
+	.until(({ result }) => result === 'exit')
+return instance({ result: 0 }) // 'exit'
+```
+
+## instance.forever
+
+Removes the max iteration limit.
+
+Creates a new instance.
+
+```javascript
+const instance = new S().forever
+return instance.config.iterations // Infinity
+```
+
+## instance.sync <default>
+
+Execute synchronously and not allow for asynchronous actions.
+
+Creates a new instance.
+
+```javascript
+const instance = new S(async () => ({ result: 'changed' }))
+	.async
+	.sync
+	.defaults({ result: 'initial' })
+return instance() // 'initial'
+```
+
+## instance.async
+
+Execute asynchronously and allow for asynchronous actions.
+
+Creates a new instance.
+
+```javascript
+const instance = new S(async () => ({ result: 'changed' }))
+	.defaults({ result: 'initial' })
+return instance() // 'initial'
+```
+
+```javascript
+const instance = new S(async () => ({ result: 'changed' }))
+	.defaults({ result: 'initial' })
+	.async
+return await instance() // 'changed'
+```
+
+## instance.pause(pause) <default: (() => false)>
+
+Allows an async execution to be paused between steps.
+
+Returns a new instance.
+
+## instance.override(override) <default: instance.run>
+
+Overrides the method that will be used when the executable is called.
+
+Returns a new instance.
+
+```javascript
+const instance = new S({ result: 'definedResult' }).override(function (...args) {
+	// console.log({ scope: this, args }) // { scope: { process: { result: 'definedResult' } }, args: [1, 2, 3] }
+	return 'customReturn'
+})
+return instance(1, 2, 3) // 'customReturn'
+```
+
+## instance.addNode(...nodes)
+
+Allows for the addition of new node types.
+
+Returns a new instance.
+
+```javascript
+const specialSymbol = Symbol('My Symbol')
+class SpecialNode extends NodeDefinition {
+	static name = 'special'
+	static typeof(object, objectType) { return Boolean(objectType === 'object' && object && specialSymbol in object)}
+	static execute(){ return { [S.Return]: 'specialValue' } }
 }
-const objB = {
-	id: 'b',
-	val: 2,
-}
-return unique_list_strings([ objA, objA, objB, objA, objB, objB ],
-	obj => obj.id
-) // [ { id: 'a', val: 1 }, { id: 'b', val: 2 } ]
+const instance = new S({ [specialSymbol]: true })
+	.addNode(SpecialNode)
+return instance({ result: 'start' }) // 'specialValue'
 ```
 
-Always preserves objects without copyng them
+```javascript
+const specialSymbol = Symbol('My Symbol')
+const instance = new S({ [specialSymbol]: true })
+return instance({ result: 'start' }) // 'start'
+```
+
+## instance.adapt(...adapters)
+
+Transforms the process before usage, allowing for temporary nodes.
 
 ```javascript
-const objA = {
-	id: 'a',
-	val: 1,
-}
-const objB = {
-	id: 'b',
-	val: 2,
-}
-const result = unique_list_strings([ objA, objA, objB, objA, objB, objB ],
-	obj => obj.id
+const replaceMe = Symbol('replace me')
+const instance = new S([
+	replaceMe,
+	S.Return,
+])
+.adapt(function (process) {
+	return S.traverse((node) => {
+		if (node === replaceMe)
+			return { result: 'changed' }
+		return node
+	})(this) })
+return instance({ result: 'unchanged' }) // 'changed'
+```
+
+## instance.adaptStart(...adapters)
+
+Transforms the state before execution.
+
+Returns a new instance.
+
+```javascript
+const instance = new S()
+.adaptStart(state => ({
+	...state,
+	result: 'overridden'
+}))
+return instance({ result: 'input' }) // 'overridden'
+```
+
+## instance.adaptEnd(...adapters)
+
+Transforms the state after execution.
+
+Returns a new instance.
+
+```javascript
+const instance = new S()
+	.adaptEnd(state => ({
+		...state,
+		result: 'overridden'
+	}))
+return instance({ result: 'start' }) // 'overridden'
+```
+
+## instance.with(...adapters)
+
+Allows for the addition of predifined modules.
+
+Returns a new instance.
+
+```javascript
+const instance = new S()
+	.with(S.strict, S.async, S.for(10))
+return instance.config // { async: true, strict: true, iterations: 10 }
+```
+
+# Chain
+
+## S.closest (path = [], ...nodeTypes)
+
+Returns the path of the closest ancestor to the node at the given `path` that matches one of the given `nodeTypes`.
+
+Returns `null` if no ancestor matches the one of the given `nodeTypes`.
+
+```javascript
+const instance = new S([
+	{
+		if: ({ result }) => result === 'start',
+		then: [
+			{ result: 'second' },
+			S.Return,
+		]
+	}
+])
+return S.closest([0, 'then', 1], 'sequence')(instance) // [ 0, 'then' ]
+```
+
+## S.changes (state = {}, changes = {})
+
+Safely apply the given `changes` to the given `state`.
+
+Merges the `changes` with the given `state` and returns it.
+
+This will ignore any symbols in `changes`, and forward the important symbols of the given `state`.
+
+```javascript
+const instance = new S()
+const result = S.changes({
+	[S.Path]: ['preserved'],
+	[S.Changes]: {},
+	preserved: 'value',
+	common: 'initial',
+}, {
+	[S.Path]: ['ignored'],
+	[S.Changes]: { ignored: true },
+	common: 'changed',
+})(instance)
+return result // { common: 'changed', preserved: 'value', [S.Path]: [ 'preserved' ], [S.Changes]: { ignored: undefined, common: 'changed' } }
+```
+
+## S.proceed (state = {}, path = state[S.Path] || [])
+
+Proceed to the next execution path.
+
+Performs fallback logic when a node exits.
+
+## S.perform (state = {}, action = null)
+
+Perform actions on the state.
+
+Applies any changes in the given `action` to the given `state`.
+
+Proceeds to the next node if the action is not itself a directive or return.
+
+## S.execute (state = {}, path = state[S.Path] || [])
+
+Execute a node in the process, return an action.
+
+Executes the node in the process at the state's current path and returns it's action.
+
+If the node is not executable it will be returned as the action.
+
+## S.traverse(iterator = a => a, post = b => b)
+
+TODO: traverse and adapt same thing?
+
+## S.run (...input)
+
+Execute the entire process either synchronously or asynchronously depending on the config.
+
+## S.runSync (...input)
+
+Execute the entire process synchronously.
+
+## S.runAsync (...input)
+
+Execute the entire process asynchronously. Always returns a promise.
+
+## S.do(process) <default: null>
+
+Defines a process to execute, overrides the existing process.
+
+Returns a function that will modify a given instance.
+
+```javascript
+const instance = new S({ result: 'old' })
+const newInstance = instance.with(S.do({ result: 'new' }))
+return newInstance() // 'new'
+```
+
+## S.defaults(defaults) <default: { result: null }>
+
+Defines the initial state to be used for all executions.
+
+Returns a function that will modify a given instance.
+
+```javascript
+const instance = new S()
+const newInstance = instance.with(S.defaults({ result: 'default' }))
+return newInstance() // 'default'
+```
+
+## S.input(input) <default: (state => state)>
+
+Allows the definition of the arguments the executable will use, and how they will be applied to the initial state.
+
+Returns a function that will modify a given instance.
+
+```javascript
+const instance = new S(({ first, second }) => ({ [S.Return]: `${first} then ${second}` }))
+.with(
+	S.defaults({ first: '', second: '' }),
+	S.input((first, second) => ({ first, second }))
 )
-return result[0] === objA && result[1] === objB // true
+return instance('this', 'that') // 'this then that'
 ```
 
-This method is exported by the library as `{ unique_list_strings }`
+## S.result(result) <default: (state => state.result)>
+
+Allows the modification of the value the executable will return.
+
+Returns a function that will modify a given instance.
 
 ```javascript
-import { unique_list_strings } from './index.js'
-	
-return unique_list_strings; // success
+const instance = new S(({ myReturnValue }) => ({ myReturnValue: myReturnValue + ' extra' }))
+	.with(S.result(state => state.myReturnValue))
+return instance({ myReturnValue: 'start' }) // 'start extra'
 ```
 
-## reduce_get_path_object (obj, step)
+## S.unstrict <default>
 
-Returns the value at a specific key `step` of the given object `obj`
+Execute without checking state properties when a state change is made.
 
-This method is not exported by the library.
+Will modify the given instance.
+
+With the strict flag, an unknown property cannot be set on the state.
 
 ```javascript
-import { reduce_get_path_object } from './index.js'
-	
-return reduce_get_path_object; // nope
+const instance = new S(() => ({ unknownVariable: false}))
+.with(
+	S.defaults({ knownVariable: true }),
+	S.strict
+)
+return instance() // StateReferenceError
 ```
 
-## get_path_object (object, path)
-
-Return the value at the given `path` in the given `object`
+The unstrict flag will override strict behaviour, so that an unknown property can be set on the state.
 
 ```javascript
-const obj = [
+const instance = new S(() => ({ unknownVariable: false}))
+.with(
+	S.defaults({ knownVariable: true }),
+	S.strict,
+	S.unstrict
+)
+return instance() // Succeeds
+```
+
+## S.strict
+
+Checks state properties when an state change is made.
+
+Will modify the given instance.
+
+Without the strict flag, unknown properties can be set on the state by a state change action.
+
+```javascript
+const instance = new S(() => ({ unknownVariable: false}))
+	.with(S.defaults({ knownVariable: true }))
+return instance() // Succeeds
+```
+
+With the strict flag, unknown properties cannot be set on the state by a state change action.
+
+```javascript
+const instance = new S(() => ({ unknownVariable: false}))
+.with(
+	S.defaults({ knownVariable: true }),
+	S.strict
+)
+return instance() // StateReferenceError
+```
+
+## S.strictTypes
+
+Checking state property types when an state change is made.
+
+Will modify the given instance.
+
+With the strict types flag, known properties cannot have their type changed by a state change action
+
+```javascript
+const instance = new S(() => ({ knownVariable: 45 }))
+.with(
+	S.defaults({ knownVariable: true }),
+	S.strictTypes
+)
+return instance() // StateTypeError
+```
+
+## S.for(iterations = 10000) <default: 10000>
+
+Defines the maximum iteration limit.
+
+Returns a function that will modify a given instance.
+
+A limited number of iterations will cause the machine to exit early
+
+```javascript
+const instance = new S([
+	({ result }) => ({ result: result + 1}),
+	0
+])
+.with(
+	S.defaults({ result: 0 }),
+	S.for(10)
+)
+return instance() // MaxIterationsError
+```
+
+## S.until(until) <default: (state => S.Return in state)>
+
+Stops execution of the machine once the given condition is met, and attempts to return.
+
+Returns a function that will modify a given instance.
+
+```javascript
+const instance = new S([
+	({ result }) => ({ result: result + 1 }),
 	{
-		key: {
-			another: { target: 'node' }
-		}
-	},
+		if: ({ result }) => result > 4,
+		then: [{ result: 'exit' }, { result:'ignored' }],
+		else: 0
+	}
+])
+	.with(S.until(({ result }) => result === 'exit'))
+return instance({ result: 0 }) // 'exit'
+```
+
+## S.forever
+
+Removes the max iteration limit.
+
+Will modify the given instance.
+
+```javascript
+const instance = new S().with(S.forever)
+return instance.config.iterations // Infinity
+```
+
+## S.sync <default>
+
+Execute synchronously and not allow for asynchronous actions.
+
+Will modify the given instance.
+
+```javascript
+const instance = new S(async () => ({ result: 'changed' }))
+.with(
+	S.async,
+	S.sync,
+	S.defaults({ result: 'initial' })
+)
+return instance() // 'initial'
+```
+
+## S.async
+
+Execute asynchronously and allow for asynchronous actions.
+
+Will modify the given instance.
+
+```javascript
+const instance = new S(async () => ({ result: 'changed' }))
+.with(S.defaults({ result: 'initial' }))
+return instance() // 'initial'
+```
+
+```javascript
+const instance = new S(async () => ({ result: 'changed' }))
+.with(
+	S.defaults({ result: 'initial' }),
+	S.async
+)
+return await instance() // 'changed'
+```
+
+## S.pause(pause) <default: (() => false)>
+
+Allows an async execution to be paused between steps.
+
+Returns a function that will modify a given instance.
+
+## S.override(override) <default: instance.run>
+
+Overrides the method that will be used when the executable is called.
+
+Returns a function that will modify a given instance.
+
+```javascript
+const instance = new S({ result: 'definedResult' })
+	.with(S.override(function (...args) {
+		// console.log({ scope: this, args }) // { scope: { process: { result: 'definedResult' } }, args: [1, 2, 3] }
+		return 'customReturn'
+	}))
+return instance(1, 2, 3) // 'customReturn'
+```
+
+## S.addNode(...nodes)
+
+Allows for the addition of new node types.
+
+Returns a function that will modify a given instance.
+
+```javascript
+const specialSymbol = Symbol('My Symbol')
+class SpecialNode extends NodeDefinition {
+	static name = 'special'
+	static typeof(object, objectType) { return Boolean(objectType === 'object' && object && specialSymbol in object)}
+	static execute(){ return { [S.Return]: 'specialValue' } }
+}
+const instance = new S({ [specialSymbol]: true })
+	.with(S.addNode(SpecialNode))
+return instance({ result: 'start' }) // 'specialValue'
+```
+
+```javascript
+const specialSymbol = Symbol('My Symbol')
+const instance = new S({ [specialSymbol]: true })
+return instance({ result: 'start' }) // 'start'
+```
+
+## S.adapt(...adapters)
+
+Transforms the process before usage, allowing for temporary nodes.
+
+Returns a function that will modify a given instance.
+
+```javascript
+const replaceMe = Symbol('replace me')
+const instance = new S([
+	replaceMe,
+	S.Return,
+]).with(S.adapt(function (process) {
+	return S.traverse((node) => {
+		if (node === replaceMe)
+			return { result: 'changed' }
+		return node
+	})(this) }))
+return instance({ result: 'unchanged' }) // 'changed'
+```
+
+## S.adaptStart(...adapters)
+
+Transforms the state before execution.
+
+Returns a function that will modify a given instance.
+
+```javascript
+const instance = new S()
+.adaptStart(state => ({
+	...state,
+	result: 'overridden'
+}))
+return instance({ result: 'input' }) // 'overridden'
+```
+
+## S.adaptEnd(...adapters)
+
+Transforms the state after execution.
+
+Returns a function that will modify a given instance.
+
+```javascript
+const instance = new S()
+.adaptEnd(state => ({
+	...state,
+	result: 'overridden'
+}))
+return instance({ result: 'input' }) // 'overridden'
+```
+
+## S.with(...adapters)
+
+Allows for the addition of predifined modules.
+
+Returns a function that will modify a given instance.
+
+```javascript
+const plugin = S.with(S.strict, S.async, S.for(10))
+const instance = new S().with(plugin)
+return instance.config // { async: true, strict: true, iterations: 10 }
+```
+
+Allow the input of a list or a list of lists, etc.
+
+### Return a function that takes a specific instance.
+
+Pass each state through the adapters sequentially.
+
+Make sure an instance is returned.
+
+# Core
+
+Every instance must have a process and be callable.
+
+## Symbols
+
+### Return
+
+Use for intentionally exiting the entire process, can be used in an object to override the result value before returning
+
+```javascript
+return { [S.Return]: "value" } // Succeeds
+```
+
+### Changes
+
+Returned in the state. Should not be passed in.
+
+```javascript
+return { [S.Changes]: {} } // Succeeds
+```
+
+### Path
+
+Returned in the state to indicate the next action path, or passed in with the state to direct the machine. This can also be used as a node on its own to change the executing path.
+
+```javascript
+return { [S.Path]: [] } // Succeeds
+```
+
+### StrictTypes
+
+Possible value of `config.strict`, used to indicate strict types as well as values.
+
+Key Words
+
+Node Types
+
+## Config
+
+Initialise the result property as `null` by default
+
+Input the initial state by default
+
+Return the result property by default
+
+Do not perform strict state checking by default
+
+Allow 1000 iterations by default
+
+Run util the return symbol is present by default.
+
+Do not allow for asynchronous actions by default
+
+Do not allow for asynchronous actions by default
+
+Do not override the execution method by default
+
+Use the provided nodes by default.
+
+Initialise with an empty adapters list.
+
+Initialise with an empty start adapters list.
+
+Initialise with an empty end adapters list.
+
+## S._closest (instance, path = [], ...nodeTypes)
+
+Returns the path of the closest ancestor to the node at the given `path` that matches one of the given `nodeTypes`.
+
+Returns `null` if no ancestor matches the one of the given `nodeTypes`.
+
+```javascript
+const instance = new S([
 	{
-		different: { path: 0 }
+		if: ({ result }) => result === 'start',
+		then: [
+			{ result: 'second' },
+			S.Return,
+		]
 	}
-]
-const path = [0,'key','another']
-return get_path_object(obj, path) // { target: 'node' }
+])
+return S._closest(instance, [0, 'then', 1], 'sequence') // [ 0, 'then' ]
 ```
 
-This method is exported by the library as `{ get_path_object }`
+Node types can be passed in as arrays of strings, or arrays of arrays of strings...
+
+### Use get_closest_path to find the closest path.
+
+Get the type of the node
+
+Pick this node if it matches any of the given types
+
+## S._changes (instance, state = {}, changes = {})
+
+Safely apply the given `changes` to the given `state`.
+
+Merges the `changes` with the given `state` and returns it.
+
+This will ignore any symbols in `changes`, and forward the important symbols of the given `state`.
 
 ```javascript
-import { get_path_object } from './index.js'
-	
-return get_path_object; // success
-```
-
-## normalise_function (functOrReturn)
-
-Wrap a value in a function, unless it's already one.
-
-If the value is a function, return it as-is
-
-```javascript
-const method = () => {}
-const result = normalise_function(method)
-return result === method // true
-```
-
-If the value is not a function, return a function that returns that value when called
-
-```javascript
-const method = 'value'
-const result = normalise_function(method)
-return result() // 'value'
-```
-
-This method is exported by the library as `{ normalise_function }`
-
-```javascript
-import { normalise_function } from './index.js'
-	
-return normalise_function; // success
-```
-
-## reduce_deep_merge_object (base, override)
-
-Merge the given `override` object into the given `base` object.
-
-This method is not exported by the library
-
-```javascript
-import { reduce_deep_merge_object } from './index.js'
-	
-return reduce_deep_merge_object; // nope
-```
-
-### If both objects are not pure objects
-
-Return the override value
-
-Get all combined unique keys
-
-### Make a new object with the combined keys
-
-Merge each value recursively if the key exists in both objects
-
-## deep_merge_object (base, ...overrides)
-
-Merge each of the given `overrides` into the given `base` object, in the order they are given.
-
-Deep merges two objects, using the second as the override
-
-```javascript
-return deep_merge_object({
-	key1: 'value1',
-	key2: {
-		key3: 'value3',
-		key4: 'value4',
-	}
+const instance = new S()
+const result = S._changes(instance, {
+	[S.Path]: ['preserved'],
+	[S.Changes]: {},
+	preserved: 'value',
+	common: 'initial',
 }, {
-	key1: 'value2',
-	key2: {
-		key3: 'value5'
-	}
-}) // { key1: 'value2', key2: { key3: 'value5', key4: 'value4' } }
+	[S.Path]: ['ignored'],
+	[S.Changes]: { ignored: true },
+	common: 'changed',
+})
+return result // { common: 'changed', preserved: 'value', [S.Path]: [ 'preserved' ], [S.Changes]: { ignored: undefined, common: 'changed' } }
 ```
 
-Does not merge arrays
+### If the strict state flag is truthy, perform state checking logic
+
+#### Go through each property in the changes and check they all already exist
+
+Throw a StateReferenceError if a property is referenced that did not previosly exist.
+
+#### If the strict state flag is set to the Strict Types Symbol, perform type checking logic.
+
+##### Go through each property and check the JS type is the same as the initial values.
+
+Collect all the errors, using the same logic as above.
+
+Throw a StateTypeError if a property changes types.
+
+Collect all the changes in the changes object.
+
+### Return a new object
+
+Deep merge the current state with the new changes
+
+Carry over the original path.
+
+Update the changes to the new changes
+
+## S._proceed (instance, state = {}, path = state[S.Path] || [])
+
+Proceed to the next execution path.
 
 ```javascript
-return deep_merge_object({
-	array: [{ deep: 'object' }, 2, 3, 4 ]
-}, {
-	array: [{ new: 'value' }, 5, 6 ]
-}) // { array: [ { new: 'value', deep: undefined }, 5, 6 ] }
+const instance = new S([
+	'firstAction',
+	'secondAction'
+])
+return S._proceed(instance, {
+	[S.Path]: [0]
+}) // { [S.Path]: [ 1 ] }
 ```
 
-If the values have different types, the override is always used without deep merging.
+Performs fallback logic when a node exits.
 
 ```javascript
-return deep_merge_object({
-	original: 'string',
-	another: {
-		deep: 'object'
-	}
-}, {
-	original: { new: 'object' },
-	another: 'changed'
-}) // { original: { new: 'object' }, another: 'changed' }
+const instance = new S([
+	[
+		'firstAction',
+		'secondAction',
+	],
+	'thirdAction'
+])
+return S._proceed(instance, {
+	[S.Path]: [0,1]
+}) // { [S.Path]: [ 1 ] }
 ```
 
-Does not preserve symbols
+Return `null` (unsuccessful) if the root node is reached
+
+Get the next closest ancestor that can be proceeded
+
+If no such node exists, return `null` (unsuccessful)
+
+Get this closest ancestor
+
+Determine what type of node the ancestor is
+
+Get the node defintion for the ancestor
+
+If the node definition cannot be proceeded, return `null` (unsuccessful)
+
+Call the `proceed` method of the ancestor node to get the next path.
+
+If there a next path, return it
+
+Proceed updwards through the tree and try again.
+
+## S._perform (instance, state = {}, action = null)
+
+Perform actions on the state.
 
 ```javascript
-const mySymbol = Symbol('My Symbol')
-return deep_merge_object({
-	[mySymbol]: 'value'
-}, { }) // {  }
+const instance = new S([
+	'firstAction',
+	'secondAction',
+	'thirdAction'
+])
+return S._perform(instance, { [S.Path]: [0], prop: 'value' }, { prop: 'newValue' }) // { prop: 'newValue', [S.Path]: [ 1 ] }
 ```
 
-Preserves original key order
+Applies any changes in the given `action` to the given `state`.
 
 ```javascript
-return Object.keys(deep_merge_object({
-	first: 1,
-	second: 2,
-	third: 3
-}, {
-	second: 4,
-	first: 5,
-})) // [ 'first', 'second', 'third' ]
+const instance = new S([
+	'firstAction',
+	'secondAction',
+	'thirdAction'
+])
+return S._perform(instance, { [S.Path]: [0], prop: 'value' }, { [S.Path]: [2] }) // { prop: 'value', [S.Path]: [ 2 ] }
 ```
 
-Merges multiple objects into the base object
+Proceeds to the next node if the action is not itself a directive or return.
 
 ```javascript
-return deep_merge_object({
-	first: 1,
-}, {
-	second: 2,
-}, {
-	first: 5,
-	third: 3,
-}, {
-	first: 6,
-	second: 7,
-	fourth: 4,
-}) // { first: 6, second: 7, third: 3, fourth: 4 }
+const instance = new S([
+	'firstAction',
+	'secondAction'
+])
+return S._perform(instance, { [S.Path]: [0] }, null) // { [S.Path]: [ 1 ] }
 ```
 
-This method is exported by the library as `{ deep_merge_object }`
+Get the current path, default to the root node.
+
+Get the node type of the given `action`
+
+Gets the node definition for the action
+
+### If the action can be performed
+
+Perform the action on the state
+
+Throw a NodeTypeError if the action cannot be performed
+
+## S._execute (instance, state = {}, path = state[S.Path] || [])
+
+Executes the node in the process at the state's current path and returns it's action.
 
 ```javascript
-import { deep_merge_object } from './index.js'
-	
-return deep_merge_object; // success
+const instance = new S([
+	() => ({ result: 'first' }),
+	() => ({ result: 'second' }),
+	() => ({ result: 'third' }),
+])
+return S._execute(instance, { [S.Path]: [1] }) // { result: 'second' }
 ```
 
-## get_closest_path (object, path = [], condition = (node, path, object) => boolean)
-
-Returns the path of the closest node that matches the given `conditon`. It will check all ancestors including the node at the given `path`.
-
-This method is exported by the library as `{ get_closest_path }`
+If the node is not executable it will be returned as the action.
 
 ```javascript
-import { get_closest_path } from './index.js'
-	
-return get_closest_path; // success
+const instance = new S([
+	({ result: 'first' }),
+	({ result: 'second' }),
+	({ result: 'third' }),
+])
+return S._execute(instance, { [S.Path]: [1] }) // { result: 'second' }
 ```
 
-Get the object at the given path
+Get the node at the given `path`
 
-Check the item against the condition
+Get the type of that node
 
-If the root node is reached, return `null` (unsuccessful)
+Get the definition of the node
 
-Ascend up the tree
+### If the node can be executed
 
-## wait_time (delay)
+Execute the node and return its resulting action
 
-Returns a promise that waits for the given `delay` time before resolving.
+If it cannot be executed, return the node to be used as an action
 
-If zero is passed, it resolves as immediately as possible.
+## S._traverse(instance, iterator = a => a, post = b => b)
 
-```javascript
-const startTime = Date.now()
-await wait_time(0)
-const endTime = Date.now()
-return endTime - startTime // 0
-```
+Traverses a process, mapping each node to a new value, effectively cloning the process.
 
-It may not be possible to accurately set times less than four ms.
+You can customise how each leaf node is mapped by supplying the `iterator` method
 
-```javascript
-const startTime = Date.now()
-await wait_time(2)
-await wait_time(2)
-const endTime = Date.now()
-return endTime - startTime // not 4
-```
+You can also customise how branch nodes are mapped by supplying the `post` method
 
-This method is exported by the library as `{ wait_time }`
+The post method will be called after child nodes have been processed by the `iterator`
 
-```javascript
-import { wait_time } from './index.js'
-	
-return wait_time; // success
-```
+Make sure the post functions is scoped to the given instance
 
-# Errors
+### Create an interation function to be used recursively
 
-## SuperSmallStateMachineError
+Get the node at the given `path`
 
-All Super Small State Machine Errors will inherit from this class.
+Get the type of the node
 
-Allows for contextual information to be provided with the error
+Get the definition of the node
 
-This class is exported by the library as `{ SuperSmallStateMachineError }`
+#### If the node can be traversed
 
-```javascript
-import { SuperSmallStateMachineError } from './index.js'
-	
-return SuperSmallStateMachineError; // success
-```
+Traverse it
 
-Declare contextual properties on the class
+If it cannot be traversed, it is a leaf node
 
-### Take in the message, followed by an object conatining the properties
+Call the primary method and return the result
 
-Create a normal error with the message
+## S._run (instance, ...input)
 
-Assign the given properties to the instance
+Execute the entire process either synchronously or asynchronously depending on the config.
 
-## SuperSmallStateMachineReferenceError
+If the process is asynchronous, execute use `runAsync`
 
-All Super Small State Machine Reference Errors will inherit from this class
+If the process is asynchronous, execute use `runSync`
 
-This class is exported by the library as `{ SuperSmallStateMachineReferenceError }`
+## S._runSync (instance, ...input)
 
-```javascript
-import { SuperSmallStateMachineReferenceError } from './index.js'
-	
-return SuperSmallStateMachineReferenceError; // success
-```
+Execute the entire process synchronously.
 
-## SuperSmallStateMachineTypeError
+Extract the useful parts of the config
 
-All Super Small State Machine Type Errors will inherit from this class
+Turn the arguments into an initial condition
 
-This class is exported by the library as `{ SuperSmallStateMachineTypeError }`
+### Merge the initial condition with the default initial state
 
-```javascript
-import { SuperSmallStateMachineTypeError } from './index.js'
-	
-return SuperSmallStateMachineTypeError; // success
-```
+Default to an empty change object
 
-## StateReferenceError
+Use the defaults as an initial state
 
-A state change has set a property that was not defined in the original state defaults.
+Use the path from the initial state - allows for starting at arbitrary positions
 
-This is likely intentional, as this is not default behaviour.
+### Repeat for a limited number of iterations.
 
-This class is exported by the library as `{ StateReferenceError }`
+This should be fine for most finite machines, but may be too little for some constantly running machines.
 
-```javascript
-import { StateReferenceError } from './index.js'
-	
-return StateReferenceError; // success
-```
+#### Check the configured `until` condition to see if we should exit.
 
-## StateTypeError
+Do it first to catch starting with a `S.Return` in place.
 
-A state change has updated a property that was defined as a different type in the original state defaults.
+#### If the interations are exceeded, Error
 
-This is likely intentional, as this is not default behaviour.
+Throw new MaxIterationsError
 
-This class is exported by the library as `{ StateTypeError }`
+Execute the current node on the process and perform any required actions. Updating the currentState
 
-```javascript
-import { StateTypeError } from './index.js'
-	
-return StateTypeError; // success
-```
+When returning, run the ends state adapters, then the result adapter to complete execution.
 
-## NodeTypeError
+## S._runAsync (instance, ...input)
 
-A node of an unknown type was used in a process.
+Execute the entire process asynchronously. Always returns a promise.
 
-This was probably caused by a custom node definition
+Extract the useful parts of the config
 
-This class is exported by the library as `{ NodeTypeError }`
+Turn the arguments into an initial condition
 
-```javascript
-import { NodeTypeError } from './index.js'
-	
-return NodeTypeError; // success
-```
+### Merge the initial condition with the default initial state
 
-## UndefinedNodeError
+Default to an empty change object
 
-An undefined node was used in a process.
+Use the defaults as an initial state
 
-This is probably caused by a missing variable.
+Use the path from the initial state - allows for starting at arbitrary positions
 
-If you wish to perform an intentional no-op, use `null`
+### Repeat for a limited number of iterations.
 
-This class is exported by the library as `{ UndefinedNodeError }`
+This should be fine for most finite machines, but may be too little for some constantly running machines.
 
-```javascript
-import { UndefinedNodeError } from './index.js'
-	
-return UndefinedNodeError; // success
-```
+Pause execution based on the pause customisation method
 
-## MaxIterationsError
+Check the configured `until` condition to see if we should exit.
 
-The execution of the process took more iterations than was allowed.
+#### If the interaction are exceeded, Error
 
-This can be configured using `.for` or `.forever`
+Throw new MaxIterationsError
 
-This class is exported by the library as `{ MaxIterationsError }`
+Execute the current node on the process and perform any required actions. Updating the currentState
 
-```javascript
-import { MaxIterationsError } from './index.js'
-	
-return MaxIterationsError; // success
-```
-
-## PathReferenceError
-
-A path was referenced which could not be found in the given process.
-
-This class is exported by the library as `{ PathReferenceError }`
-
-```javascript
-import { PathReferenceError } from './index.js'
-	
-return PathReferenceError; // success
-```
-
-# Node Types
-
-The string names of node types, index by two-letter abbreviations
-
-This reference table is exported by the library as `{ NodeTypes }`
-
-```javascript
-import { NodeTypes } from './index.js'
-	
-return NodeTypes; // success
-```
-
-Undefined Node
-
-Empty Node
-
-Return Node
-
-Function Node
-
-Sequence Node
-
-Condition Node
-
-Switch Node
-
-Machine Node
-
-Changes Node
-
-Directive Node
-
-Absolute Directive Node
-
-Machine Directive Node
-
-Sequence Directive Node
-
-# Key Words
-
-Key Words used by specific nodes
-
-This reference table is exported by the library as `{ KeyWords }`
-
-```javascript
-import { KeyWords } from './index.js'
-	
-return KeyWords; // success
-```
-
-`'if'` used by Condition Node
-
-`'then'` used by Condition Node
-
-`'else'` used by Condition Node
-
-`'switch'` used by Switch Node
-
-`'case'` used by Switch Node
-
-`'default'` used by Switch Node
-
-`'initial'` used by Machine Node
-
-## `'result'` used by Changes Node
-
-is the default property on the state.
-
-Should be used for pasing in arguments to actions, and returning a value from the machine itself.
-
-# Node Definitions
-
-Extends the Map class.
-
-This class is exported by the library as `{ NodeDefinitions }`
-
-```javascript
-import { NodeDefinitions } from './index.js'
-	
-return NodeDefinitions; // success
-```
-
-Takes in a list of nodes and acts as a collection-object for them
-
-## Provides a typeof method that checks the given `object` against the node definitions and returns the name of the node.
-
-### Search from last to first to allow easy overriding
-
-Newer types override older types
-
-Return the name of the type if the type is found, otherwise return false
-
-# Node Definition
-
-This class is exported by the library as `{ NodeDefinition }`
-
-```javascript
-import { NodeDefinition } from './index.js'
-	
-return NodeDefinition; // success
-```
-
-The name will deafault to "Unnamed node", but will be a unique symbol each time
-
-The typeof method will be null by default.
-
-The execute method will be null by default.
-
-The proceed method will be null by default.
-
-The perform method will be null by default.
-
-The traverse method will be null by default.
-
-## Typescript requires us to do this through a constructor for some reason. This should probably be fixed.
-
-Assigns the given properties to the new instance
-
-# exitFindNext (action, state)
-
-TODO: merge into S._proceed? or S._perform?
-
-Attempts to proceed to the next path
-
-If it fails, we should return
-
-Extra types
+When returning, run the ends state adapters, then the result adapter to complete execution.
 
 # Default Nodes
 
@@ -1195,2190 +1804,135 @@ import { nodes } from './index.js'
 return nodes; // success
 ```
 
-Extensible Function
+# Errors
 
-# Core
+## SuperSmallStateMachineError
 
-Every instance must have a process and be callable.
+All Super Small State Machine Errors will inherit from this class.
 
-## Symbols
+Allows for contextual information to be provided with the error
 
-### Return
+This class is exported by the library as `{ SuperSmallStateMachineError }`
 
-Use for intentionally exiting the entire process, can be used in an object to override the result value before returning
-
-```javascript
-return { [S.Return]: "value" } // Succeeds
-```
-
-### Changes
-
-Returned in the state. Should not be passed in.
-
-```javascript
-return { [S.Changes]: {} } // Succeeds
-```
-
-### Path
-
-Returned in the state to indicate the next action path, or passed in with the state to direct the machine. This can also be used as a node on its own to change the executing path.
-
-```javascript
-return { [S.Path]: [] } // Succeeds
-```
-
-### StrictTypes
-
-Possible value of `config.strict`, used to indicate strict types as well as values.
-
-Key Words
-
-Node Types
-
-## Config
-
-Initialise the result property as `null` by default
-
-Input the initial state by default
-
-Return the result property by default
-
-Do not perform strict state checking by default
-
-Allow 1000 iterations by default
-
-Run util the return symbol is present by default.
-
-Do not allow for asynchronous actions by default
-
-Do not allow for asynchronous actions by default
-
-Do not override the execution method by default
-
-Use the provided nodes by default.
-
-Initialise with an empty adapters list.
-
-Initialise with an empty start adapters list.
-
-Initialise with an empty end adapters list.
-
-## S._closest (instance, path = [], ...nodeTypes)
-
-Returns the path of the closest ancestor to the node at the given `path` that matches one of the given `nodeTypes`.
-
-Returns `null` if no ancestor matches the one of the given `nodeTypes`.
-
-```javascript
-const instance = new S([
-	{
-		if: ({ result }) => result === 'start',
-		then: [
-			{ result: 'second' },
-			S.Return,
-		]
-	}
-])
-return S._closest(instance, [0, 'then', 1], 'sequence') // [ 0, 'then' ]
-```
-
-Node types can be passed in as arrays of strings, or arrays of arrays of strings...
-
-### Use get_closest_path to find the closest path.
-
-Get the type of the node
-
-Pick this node if it matches any of the given types
-
-## S._changes (instance, state = {}, changes = {})
-
-Safely apply the given `changes` to the given `state`.
-
-Merges the `changes` with the given `state` and returns it.
-
-This will ignore any symbols in `changes`, and forward the important symbols of the given `state`.
-
-```javascript
-const instance = new S()
-const result = S._changes(instance, {
-	[S.Path]: ['preserved'],
-	[S.Changes]: {},
-	preserved: 'value',
-	common: 'initial',
-}, {
-	[S.Path]: ['ignored'],
-	[S.Changes]: { ignored: true },
-	common: 'changed',
-})
-return result // { common: 'changed', preserved: 'value', [S.Path]: [ 'preserved' ], [S.Changes]: { ignored: undefined, common: 'changed' } }
-```
-
-### If the strict state flag is truthy, perform state checking logic
-
-#### Go through each property in the changes and check they all already exist
-
-Throw a StateReferenceError if a property is referenced that did not previosly exist.
-
-#### If the strict state flag is set to the Strict Types Symbol, perform type checking logic.
-
-##### Go through each property and check the JS type is the same as the initial values.
-
-Collect all the errors, using the same logic as above.
-
-Throw a StateTypeError if a property changes types.
-
-Collect all the changes in the changes object.
-
-### Return a new object
-
-Deep merge the current state with the new changes
-
-Carry over the original path.
-
-Update the changes to the new changes
-
-## S._proceed (instance, state = {}, path = state[S.Path] || [])
-
-Proceed to the next execution path.
-
-```javascript
-const instance = new S([
-	'firstAction',
-	'secondAction'
-])
-return S._proceed(instance, {
-	[S.Path]: [0]
-}) // { [S.Path]: [ 1 ] }
-```
-
-Performs fallback logic when a node exits.
-
-```javascript
-const instance = new S([
-	[
-		'firstAction',
-		'secondAction',
-	],
-	'thirdAction'
-])
-return S._proceed(instance, {
-	[S.Path]: [0,1]
-}) // { [S.Path]: [ 1 ] }
-```
-
-Return `null` (unsuccessful) if the root node is reached
-
-Get the next closest ancestor that can be proceeded
-
-If no such node exists, return `null` (unsuccessful)
-
-Get this closest ancestor
-
-Determine what type of node the ancestor is
-
-Get the node defintion for the ancestor
-
-If the node definition cannot be proceeded, return `null` (unsuccessful)
-
-Call the `proceed` method of the ancestor node to get the next path.
-
-If there a next path, return it
-
-Proceed updwards through the tree and try again.
-
-## S._perform (instance, state = {}, action = null)
-
-Perform actions on the state.
-
-```javascript
-const instance = new S([
-	'firstAction',
-	'secondAction',
-	'thirdAction'
-])
-return S._perform(instance, { [S.Path]: [0], prop: 'value' }, { prop: 'newValue' }) // { prop: 'newValue', [S.Path]: [ 1 ] }
-```
-
-Applies any changes in the given `action` to the given `state`.
-
-```javascript
-const instance = new S([
-	'firstAction',
-	'secondAction',
-	'thirdAction'
-])
-return S._perform(instance, { [S.Path]: [0], prop: 'value' }, { [S.Path]: [2] }) // { prop: 'value', [S.Path]: [ 2 ] }
-```
-
-Proceeds to the next node if the action is not itself a directive or return.
-
-```javascript
-const instance = new S([
-	'firstAction',
-	'secondAction'
-])
-return S._perform(instance, { [S.Path]: [0] }, null) // { [S.Path]: [ 1 ] }
-```
-
-Get the current path, default to the root node.
-
-Get the node type of the given `action`
-
-Gets the node definition for the action
-
-### If the action can be performed
-
-Perform the action on the state
-
-Throw a NodeTypeError if the action cannot be performed
-
-## S._execute (instance, state = {}, path = state[S.Path] || [])
-
-Executes the node in the process at the state's current path and returns it's action.
-
-```javascript
-const instance = new S([
-	() => ({ result: 'first' }),
-	() => ({ result: 'second' }),
-	() => ({ result: 'third' }),
-])
-return S._execute(instance, { [S.Path]: [1] }) // { result: 'second' }
-```
-
-If the node is not executable it will be returned as the action.
-
-```javascript
-const instance = new S([
-	({ result: 'first' }),
-	({ result: 'second' }),
-	({ result: 'third' }),
-])
-return S._execute(instance, { [S.Path]: [1] }) // { result: 'second' }
-```
-
-Get the node at the given `path`
-
-Get the type of that node
-
-Get the definition of the node
-
-### If the node can be executed
-
-Execute the node and return its resulting action
-
-If it cannot be executed, return the node to be used as an action
-
-## S._traverse(instance, iterator = a => a, post = b => b)
-
-Traverses a process, mapping each node to a new value, effectively cloning the process.
-
-You can customise how each leaf node is mapped by supplying the `iterator` method
-
-You can also customise how branch nodes are mapped by supplying the `post` method
-
-The post method will be called after child nodes have been processed by the `iterator`
-
-Make sure the post functions is scoped to the given instance
-
-### Create an interation function to be used recursively
-
-Get the node at the given `path`
-
-Get the type of the node
-
-Get the definition of the node
-
-#### If the node can be traversed
-
-Traverse it
-
-If it cannot be traversed, it is a leaf node
-
-Call the primary method and return the result
-
-## S._run (instance, ...input)
-
-Execute the entire process either synchronously or asynchronously depending on the config.
-
-If the process is asynchronous, execute use `runAsync`
-
-If the process is asynchronous, execute use `runSync`
-
-## S._runSync (instance, ...input)
-
-Execute the entire process synchronously.
-
-Extract the useful parts of the config
-
-Turn the arguments into an initial condition
-
-### Merge the initial condition with the default initial state
-
-Default to an empty change object
-
-Use the defaults as an initial state
-
-Use the path from the initial state - allows for starting at arbitrary positions
-
-### Repeat for a limited number of iterations.
-
-This should be fine for most finite machines, but may be too little for some constantly running machines.
-
-#### Check the configured `until` condition to see if we should exit.
-
-Do it first to catch starting with a `S.Return` in place.
-
-#### If the interations are exceeded, Error
-
-Throw new MaxIterationsError
-
-Execute the current node on the process and perform any required actions. Updating the currentState
-
-When returning, run the ends state adapters, then the result adapter to complete execution.
-
-## S._runAsync (instance, ...input)
-
-Execute the entire process asynchronously. Always returns a promise.
-
-Extract the useful parts of the config
-
-Turn the arguments into an initial condition
-
-### Merge the initial condition with the default initial state
-
-Default to an empty change object
-
-Use the defaults as an initial state
-
-Use the path from the initial state - allows for starting at arbitrary positions
-
-### Repeat for a limited number of iterations.
-
-This should be fine for most finite machines, but may be too little for some constantly running machines.
-
-Pause execution based on the pause customisation method
-
-Check the configured `until` condition to see if we should exit.
-
-#### If the interaction are exceeded, Error
-
-Throw new MaxIterationsError
-
-Execute the current node on the process and perform any required actions. Updating the currentState
-
-When returning, run the ends state adapters, then the result adapter to complete execution.
-
-# Chain
-
-## S.closest (path = [], ...nodeTypes)
-
-Returns the path of the closest ancestor to the node at the given `path` that matches one of the given `nodeTypes`.
-
-Returns `null` if no ancestor matches the one of the given `nodeTypes`.
-
-```javascript
-const instance = new S([
-	{
-		if: ({ result }) => result === 'start',
-		then: [
-			{ result: 'second' },
-			S.Return,
-		]
-	}
-])
-return S.closest([0, 'then', 1], 'sequence')(instance) // [ 0, 'then' ]
-```
-
-## S.changes (state = {}, changes = {})
-
-Safely apply the given `changes` to the given `state`.
-
-Merges the `changes` with the given `state` and returns it.
-
-This will ignore any symbols in `changes`, and forward the important symbols of the given `state`.
-
-```javascript
-const instance = new S()
-const result = S.changes({
-	[S.Path]: ['preserved'],
-	[S.Changes]: {},
-	preserved: 'value',
-	common: 'initial',
-}, {
-	[S.Path]: ['ignored'],
-	[S.Changes]: { ignored: true },
-	common: 'changed',
-})(instance)
-return result // { common: 'changed', preserved: 'value', [S.Path]: [ 'preserved' ], [S.Changes]: { ignored: undefined, common: 'changed' } }
-```
-
-## S.proceed (state = {}, path = state[S.Path] || [])
-
-Proceed to the next execution path.
-
-Performs fallback logic when a node exits.
-
-## S.perform (state = {}, action = null)
-
-Perform actions on the state.
-
-Applies any changes in the given `action` to the given `state`.
-
-Proceeds to the next node if the action is not itself a directive or return.
-
-## S.execute (state = {}, path = state[S.Path] || [])
-
-Execute a node in the process, return an action.
-
-Executes the node in the process at the state's current path and returns it's action.
-
-If the node is not executable it will be returned as the action.
-
-## S.traverse(iterator = a => a, post = b => b)
-
-TODO: traverse and adapt same thing?
-
-## S.run (...input)
-
-Execute the entire process either synchronously or asynchronously depending on the config.
-
-## S.runSync (...input)
-
-Execute the entire process synchronously.
-
-## S.runAsync (...input)
-
-Execute the entire process asynchronously. Always returns a promise.
-
-## S.do(process) <default: null>
-
-Defines a process to execute, overrides the existing process.
-
-Returns a function that will modify a given instance.
-
-```javascript
-const instance = new S({ result: 'old' })
-const newInstance = instance.with(S.do({ result: 'new' }))
-return newInstance() // 'new'
-```
-
-## S.defaults(defaults) <default: { result: null }>
-
-Defines the initial state to be used for all executions.
-
-Returns a function that will modify a given instance.
-
-```javascript
-const instance = new S()
-const newInstance = instance.with(S.defaults({ result: 'default' }))
-return newInstance() // 'default'
-```
-
-## S.input(input) <default: (state => state)>
-
-Allows the definition of the arguments the executable will use, and how they will be applied to the initial state.
-
-Returns a function that will modify a given instance.
-
-```javascript
-const instance = new S(({ first, second }) => ({ [S.Return]: `${first} then ${second}` }))
-.with(
-	S.defaults({ first: '', second: '' }),
-	S.input((first, second) => ({ first, second }))
-)
-return instance('this', 'that') // 'this then that'
-```
-
-## S.result(result) <default: (state => state.result)>
-
-Allows the modification of the value the executable will return.
-
-Returns a function that will modify a given instance.
-
-```javascript
-const instance = new S(({ myReturnValue }) => ({ myReturnValue: myReturnValue + ' extra' }))
-	.with(S.result(state => state.myReturnValue))
-return instance({ myReturnValue: 'start' }) // 'start extra'
-```
-
-## S.unstrict <default>
-
-Execute without checking state properties when a state change is made.
-
-Will modify the given instance.
-
-With the strict flag, an unknown property cannot be set on the state.
-
-```javascript
-const instance = new S(() => ({ unknownVariable: false}))
-.with(
-	S.defaults({ knownVariable: true }),
-	S.strict
-)
-return instance() // StateReferenceError
-```
-
-The unstrict flag will override strict behaviour, so that an unknown property can be set on the state.
-
-```javascript
-const instance = new S(() => ({ unknownVariable: false}))
-.with(
-	S.defaults({ knownVariable: true }),
-	S.strict,
-	S.unstrict
-)
-return instance() // Succeeds
-```
-
-## S.strict
-
-Checks state properties when an state change is made.
-
-Will modify the given instance.
-
-Without the strict flag, unknown properties can be set on the state by a state change action.
-
-```javascript
-const instance = new S(() => ({ unknownVariable: false}))
-	.with(S.defaults({ knownVariable: true }))
-return instance() // Succeeds
-```
-
-With the strict flag, unknown properties cannot be set on the state by a state change action.
-
-```javascript
-const instance = new S(() => ({ unknownVariable: false}))
-.with(
-	S.defaults({ knownVariable: true }),
-	S.strict
-)
-return instance() // StateReferenceError
-```
-
-## S.strictTypes
-
-Checking state property types when an state change is made.
-
-Will modify the given instance.
-
-With the strict types flag, known properties cannot have their type changed by a state change action
-
-```javascript
-const instance = new S(() => ({ knownVariable: 45 }))
-.with(
-	S.defaults({ knownVariable: true }),
-	S.strictTypes
-)
-return instance() // StateTypeError
-```
-
-## S.for(iterations = 10000) <default: 10000>
-
-Defines the maximum iteration limit.
-
-Returns a function that will modify a given instance.
-
-A limited number of iterations will cause the machine to exit early
-
-```javascript
-const instance = new S([
-	({ result }) => ({ result: result + 1}),
-	0
-])
-.with(
-	S.defaults({ result: 0 }),
-	S.for(10)
-)
-return instance() // MaxIterationsError
-```
-
-## S.until(until) <default: (state => S.Return in state)>
-
-Stops execution of the machine once the given condition is met, and attempts to return.
-
-Returns a function that will modify a given instance.
-
-```javascript
-const instance = new S([
-	({ result }) => ({ result: result + 1 }),
-	{
-		if: ({ result }) => result > 4,
-		then: [{ result: 'exit' }, { result:'ignored' }],
-		else: 0
-	}
-])
-	.with(S.until(({ result }) => result === 'exit'))
-return instance({ result: 0 }) // 'exit'
-```
-
-## S.forever
-
-Removes the max iteration limit.
-
-Will modify the given instance.
-
-```javascript
-const instance = new S().with(S.forever)
-return instance.config.iterations // Infinity
-```
-
-## S.sync <default>
-
-Execute synchronously and not allow for asynchronous actions.
-
-Will modify the given instance.
-
-```javascript
-const instance = new S(async () => ({ result: 'changed' }))
-.with(
-	S.async,
-	S.sync,
-	S.defaults({ result: 'initial' })
-)
-return instance() // 'initial'
-```
-
-## S.async
-
-Execute asynchronously and allow for asynchronous actions.
-
-Will modify the given instance.
-
-```javascript
-const instance = new S(async () => ({ result: 'changed' }))
-.with(S.defaults({ result: 'initial' }))
-return instance() // 'initial'
-```
-
-```javascript
-const instance = new S(async () => ({ result: 'changed' }))
-.with(
-	S.defaults({ result: 'initial' }),
-	S.async
-)
-return await instance() // 'changed'
-```
-
-## S.pause(pause) <default: (() => false)>
-
-Allows an async execution to be paused between steps.
-
-Returns a function that will modify a given instance.
-
-## S.override(override) <default: instance.run>
-
-Overrides the method that will be used when the executable is called.
-
-Returns a function that will modify a given instance.
-
-```javascript
-const instance = new S({ result: 'definedResult' })
-	.with(S.override(function (...args) {
-		// console.log({ scope: this, args }) // { scope: { process: { result: 'definedResult' } }, args: [1, 2, 3] }
-		return 'customReturn'
-	}))
-return instance(1, 2, 3) // 'customReturn'
-```
-
-## S.addNode(...nodes)
-
-Allows for the addition of new node types.
-
-Returns a function that will modify a given instance.
-
-```javascript
-const specialSymbol = Symbol('My Symbol')
-class SpecialNode extends NodeDefinition {
-	static name = 'special'
-	static typeof(object, objectType) { return Boolean(objectType === 'object' && object && specialSymbol in object)}
-	static execute(){ return { [S.Return]: 'specialValue' } }
-}
-const instance = new S({ [specialSymbol]: true })
-	.with(S.addNode(SpecialNode))
-return instance({ result: 'start' }) // 'specialValue'
-```
-
-```javascript
-const specialSymbol = Symbol('My Symbol')
-const instance = new S({ [specialSymbol]: true })
-return instance({ result: 'start' }) // 'start'
-```
-
-## S.adapt(...adapters)
-
-Transforms the process before usage, allowing for temporary nodes.
-
-Returns a function that will modify a given instance.
-
-```javascript
-const replaceMe = Symbol('replace me')
-const instance = new S([
-	replaceMe,
-	S.Return,
-]).with(S.adapt(function (process) {
-	return S.traverse((node) => {
-		if (node === replaceMe)
-			return { result: 'changed' }
-		return node
-	})(this) }))
-return instance({ result: 'unchanged' }) // 'changed'
-```
-
-## S.adaptStart(...adapters)
-
-Transforms the state before execution.
-
-Returns a function that will modify a given instance.
-
-```javascript
-const instance = new S()
-.adaptStart(state => ({
-	...state,
-	result: 'overridden'
-}))
-return instance({ result: 'input' }) // 'overridden'
-```
-
-## S.adaptEnd(...adapters)
-
-Transforms the state after execution.
-
-Returns a function that will modify a given instance.
-
-```javascript
-const instance = new S()
-.adaptEnd(state => ({
-	...state,
-	result: 'overridden'
-}))
-return instance({ result: 'input' }) // 'overridden'
-```
-
-## S.with(...adapters)
-
-Allows for the addition of predifined modules.
-
-Returns a function that will modify a given instance.
-
-```javascript
-const plugin = S.with(S.strict, S.async, S.for(10))
-const instance = new S().with(plugin)
-return instance.config // { async: true, strict: true, iterations: 10 }
-```
-
-Allow the input of a list or a list of lists, etc.
-
-### Return a function that takes a specific instance.
-
-Pass each state through the adapters sequentially.
-
-Make sure an instance is returned.
-
-# Instance
-
-Process
-
-```javascript
-const instance = new S({ result: 'value' })
-return instance.process // { result: 'value' }
-```
-
-Config
-
-```javascript
-const instance = new S()
-return instance.config // { defaults: { result: null }, iterations: 10000, strict: false, async: false }
-```
-
-```javascript
-const instance = new S()
-const modifiedInstance = instance
-	.async
-	.for(10)
-	.defaults({ result: 'other' })
-	.strict
-	// .delay(20)
-	// .allow(100)
-	// .wait(100)
-return modifiedInstance.config // { defaults: { result: 'other' }, iterations: 10, strict: true, async: true }
-```
-
-## Instance Constructor
-
-### Basics
-
-The primary way of interacting with this library is to create a new instance
-
-```javascript
-const instance = new S() // Succeeds
-```
-
-Instances are executable, like functions
-
-```javascript
-const instance = new S()
-return instance() === undefined // Succeeds
-```
-
-The constructor takes two arguments, the `process` and the `config`
-
-```javascript
-const instance = new S({}, {})
-return instance() // Succeeds
-```
-
-Neither of these arguments are required, and it is not recommended to configure them config via the constructor. Instead you should update the config using the various chainable methods and properties.
-
-```javascript
-const instance = new S(process)
-	.defaults({})
-	.input()
-	.result() // Succeeds
-```
-
-Create an ExtensibleFunction that can execute the `run` or `override` method in scope of the new SuperSmallStateMachine instance.
-
-### Create the config by merging the passed config with the defaults.
-
-This is private so it cannot be mutated at runtime
-
-The process must be public, it cannot be deep merged or cloned as it may contain symbols.
-
-## instance.closest (path = [], ...nodeTypes)
-
-Returns the path of the closest ancestor to the node at the given `path` that matches one of the given `nodeTypes`.
-
-Returns `null` if no ancestor matches the one of the given `nodeTypes`.
-
-```javascript
-const instance = new S([
-	{
-		if: ({ result }) => result === 'start',
-		then: [
-			{ result: 'second' },
-			S.Return,
-		]
-	}
-])
-return instance.closest([0, 'then', 1], 'sequence') // [ 0, 'then' ]
-```
-
-## instance.changes (state = {}, changes = {})
-
-Safely apply the given `changes` to the given `state`.
-
-Merges the `changes` with the given `state` and returns it.
-
-This will ignore any symbols in `changes`, and forward the important symbols of the given `state`.
-
-```javascript
-const instance = new S()
-const result = instance.changes({
-	[S.Path]: ['preserved'],
-	[S.Changes]: {},
-	preserved: 'value',
-	common: 'initial',
-}, {
-	[S.Path]: ['ignored'],
-	[S.Changes]: { ignored: true },
-	common: 'changed',
-})
-return result // { common: 'changed', preserved: 'value', [S.Path]: [ 'preserved' ], [S.Changes]: { ignored: undefined, common: 'changed' } }
-```
-
-## instance.proceed (state = {}, path = state[S.Path] || [])
-
-Proceed to the next execution path.
-
-Performs fallback logic when a node exits.
-
-## instance.perform (state = {}, action = null)
-
-Perform actions on the state.
-
-Applies any changes in the given `action` to the given `state`.
-
-Proceeds to the next node if the action is not itself a directive or return.
-
-## instance.execute (state = {}, path = state[S.Path] || [])
-
-Execute a node in the process, return an action.
-
-Executes the node in the process at the state's current path and returns it's action.
-
-If the node is not executable it will be returned as the action.
-
-## instance.traverse(iterator = a => a, post = b => b)
-
-TODO: traverse and adapt same thing?
-
-## instance.run (...input)
-
-Execute the entire process either synchronously or asynchronously depending on the config.
-
-## instance.runSync (...input)
-
-Execute the entire process synchronously.
-
-## instance.runAsync (...input)
-
-Execute the entire process asynchronously. Always returns a promise.
-
-## instance.do(process) <default: null>
-
-Defines a process to execute, overrides the existing process.
-
-Returns a new instance.
-
-```javascript
-const instance = new S({ result: 'old' })
-	.do({ result: 'new' })
-return instance() // 'new'
-```
-
-## instance.defaults(defaults) <default: { result: null }>
-
-Defines the initial state to be used for all executions.
-
-Returns a new instance.
-
-```javascript
-const instance = new S()
-	.defaults({ result: 'default' })
-return instance() // 'default'
-```
-
-## instance.input(input) <default: (state => state)>
-
-Allows the definition of the arguments the executable will use, and how they will be applied to the initial state.
-
-Returns a new instance.
-
-```javascript
-const instance = new S(({ first, second }) => ({ [S.Return]: `${first} then ${second}` }))
-	.defaults({ first: '', second: '' })
-	.input((first, second) => ({ first, second }))
-return instance('this', 'that') // 'this then that'
-```
-
-## instance.result(result) <default: (state => state.result)>
-
-Allows the modification of the value the executable will return.
-
-Returns a new instance.
-
-```javascript
-const instance = new S(({ myReturnValue }) => ({ myReturnValue: myReturnValue + ' extra' }))
-	.result(state => state.myReturnValue)
-return instance({ myReturnValue: 'start' }) // 'start extra'
-```
-
-## instance.unstrict <default>
-
-Execute without checking state properties when a state change is made.
-
-Creates a new instance.
-
-```javascript
-const instance = new S(() => ({ unknownVariable: false}))
-	.defaults({ knownVariable: true })
-	.strict
-return instance() // StateReferenceError
-```
-
-```javascript
-const instance = new S(() => ({ unknownVariable: false}))
-	.defaults({ knownVariable: true })
-	.strict
-	.unstrict
-return instance() // Succeeds
-```
-
-## instance.strict
-
-Checks state properties when an state change is made.
-
-Creates a new instance.
-
-```javascript
-const instance = new S(() => ({ unknownVariable: false}))
-	.defaults({ knownVariable: true })
-return instance() // Succeeds
-```
-
-```javascript
-const instance = new S(() => ({ unknownVariable: false}))
-	.defaults({ knownVariable: true })
-	.strict
-return instance() // StateReferenceError
-```
-
-## instance.strictTypes
-
-Checking state property types when an state change is made.
-
-Creates a new instance.
-
-```javascript
-const instance = new S([() => ({ knownVariable: 45 }), ({ knownVariable }) => ({ result: knownVariable })])
-	.defaults({ knownVariable: true })
-	.strictTypes
-return instance() // StateTypeError
-```
-
-## instance.for(iterations = 10000) <default: 10000>
-
-Defines the maximum iteration limit.
-
-Returns a new instance.
-
-```javascript
-const instance = new S([
-	({ result }) => ({ result: result + 1}),
-	0
-])
-	.defaults({ result: 0 })
-	.for(10)
-return instance() // MaxIterationsError
-```
-
-## instance.until(until) <default: (state => S.Return in state)>
-
-Stops execution of the machine once the given condition is met, and attempts to return.
-
-```javascript
-const instance = new S([
-	({ result }) => ({ result: result + 1 }),
-	{
-		if: ({ result }) => result > 4,
-		then: [{ result: 'exit' }, { result:'ignored' }],
-		else: 0
-	}
-])
-	.until(({ result }) => result === 'exit')
-return instance({ result: 0 }) // 'exit'
-```
-
-## instance.forever
-
-Removes the max iteration limit.
-
-Creates a new instance.
-
-```javascript
-const instance = new S().forever
-return instance.config.iterations // Infinity
-```
-
-## instance.sync <default>
-
-Execute synchronously and not allow for asynchronous actions.
-
-Creates a new instance.
-
-```javascript
-const instance = new S(async () => ({ result: 'changed' }))
-	.async
-	.sync
-	.defaults({ result: 'initial' })
-return instance() // 'initial'
-```
-
-## instance.async
-
-Execute asynchronously and allow for asynchronous actions.
-
-Creates a new instance.
-
-```javascript
-const instance = new S(async () => ({ result: 'changed' }))
-	.defaults({ result: 'initial' })
-return instance() // 'initial'
-```
-
-```javascript
-const instance = new S(async () => ({ result: 'changed' }))
-	.defaults({ result: 'initial' })
-	.async
-return await instance() // 'changed'
-```
-
-## instance.pause(pause) <default: (() => false)>
-
-Allows an async execution to be paused between steps.
-
-Returns a new instance.
-
-## instance.override(override) <default: instance.run>
-
-Overrides the method that will be used when the executable is called.
-
-Returns a new instance.
-
-```javascript
-const instance = new S({ result: 'definedResult' }).override(function (...args) {
-	// console.log({ scope: this, args }) // { scope: { process: { result: 'definedResult' } }, args: [1, 2, 3] }
-	return 'customReturn'
-})
-return instance(1, 2, 3) // 'customReturn'
-```
-
-## instance.addNode(...nodes)
-
-Allows for the addition of new node types.
-
-Returns a new instance.
-
-```javascript
-const specialSymbol = Symbol('My Symbol')
-class SpecialNode extends NodeDefinition {
-	static name = 'special'
-	static typeof(object, objectType) { return Boolean(objectType === 'object' && object && specialSymbol in object)}
-	static execute(){ return { [S.Return]: 'specialValue' } }
-}
-const instance = new S({ [specialSymbol]: true })
-	.addNode(SpecialNode)
-return instance({ result: 'start' }) // 'specialValue'
-```
-
-```javascript
-const specialSymbol = Symbol('My Symbol')
-const instance = new S({ [specialSymbol]: true })
-return instance({ result: 'start' }) // 'start'
-```
-
-## instance.adapt(...adapters)
-
-Transforms the process before usage, allowing for temporary nodes.
-
-```javascript
-const replaceMe = Symbol('replace me')
-const instance = new S([
-	replaceMe,
-	S.Return,
-])
-.adapt(function (process) {
-	return S.traverse((node) => {
-		if (node === replaceMe)
-			return { result: 'changed' }
-		return node
-	})(this) })
-return instance({ result: 'unchanged' }) // 'changed'
-```
-
-## instance.adaptStart(...adapters)
-
-Transforms the state before execution.
-
-Returns a new instance.
-
-```javascript
-const instance = new S()
-.adaptStart(state => ({
-	...state,
-	result: 'overridden'
-}))
-return instance({ result: 'input' }) // 'overridden'
-```
-
-## instance.adaptEnd(...adapters)
-
-Transforms the state after execution.
-
-Returns a new instance.
-
-```javascript
-const instance = new S()
-	.adaptEnd(state => ({
-		...state,
-		result: 'overridden'
-	}))
-return instance({ result: 'start' }) // 'overridden'
-```
-
-## instance.with(...adapters)
-
-Allows for the addition of predifined modules.
-
-Returns a new instance.
-
-```javascript
-const instance = new S()
-	.with(S.strict, S.async, S.for(10))
-return instance.config // { async: true, strict: true, iterations: 10 }
-```
-
-# Requirements
-
-## Execution
-
-Can execute function
-
-```javascript
-const instance = new S(({ input }) => ({ result: (input + 5) * 47 }))
-	.defaults({
-		input: -5,
-	})
-return instance({
-	input: 8,
-}) // 611
-```
-
-Can execute array
-
-```javascript
-const instance = new S([
-	({ input }) => ({ result: input * 9 }),
-	({ result }) => ({ result: result + 15 })
-])
-	.defaults({
-		input: 0,
-	})
-return instance({
-	input: 6
-}) // 69
-```
-
-Can execute conditional (then)
-
-```javascript
-const instance = new S({
-	if: ({ input }) => input === 25,
-	then: () => ({ result: 44 }),
-	else: () => ({ result: 55 }),
-})
-	.defaults({
-		input: 0,
-	})
-return instance({
-	input: 25
-}) // 44
-```
-
-Can execute conditional (else)
-
-```javascript
-const instance = new S({
-	if: ({ input }) => input === 25,
-	then: () => ({ result: 44 }),
-	else: () => ({ result: 55 }),
-})
-	.defaults({
-		input: 0,
-	})
-return instance({
-	input: 8
-}) // 55
-```
-
-Can execute switch conditional (specific case)
-
-```javascript
-const instance = new S({
-	switch: ({ mode }) => mode,
-	case: {
-		first: () => ({ result: 1 }),
-		second: () => ({ result: 2 }),
-		third: () => ({ result: 3 }),
-		default: () => ({ result: -1 }),
-	}
-})
-	.defaults({
-		mode: 'none'
-	})
-return instance({
-	mode: 'second'
-}) // 2
-```
-
-Can execute switch conditional (default)
-
-```javascript
-const instance = new S({
-	switch: ({ mode }) => mode,
-	case: {
-		first: () => ({ result: 1 }),
-		second: () => ({ result: 2 }),
-		third: () => ({ result: 3 }),
-		default: () => ({ result: -1 }),
-	}
-})
-	.defaults({
-		mode: 'none'
-	})
-return instance({
-	mode: 'blarg'
-}) // -1
-```
-
-Can execute state machine
-
-```javascript
-const instance = new S({
-	initial: [
-		({ input }) => ({ result: input }),
-		'secondState'
-	],
-	secondState: [
-		({ result }) => ({ result: result * 3 }),
-		'thirdState'
-	],
-	thirdState: [
-		{
-			if: ({ result }) => result < 1000,
-			then: 'secondState',
-		}
-	]
-})
-	.defaults({
-		input: 0,
-	})
-return instance({
-	input: 32,
-}) // 2592
-```
-
-Can execute array as state machine
-
-```javascript
-const instance = new S([
-	({ input }) => ({ result: input - 1 }),
-	({ result, input }) => ({ result: result + input }),
-	({ input }) => ({ input: input - 1 }),
-	{
-		if: ({ input }) => input > 0,
-		then: 1,
-	}
-])
-	.defaults({
-		result: 0,
-		input: 1,
-	})
-return instance({
-	input: 13,
-}) // 103
-```
-
-Can nest indefinitely
-
-```javascript
-const instance = new S({
-	if: ({ input }) => input < 4,
-	else: {
-		initial: [
-			[
-				({ input }) => ({ result: input }),
-				({ input }) => ({ input: input - 1 }),
-			],
-			({ result, input }) => ({ result: result + input }),
-			'machine'
-		],
-		machine: [
-			{
-				initial: {
-					if: ({ result }) => result % 2 === 0,
-					then: 'halve',
-					else: 'other'
-				},
-				halve: ({ input }) => ({ input: input / 2 }),
-				other: {
-					switch: ({ result }) => result % 3,
-					case: {
-						0: ({ result }) => ({ result: result + 7 }),
-						1: ({ result }) => ({ result: result + 5 }),
-						2: ({ result }) => ({ result: result + 3 }),
-					}
-				}
-			},
-			'afterMachine'
-		],
-		afterMachine: 'somethingElse',
-		somethingElse: {
-			initial: {
-				switch: () => 'always',
-				case: {
-					always: [
-						{
-							if:() => true,
-							then:{
-								initial:{
-									if:()=>true,
-									then:[{
-										switch:()=>'always',
-										case:{
-											always:{
-												if:()=>true,
-												then:({ result }) => ({ result: result - 1 })
-											}
-										}
-									}]
-								}
-							}
-						}
-					]
-				}
-			}
-		}
-	},
-	then: ({ input }) => ({ result: input }),
-})
-	.defaults({
-		input: 0,
-	})
-return instance({
-	input: 18,
-}) // 37
-```
-
-## Static Values
-
-Can use path object as absolute path
-
-```javascript
-const instance = new S({
-	initial: { [S.Path]: ['second',0] },
-	second: [
-		({ result }) => ({ result: result + 4 })
-	]
-})
-	.defaults({
-		result: 0,
-	})
-return instance({
-	result: 5,
-}) // 9
-```
-
-Can use path object as relative path
-
-```javascript
-const instance = new S({
-	initial: { [S.Path]: 'second' },
-	second: [
-		({ result }) => ({ result: result + 4 })
-	]
-})
-	.defaults({
-		result: 0,
-	})
-return instance({
-	result: 5,
-}) // 9
-```
-
-Can use string as relative path
-
-```javascript
-const instance = new S({
-	initial: [
-		({ result }) => ({ result: result + 1 }),
-		'final'
-	],
-	final: [
-		{
-			if: ({ result }) => result < 7,
-			then: 'initial'
-		}
-	]
-})
-	.defaults({
-		result: 9,
-	})
-return instance({
-	result: 0,
-}) // 7
-```
-
-Can use symbol as relative path
-
-```javascript
-const testSymbol = Symbol('Test Symbol')
-const instance = new S({
-	initial: [
-		({ result }) => ({ result: result + 1 }),
-		testSymbol
-	],
-	[testSymbol]: [
-		{
-			if: ({ result }) => result < 7,
-			then: 'initial'
-		}
-	]
-})
-	.defaults({
-		result: 9,
-	})
-return instance({
-	result: 0,
-}) // 7
-```
-
-Can use number as relative path
-
 ```javascript
-const instance = new S([
-	({ result }) => ({ result: result + 1 }),
-	{
-		if: ({ result }) => result < 7,
-		then: 0
-	}
-])
-	.defaults({
-		result: 9,
-	})
-return instance({
-	result: 0,
-}) // 7
+import { SuperSmallStateMachineError } from './index.js'
+	
+return SuperSmallStateMachineError; // success
 ```
 
-Can use return as directive
-
-```javascript
-const instance = new S([
-	({ result }) => ({ result: result - 1 }),
-	{
-		if: ({ result }) => result <= 0,
-		then: S.Return,
-		else: 0
-	}
-])
-	.defaults({
-		result: -1,
-	})
-return instance({
-	result: 6,
-}) // 0
-```
+Declare contextual properties on the class
 
-Can use return object as directive
+### Take in the message, followed by an object conatining the properties
 
-```javascript
-const instance = new S([
-	({ result }) => ({ result: result - 1 }),
-	{
-		if: ({ result }) => result <= 0,
-		then: { [S.Return]: 66 },
-		else: 0
-	}
-])
-	.defaults({
-		result: -1,
-	})
-return instance({
-	result: 6,
-}) // 66
-```
+Create a normal error with the message
 
-Can use state change object as value
+Assign the given properties to the instance
 
-```javascript
-const instance = new S({ result: 66 })
-	.defaults({
-		result: 0,
-	})
-return instance({
-	result: 99
-}) // 66
-```
+## SuperSmallStateMachineReferenceError
 
-## Dynamic Values
+All Super Small State Machine Reference Errors will inherit from this class
 
-Can return array as absolute path
+This class is exported by the library as `{ SuperSmallStateMachineReferenceError }`
 
 ```javascript
-const instance = new S({
-	initial: () => ['second',0],
-	second: [
-		({ result }) => ({ result: result + 4 })
-	]
-})
-	.defaults({
-		result: 0,
-	})
-return instance({
-	result: 5,
-}) // 9
+import { SuperSmallStateMachineReferenceError } from './index.js'
+	
+return SuperSmallStateMachineReferenceError; // success
 ```
 
-Can return path object as absolute path
+## SuperSmallStateMachineTypeError
 
-```javascript
-const instance = new S({
-	initial: () => ({ [S.Path]: ['second',0] }),
-	second: [
-		({ result }) => ({ result: result + 4 })
-	]
-})
-	.defaults({
-		result: 0,
-	})
-return instance({
-	result: 5,
-}) // 9
-```
+All Super Small State Machine Type Errors will inherit from this class
 
-Can return path object as relative path
+This class is exported by the library as `{ SuperSmallStateMachineTypeError }`
 
 ```javascript
-const instance = new S({
-	initial: () => ({ [S.Path]: 'second' }),
-	second: [
-		({ result }) => ({ result: result + 4 })
-	]
-})
-	.defaults({
-		result: 0,
-	})
-return instance({
-	result: 5,
-}) // 9
+import { SuperSmallStateMachineTypeError } from './index.js'
+	
+return SuperSmallStateMachineTypeError; // success
 ```
-
-Can return string as relative path
 
-```javascript
-const instance = new S({
-	initial: [
-		({ result }) => ({ result: result + 1 }),
-		() => 'final'
-	],
-	final: [
-		{
-			if: ({ result }) => result < 7,
-			then: () => 'initial'
-		}
-	]
-})
-	.defaults({
-		result: 9,
-	})
-return instance({
-	result: 0,
-}) // 7
-```
+## StateReferenceError
 
-Can return symbol as relative path
+A state change has set a property that was not defined in the original state defaults.
 
-```javascript
-const testSymbol = Symbol('Test Symbol')
-const instance = new S({
-	initial: [
-		({ result }) => ({ result: result + 1 }),
-		() => testSymbol
-	],
-	[testSymbol]: [
-		{
-			if: ({ result }) => result < 7,
-			then: () => 'initial'
-		}
-	]
-})
-	.defaults({
-		result: 9,
-	})
-return instance({
-	result: 0,
-}) // 7
-```
+This is likely intentional, as this is not default behaviour.
 
-Can return number as relative path
+This class is exported by the library as `{ StateReferenceError }`
 
 ```javascript
-const instance = new S([
-	({ result }) => ({ result: result + 1 }),
-	{
-		if: ({ result }) => result < 7,
-		then: () => 0
-	}
-])
-	.defaults({
-		result: 9,
-	})
-return instance({
-	result: 0,
-}) // 7
+import { StateReferenceError } from './index.js'
+	
+return StateReferenceError; // success
 ```
 
-Can return return as directive
+## StateTypeError
 
-```javascript
-const instance = new S([
-	({ result }) => ({ result: result - 1 }),
-	{
-		if: ({ result }) => result <= 0,
-		then: () => S.Return,
-		else: 0
-	}
-])
-	.defaults({
-		result: -1,
-	})
-return instance({
-	result: 6,
-}) // 0
-```
+A state change has updated a property that was defined as a different type in the original state defaults.
 
-Can return return object as directive
-
-```javascript
-const instance = new S([
-	({ result }) => ({ result: result - 1 }),
-	{
-		if: ({ result }) => result <= 0,
-		then: () => ({ [S.Return]: 66 }),
-		else: 0
-	}
-])
-	.defaults({
-		result: -1,
-	})
-return instance({
-	result: 6,
-}) // 66
-```
+This is likely intentional, as this is not default behaviour.
 
-Can return object as state change
+This class is exported by the library as `{ StateTypeError }`
 
 ```javascript
-const instance = new S(() => ({ result: 66 }))
-	.defaults({
-		result: 0,
-	})
-return instance({
-	result: 99
-}) // 66
+import { StateTypeError } from './index.js'
+	
+return StateTypeError; // success
 ```
 
-## Wrapping
+## NodeTypeError
 
-Can use other machine as step
+A node of an unknown type was used in a process.
 
-```javascript
-const instance = new S({
-	initial: [
-		({ input }) => ({ realInput: input }),
-		'testEnd'
-	],
-	testEnd: {
-		if: ({ realInput }) => realInput <= 1,
-		then: ({ stack }) => ({ [S.Return]: stack.join('_') }),
-		else: 'nextBatch'
-	},
-	nextBatch: [
-		(new S([
-			({ result, input }) => ({ result: result * input }),
-			({ input }) => ({ input: input-1 }),
-			{
-				if: ({ input }) => input > 1,
-				then: 0
-			}
-		]).defaults({
-			result: 1,
-			input: 1,
-		}))
-		.input(({ realInput }) => ({ input: realInput, result: 1 }))
-		.result(({result}) => ({ result })),
-		({ realInput }) => ({ realInput: realInput - 1}),
-		({ stack,result }) => ({ stack: [...stack,result]}),
-		'testEnd'
-	]
-})
-	.defaults({
-		input: 1,
-		realInput: 1,
-		result: 1,
-		stack: [],
-	})
-return instance({
-	input: 10
-}) // '3628800_362880_40320_5040_720_120_24_6_2'
-```
+This was probably caused by a custom node definition
 
-Can use other machine step as own step
+This class is exported by the library as `{ NodeTypeError }`
 
 ```javascript
-const instance = new S({
-	initial: [
-		({ subState, input }) => ({ subState: { ...subState, input }}),
-		'cradle'
-	],
-	cradle: [
-		new S([
-			({ counter }) => ({ counter: counter + 1 }),
-			({ result, counter }) => ({ result: result * counter }),
-			{
-				if: ({ input, counter }) => counter < input,
-				then: 0
-			}
-		])
-		.override(function ({ subState: currentSubState, subPath: currentSubPath }) {
-			const currentState = {
-				result: 1,
-				input: 1,
-				counter: 0,
-				...currentSubState,
-				[S.Path]: currentSubPath
-			}
-			const { [S.Path]: subPath, [S.Return]: subDone = false, ...subState } = this.perform(currentState, this.execute(currentState))
-			return {
-				subPath, subState, subDone
-			}
-		}),
-		'final'
-	],
-	final: [
-		{
-			if: ({ subState, resultList }) => subState.result !== resultList[resultList.length-1],
-			then: ({ resultList, subState }) => ({ resultList: [...resultList, subState.result]})
-		},
-		{
-			if: ({ subDone }) => subDone,
-			then: ({ resultList }) => ({ [S.Return]: resultList.join('_') }),
-			else: 'cradle'
-		}
-	]
-})
-	.defaults({
-		input: 1,
-		resultList: [],
-		subState: {},
-		subPath: [],
-		subDone: false,
-	})
-return instance({
-	input: 10,
-}) // '1_2_6_24_120_720_5040_40320_362880_3628800'
+import { NodeTypeError } from './index.js'
+	
+return NodeTypeError; // success
 ```
-
-# Examples
 
-7 bang is 5040
+## UndefinedNodeError
 
-```javascript
-const instance = new S([
-	({ result, input }) => ({ result: result * input }),
-	({ input }) => ({ input: input-1 }),
-	{
-		if: ({ input }) => input > 1,
-		then: 0
-	}
-],)
-	.defaults({
-		result: 1,
-		input: 1,
-	})
-return instance({
-	input: 7
-}) // 5040
-```
+An undefined node was used in a process.
 
-12th fibonacci number is 144
+This is probably caused by a missing variable.
 
-```javascript
-const instance = new S({
-	initial: 'testStart',
-	testStart: [
-		{
-			if: ({ result }) => result === 0,
-			then: () => ({ result: 1 })
-		},
-		'fib'
-	],
-	fib: [
-		({ result, result2 }) => ({
-			result2: result,
-			result: result + result2
-		}),
-		'testEnd',
-	],
-	testEnd: [
-		({ input }) => ({ input: input-1 }),
-		{
-			if: ({ input }) => input > 1,
-			then: 'fib',
-			else: S.Return,
-		}
-	]
-})
-	.defaults({
-		input: 1,
-		result: 0,
-		result2: 0,
-	})
-return instance({
-	input: 12,
-}) // 144
-```
+If you wish to perform an intentional no-op, use `null`
 
-12th fibonacci number is 144 (described)
+This class is exported by the library as `{ UndefinedNodeError }`
 
 ```javascript
-const instance = new S({
-	initial: 'testStart',
-	testStart: [
-		a('startingPosition'),
-		'fib'
-	],
-	fib: [
-		a('fibonacci'),
-		'testEnd',
-	],
-	testEnd: [
-		a('decrementCounter'),
-		t('exitOrLoop')
-	]
-})
-	.with(describedPlugin({
-		transitions: {
-			exitOrLoop: {
-				if: ({ input }) => input > 1,
-				then: 'fib',
-				else: S.Return,
-			}
-		},
-		actions: {
-			startAtOne: () => ({ result: 1 }),
-			decrementCounter: ({ input }) => ({ input: input-1 }),
-			fibonacci: ({ result, result2 }) => ({
-				result2: result,
-				result: result + result2
-			}),
-			startingPosition: {
-				if: c('startAtZero'),
-				then: a('startAtOne')
-			}
-		},
-		conditions: {
-			startAtZero: ({ result }) => result === 0
-		}
-	}))
-	.defaults({
-		input: 1,
-		result: 0,
-		result2: 0,
-	})
-return instance({
-	input: 12,
-}) // 144
+import { UndefinedNodeError } from './index.js'
+	
+return UndefinedNodeError; // success
 ```
 
-## Parallel
+## MaxIterationsError
 
-Can perform parallel actions when using async.
+The execution of the process took more iterations than was allowed.
 
-```javascript
-const instance = new S([
-	({ input }) => ({ input: input - 1 }),
-	parallel({
-		if: ({ input }) => input > 5,
-		then: [
-			({ result, input }) => ({ result: [...result,input] }),
-			({ input }) => ({ input: input - 1 }),
-		],
-	},
-	{
-		if: ({ input }) => input > 5, 
-		then: [
-			({ result, input }) => ({ result: [...result,input] }),
-			({ input }) => ({ input: input - 1 }),
-		],
-	}),
-	{
-		if: ({ input }) => input > 0,
-		then: 0,
-	},
-	({ result }) => ({ [S.Return]: result.join('_') })
-]).defaults( {
-		input: 0,
-		result: []
-	})
-	.async
-	.with(parallelPlugin)
-return instance({
-	input: 10 
-}) // '9_7'
-```
+This can be configured using `.for` or `.forever`
 
-Cannot perform parallel actions when not using async.
+This class is exported by the library as `{ MaxIterationsError }`
 
 ```javascript
-const instance = new S([
-	({ input }) => ({ input: input - 1 }),
-	parallel({
-		if: ({ input }) => input > 5,
-		then: [
-			({ result, input }) => ({ result: [...result,input] }),
-			({ input }) => ({ input: input - 1 }),
-		],
-	},
-	{
-		if: ({ input }) => input > 5, 
-		then: [
-			({ result, input }) => ({ result: [...result,input] }),
-			({ input }) => ({ input: input - 1 }),
-		],
-	}),
-	{
-		if: ({ input }) => input > 0,
-		then: 0,
-	},
-	({ result }) => ({ [S.Return]: result.join('_') })
-])
-	.defaults({
-		input: 0,
-		result: []
-	}).with(parallelPlugin)
-return instance({
-	input: 10 
-}) // '9_8_6'
+import { MaxIterationsError } from './index.js'
+	
+return MaxIterationsError; // success
 ```
 
-## Events
+## PathReferenceError
 
-Fibonacci numbers (events)
-
-```javascript
-const instance = new S({
-	initial: 'testStart',
-	testStart: [
-		{
-			if: ({ result }) => result === 0,
-			then: () => ({ result: 1 }),
-		},
-		'fibb'
-	],
-	fibb: [
-		({ result, result2 }) => ({
-			result2: result,
-			result: result + result2
-		}),
-		'testEnd',
-	],
-	testEnd: [
-		({ input }) => ({ input: input-1 }),
-		{
-			if: ({ input }) => input > 1,
-			then: 'fibb',
-			else: 'waitForEvents',
-		}
-	],
-	waitForEvents: {
-		on: {
-			nextNumber: [
-				({ input }) => ({ input: input+1 }),
-				'fibb'
-			],
-			getResult: emit(({ result }) => ({ name: 'result', data: result })),
-			kill: S.Return,
-		}
-	}
-})
-	.defaults({
-		input: 1,
-		result: 0,
-		result2: 0,
-	})
-	.async
-	.with(eventsPlugin({
-		nextNumber: {},
-		getResult: {},
-		kill: {},
-	}))
-const runningInstance = instance({input:12})
-let results = []
-runningInstance.subscribe((event) => {
-	if (event.name === 'result') {
-		results.push(event.data)
-	}
-});
-runningInstance.send('getResult')
-runningInstance.send('nextNumber')
-runningInstance.send('getResult')
-runningInstance.send('getResult')
-runningInstance.send('nextNumber')
-runningInstance.send('getResult')
-runningInstance.send('kill')
-await runningInstance
-return results.join('_') // '144_233_233_377'
-```
+A path was referenced which could not be found in the given process.
 
-Fibonacci numbers (events + described)
+This class is exported by the library as `{ PathReferenceError }`
 
 ```javascript
-const instance = new S({
-	initial: 'testStart',
-	testStart: [
-		{
-			if: c('startAtZero'),
-			then: a('startAtOne'),
-		},
-		'fibb'
-	],
-	fibb: [
-		a('fibonacci'),
-		'testEnd',
-	],
-	testEnd: [
-	a('decrementCounter'),
-		{
-			if: c('moreRepetitions'),
-			then: 'fibb',
-			else: 'waitForEvents',
-		}
-	],
-	waitForEvents: {
-		on: {
-			nextNumber: [
-				({ input }) => ({ input: input+1 }),
-				'fibb'
-			],
-			getResult: emit(({ result }) => ({ name: 'result', data: result })),
-			kill: S.Return,
-		}
-	}
-})
-	.defaults({
-		input: 1,
-		result: 0,
-		result2: 0,
-	})
-	.async
-	.with(describedPlugin({
-		actions:{
-			startAtOne: () => ({ result: 1 }),
-			fibb: ({ result, result2 }) => ({
-				result2: result,
-				result: result + result2
-			}),
-			decrementCounter: ({ input }) => ({ input: input-1 }),
-			fibonacci: [
-				a('fibb'),
-			],
-		},
-		conditions: {
-			startAtZero: ({ result }) => result === 0,
-			moreRepetitions: ({ input }) => input > 1
-		},
-	}), eventsPlugin({
-		nextNumber: {},
-		getResult: {},
-		kill: {},
-	}))
-const runningInstance = instance({input:12})
-let results = []
-runningInstance.subscribe((event) => {
-	if (event.name === 'result') {
-		results.push(event.data)
-	}
-});
-runningInstance.send('getResult')
-runningInstance.send('nextNumber')
-runningInstance.send('getResult')
-runningInstance.send('getResult')
-runningInstance.send('nextNumber')
-runningInstance.send('getResult')
-runningInstance.send('kill')
-await runningInstance
-return results.join('_') // '144_233_233_377'
+import { PathReferenceError } from './index.js'
+	
+return PathReferenceError; // success
 ```
 

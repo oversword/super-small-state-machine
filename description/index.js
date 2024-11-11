@@ -682,10 +682,6 @@ export interface Config<
 	nodes: NodeDefinitions<State, Result, Input, Action, Process>,
 	async: boolean,
 	pause: (state: SystemState<State>, runs: number) => false | Promise<any>
-	// // Special settings for async
-	// delay: number,
-	// allow: number,
-	// wait: number,
 }`)
 ),
 
@@ -1481,11 +1477,6 @@ D('Core',
 		),
 		D('Do not allow for asynchronous actions by default',
 			CS("async: false,"),
-			// D('Special settings for async',
-			// 	CS("delay: 0,"),
-			// 	CS("allow: 1000,"),
-			// 	CS("wait: 0,"),
-			// ),
 		),
 		D('Do not override the execution method by default',
 			CS("override: null,"),
@@ -1884,9 +1875,6 @@ D('Core',
 		D('Turn the arguments into an initial condition',
 			CS("const modifiedInput = (await inputModifier.apply(instance, input)) || {}"),
 		),
-		// D('If a delay is configured, wait before starting execution',
-		// 	CS("if (delay) await wait_time(delay)"),
-		// ),
 		D('Merge the initial condition with the default initial state',
 			CS("let r = 0, currentState = adaptStart.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {"),
 			D('Default to an empty change object',
@@ -1920,23 +1908,6 @@ D('Core',
 			D('Execute the current node on the process and perform any required actions. Updating the currentState',
 				CS("currentState = this._perform(instance, currentState, await this._execute(instance, currentState))"),
 			),
-			// D('Check if the allowed execution time is exceeded every 10 steps',
-			// 	CS("if (allow > 0 && r % 10 === 0) {"),
-			// 	D('Get the current time',
-			// 		CS("const nowTime = Date.now()"),
-			// 	),
-			// 	D('If the allowed time is exceeded',
-			// 		CS("if (nowTime - startTime >= allow) {"),
-			// 		D('Wait for the configured `wait` time',
-			// 			CS("await wait_time(wait)"),
-			// 		),
-			// 		D('Reset the start time of execution',
-			// 			CS("startTime = Date.now()"),
-			// 		),
-			// 		CS("}"),
-			// 	),
-			// 	CS("}"),
-			// ),
 			CS("}"),
 		),
 		D('When returning, run the ends state adapters, then the result adapter to complete execution.',
@@ -2196,29 +2167,6 @@ D('Chain',
 		JS("static forever                                (instance) { return ({ process: instance.process, config: { ...instance.config, iterations: Infinity }, }) }"),
 		TS(`static forever${commonGenericDefinition} (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, iterations: Infinity }, }) }`)
 	),
-	// D('S.step',
-	// 	'Execute one action or directive at a time, and always return the full state (ignoring previous `instance.result` calls)',
-	// 	'Will modify the given instance.',
-	// 	E.equals(() => {
-	// 		const instance = new S([{ result: 'first' }, { result: 'second' }])
-	// 		.with(
-	// 			S.defaults({ result: 'initial' }),
-	// 			S.step
-	// 		)
-	// 		const result1 = instance()
-	// 		const result2 = instance(result1)
-	// 		const result3 = instance(result2)
-	// 		return { result1, result2, result3 }
-	// 	}, {
-	// 		result1: { result: 'initial' },
-	// 		result2: { result: 'first' },
-	// 		result3: { result: 'second' }
-	// 	}),
-	// 	// CS("currentState = this._perform(instance, currentState, this._execute(instance, currentState))")
-
-	// 	JS("static step                     (instance) { return ({ process: instance.process, config: { ...instance.config, override: function () {  } }, }) }"),
-	// 	TS(`static step${commonGenericDefinition} (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S<State, SystemState<State>, Input, Action, Process>, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, iterations: 1, result: a => a } as unknown as Config<State, SystemState<State>, Input, Action, Process>, }) }`)
-	// ),
 	D('S.sync <default>',
 		'Execute synchronously and not allow for asynchronous actions.',
 		'Will modify the given instance.',
@@ -2259,24 +2207,6 @@ D('Chain',
 		JS("static pause(pause = S.config.pause)         { return instance => ({ process: instance.process, config: { ...instance.config, pause }, }) }"),
 		TS(`static pause${commonGenericDefinition}(pause: Config${commonGenericArguments}['pause'] = (S.config.pause as Config${commonGenericArguments}['pause'])) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, pause }, }) }`)
 	),
-	// D('S.delay(delay = 0) <default: 0>',
-	// 	'Defines an initial delay before starting to execute the process.',
-	// 	'Returns a function that will modify a given instance.',
-	// 	JS("static delay(delay = 0)        { return instance => ({ process: instance.process, config: { ...instance.config, delay }, }) }"),
-	// 	TS(`static delay${commonGenericDefinition}(delay: number = 0) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, delay }, }) }`)
-	// ),
-	// D('S.allow(allow = 1000) <default: 1000>',
-	// 	'Defines the amount of time the process is allowed to run for before pausing.',
-	// 	'Returns a function that will modify a given instance.',
-	// 	JS("static allow(allow = 1000)     { return instance => ({ process: instance.process, config: { ...instance.config, allow }, }) }"),
-	// 	TS(`static allow${commonGenericDefinition}(allow: number = 1000) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, allow }, }) }`),
-	// ),
-	// D('S.wait(wait = 0) <default: 0>',
-	// 	'Defines the amount of time the process will pause for when the allowed time is exceeded.',
-	// 	'Returns a function that will modify a given instance.',
-	// 	JS("static wait(wait = 0)          { return instance => ({ process: instance.process, config: { ...instance.config, wait }, }) }"),
-	// 	TS(`static wait${commonGenericDefinition}(wait: number = 0) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, wait }, }) }`)
-	// ),
 	D('S.override(override) <default: instance.run>',
 		'Overrides the method that will be used when the executable is called.',
 		'Returns a function that will modify a given instance.',
@@ -2418,9 +2348,6 @@ D('Instance',
 			iterations: 10000,
 			strict: false,
 			async: false,
-			// delay: 0,
-			// allow: 1000,
-			// wait: 0,
 		}),
 		E.equals(() => {
 			const instance = new S()
@@ -2429,18 +2356,12 @@ D('Instance',
 				.for(10)
 				.defaults({ result: 'other' })
 				.strict
-				// .delay(20)
-				// .allow(100)
-				// .wait(100)
 			return modifiedInstance.config
 		}, { 
 			defaults: { result: 'other' },
 			iterations: 10,
 			strict: true,
 			async: true,
-			// delay: 20,
-			// allow: 100,
-			// wait: 100,
 		}),
 		JS("#config = S.config"),
 		JS("get config() { return { ...this.#config } }"),
@@ -2713,24 +2634,6 @@ D('Instance',
 		JS("get forever()           { return this.with(S.forever) }"),
 		TS(`get forever(): S${commonGenericArguments} { return this.with(S.forever) }`)
 	),
-	// D('instance.step',
-	// 	'Execute one action or directive at a time, and always return the full state (ignoring previous `instance.result` calls)',
-	// 	E.equals(() => {
-	// 		const instance = new S([{ result: 'first' }, { result: 'second' }])
-	// 			.defaults({ result: 'initial' })
-	// 			.step
-	// 		const result1 = instance()
-	// 		const result2 = instance(result1)
-	// 		const result3 = instance(result2)
-	// 		return { result1, result2, result3 }
-	// 	}, {
-	// 		result1: { result: 'initial' },
-	// 		result2: { result: 'first' },
-	// 		result3: { result: 'second' }
-	// 	}),
-	// 	JS("get step()              { return this.with(S.step) }"),
-	// 	TS("get step(): S<State, SystemState<State>, Input, Action, Process> { return this.with(S.step) }"),
-	// ),
 	D('instance.sync <default>',
 		'Execute synchronously and not allow for asynchronous actions.',
 		'Creates a new instance.',
@@ -2767,24 +2670,6 @@ D('Instance',
 		JS("pause(pause)            { return this.with(S.pause(pause)) }"),
 		TS(`pause(pause: Config${commonGenericArguments}['pause']): S${commonGenericArguments} { return this.with(S.pause(pause)) }`)
 	),
-	// D('instance.delay(delay = 0) <default: 0>',
-	// 	'Defines an initial delay before starting to execute the process.',
-	// 	'Returns a new instance.',
-	// 	JS("delay(delay)            { return this.with(S.delay(delay)) }"),
-	// 	TS(`delay(delay: number): S${commonGenericArguments} { return this.with(S.delay(delay)) }`)
-	// ),
-	// D('instance.allow(allow = 1000) <default: 1000>',
-	// 	'Defines the amount of time the process is allowed to run for before pausing.',
-	// 	'Returns a new instance.',
-	// 	JS("allow(allow)            { return this.with(S.allow(allow)) }"),
-	// 	TS(`allow(allow: number): S${commonGenericArguments} { return this.with(S.allow(allow)) }`)
-	// ),
-	// D('instance.wait(wait = 0) <default: 0>',
-	// 	'Defines the amount of time the process will pause for when the allowed time is exceeded.',
-	// 	'Returns a new instance.',
-	// 	JS("wait(wait)              { return this.with(S.wait(wait)) }"),
-	// 	TS(`wait(wait: number): S${commonGenericArguments} { return this.with(S.wait(wait)) }`)
-	// ),
 	D('instance.override(override) <default: instance.run>',
 		'Overrides the method that will be used when the executable is called.',
 		'Returns a new instance.',
@@ -3098,7 +2983,6 @@ D('Requirements',
 	),
 
 	D('Static Values',
-		// Can use path object as absolute path
 		D('Can use path object as absolute path',
 			E.is(() => {
 				const instance = new S({
