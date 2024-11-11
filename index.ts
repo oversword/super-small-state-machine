@@ -588,7 +588,7 @@ export abstract class SuperSmallStateMachineChain<
 	Input extends Array<unknown> = [Partial<InputSystemState<State>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
->(state: SystemState<State>) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Action => this._execute(instance, state) }
+>(state: SystemState<State>, path?: Path) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Action => this._execute(instance, state, path) }
 	static traverse<
 	State extends InitialState = { [KeyWords.RS]: null },
 	Result extends unknown = State[KeyWords.RS],
@@ -785,7 +785,7 @@ export default class S<
 	changes(state: SystemState<State>, changes: Partial<State>): SystemState<State> { return S._changes(this, state, changes) }
 	proceed(state: SystemState<State>, path: Path) { return S._proceed(this, state, path) }
 	perform(state: SystemState<State>, action: Action) { return S._perform(this, state, action) }
-	execute(state: SystemState<State>) { return S._execute(this, state) }
+	execute(state: SystemState<State>, path?: Path) { return S._execute(this, state, path) }
 	traverse(iterator: ((item: Process, path: Path) => Process), post: ((item: Process, path: Path) => Process)){ return S._traverse(this, iterator, post) }
 	run (...input: Input): Result { return S._run(this, ...input) }
 	runSync (...input: Input): Result { return S._runSync(this, ...input) }

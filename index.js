@@ -324,32 +324,32 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 }
 export class SuperSmallStateMachineChain extends SuperSmallStateMachineCore {
 	static closest(path, ...nodeTypes) { return instance => this._closest(instance, path, ...nodeTypes) }
-	static changes(state, changes) { return instance => this._changes(instance, state, changes) }
-	static proceed(state, path)    { return instance => this._proceed(instance, state, path) }
-	static perform(state, action)  { return instance => this._perform(instance, state, action) }
-	static execute(state)          { return instance => this._execute(instance, state) }
-	static traverse(iterator, post){ return instance => this._traverse(instance, iterator, post) }
-	static run(...input)           { return instance => this._run(instance, ...input) }
-	static runSync(...input)       { return instance => this._runSync(instance, ...input) }
-	static runAsync(...input)      { return instance => this._runAsync(instance, ...input) }
-	static do(process)             { return instance => ({ process: instance.config.adapt.reduce((prev, modifier) => modifier.call(instance, prev), process), config: instance.config }) }
-	static defaults(defaults)      { return instance => ({ process: instance.process, config: { ...instance.config, defaults }, }) }
-	static input(input)            { return instance => ({ process: instance.process, config: { ...instance.config, input }, }) }
-	static result(result)          { return instance => ({ process: instance.process, config: { ...instance.config, result }, }) }
-	static unstrict                 (instance) { return ({ process: instance.process, config: { ...instance.config, strict: false }, }) }
-	static strict                   (instance) { return ({ process: instance.process, config: { ...instance.config, strict: true }, }) }
-	static strictTypes              (instance) { return ({ process: instance.process, config: { ...instance.config, strict: S.StrictTypes }, }) }
-	static for(iterations = 10000) { return instance => ({ process: instance.process, config: { ...instance.config, iterations }, }) }
-	static until(until)            { return instance => ({ process: instance.process, config: { ...instance.config, until }, }) }
-	static forever                  (instance) { return ({ process: instance.process, config: { ...instance.config, iterations: Infinity }, }) }
-	static sync                     (instance) { return ({ process: instance.process, config: { ...instance.config, async: false }, }) }
-	static async                    (instance) { return ({ process: instance.process, config: { ...instance.config, async: true }, }) }
-	static pause(pause = S.config.pause){ return instance => ({ process: instance.process, config: { ...instance.config, pause }, }) }
-	static override(override)      { return instance => ({ process: instance.process, config: { ...instance.config, override } }) }
-	static addNode(...nodes)       { return instance => ({ process: instance.process, config: { ...instance.config, nodes: new NodeDefinitions(...instance.config.nodes.values(),...nodes) }, }) }
-	static adapt(...adapters)      { return instance => ({ process: adapters.reduce((prev, adapter) => adapter.call(instance, prev), instance.process), config: { ...instance.config, adapt: [ ...instance.config.adapt, ...adapters ] }, }) }
-	static adaptStart(...adapters) { return instance => ({ process: instance.process, config: { ...instance.config, adaptStart: [ ...instance.config.adaptStart, ...adapters ] }, }) }
-	static adaptEnd(...adapters)   { return instance => ({ process: instance.process, config: { ...instance.config, adaptEnd: [ ...instance.config.adaptEnd, ...adapters ] }, }) }
+	static changes(state, changes)     { return instance => this._changes(instance, state, changes) }
+	static proceed(state, path)        { return instance => this._proceed(instance, state, path) }
+	static perform(state, action)      { return instance => this._perform(instance, state, action) }
+	static execute(state, path)        { return instance => this._execute(instance, state, path) }
+	static traverse(iterator, post)    { return instance => this._traverse(instance, iterator, post) }
+	static run(...input)               { return instance => this._run(instance, ...input) }
+	static runSync(...input)           { return instance => this._runSync(instance, ...input) }
+	static runAsync(...input)          { return instance => this._runAsync(instance, ...input) }
+	static do(process = null)                    { return instance => ({ process: instance.config.adapt.reduce((prev, modifier) => modifier.call(instance, prev), process), config: instance.config }) }
+	static defaults(defaults = S.config.defaults){ return instance => ({ process: instance.process, config: { ...instance.config, defaults }, }) }
+	static input(input = S.config.input)         { return instance => ({ process: instance.process, config: { ...instance.config, input }, }) }
+	static result(result = S.config.result)      { return instance => ({ process: instance.process, config: { ...instance.config, result }, }) }
+	static unstrict                               (instance) { return ({ process: instance.process, config: { ...instance.config, strict: false }, }) }
+	static strict                                 (instance) { return ({ process: instance.process, config: { ...instance.config, strict: true }, }) }
+	static strictTypes                            (instance) { return ({ process: instance.process, config: { ...instance.config, strict: S.StrictTypes }, }) }
+	static for(iterations = S.config.iterations) { return instance => ({ process: instance.process, config: { ...instance.config, iterations }, }) }
+	static until(until = S.config.until)         { return instance => ({ process: instance.process, config: { ...instance.config, until }, }) }
+	static forever                                (instance) { return ({ process: instance.process, config: { ...instance.config, iterations: Infinity }, }) }
+	static sync                                   (instance) { return ({ process: instance.process, config: { ...instance.config, async: false }, }) }
+	static async                                  (instance) { return ({ process: instance.process, config: { ...instance.config, async: true }, }) }
+	static pause(pause = S.config.pause)         { return instance => ({ process: instance.process, config: { ...instance.config, pause }, }) }
+	static override(override = S.config.override){ return instance => ({ process: instance.process, config: { ...instance.config, override } }) }
+	static addNode(...nodes)                     { return instance => ({ process: instance.process, config: { ...instance.config, nodes: new NodeDefinitions(...instance.config.nodes.values(),...nodes) }, }) }
+	static adapt(...adapters)                    { return instance => ({ process: adapters.reduce((prev, adapter) => adapter.call(instance, prev), instance.process), config: { ...instance.config, adapt: [ ...instance.config.adapt, ...adapters ] }, }) }
+	static adaptStart(...adapters)               { return instance => ({ process: instance.process, config: { ...instance.config, adaptStart: [ ...instance.config.adaptStart, ...adapters ] }, }) }
+	static adaptEnd(...adapters)                 { return instance => ({ process: instance.process, config: { ...instance.config, adaptEnd: [ ...instance.config.adaptEnd, ...adapters ] }, }) }
 	static with(...adapters) {
 		const flatAdapters = adapters.flat(Infinity)
 		return instance => {
@@ -371,7 +371,7 @@ export default class S extends SuperSmallStateMachineChain {
 	changes(state, changes) { return S._changes(this, state, changes) }
 	proceed(state, path)    { return S._proceed(this, state, path) }
 	perform(state, action)  { return S._perform(this, state, action) }
-	execute(state)          { return S._execute(this, state) }
+	execute(state, path)    { return S._execute(this, state, path) }
 	traverse(iterator, post){ return S._traverse(this, iterator, post) }
 	run     (...input)      { return S._run(this, ...input) }
 	runSync (...input)      { return S._runSync(this, ...input) }

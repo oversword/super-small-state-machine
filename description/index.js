@@ -1993,47 +1993,47 @@ D('Chain',
 				common: 'changed',
 			}
 		}, symbols),
-		JS("static changes(state, changes) { return instance => this._changes(instance, state, changes) }"),
+		JS("static changes(state, changes)     { return instance => this._changes(instance, state, changes) }"),
 		TS(`static changes${commonGenericDefinition}(state: SystemState<State>, changes: Partial<State>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): SystemState<State> => this._changes(instance, state, changes) }`)
 	),
 	D('S.proceed (state = {}, path = state[S.Path] || [])',
 		'Proceed to the next execution path.',
 		'Performs fallback logic when a node exits.',
-		JS("static proceed(state, path)    { return instance => this._proceed(instance, state, path) }"),
+		JS("static proceed(state, path)        { return instance => this._proceed(instance, state, path) }"),
 		TS(`static proceed${commonGenericDefinition}(state: SystemState<State>, path: Path) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Path | null => this._proceed(instance, state, path) }`)
 	),
 	D('S.perform (state = {}, action = null)',
 		'Perform actions on the state.',
 		'Applies any changes in the given `action` to the given `state`.',
 		'Proceeds to the next node if the action is not itself a directive or return.',
-		JS("static perform(state, action)  { return instance => this._perform(instance, state, action) }"),
+		JS("static perform(state, action)      { return instance => this._perform(instance, state, action) }"),
 		TS(`static perform${commonGenericDefinition}(state: SystemState<State>, action: Action) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): SystemState<State> => this._perform(instance, state, action) }`)
 	),
 	D('S.execute (state = {}, path = state[S.Path] || [])',
 		'Execute a node in the process, return an action.',
 		"Executes the node in the process at the state's current path and returns it's action.",
 		'If the node is not executable it will be returned as the action.',
-		JS("static execute(state)          { return instance => this._execute(instance, state) }"),
-		TS(`static execute${commonGenericDefinition}(state: SystemState<State>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Action => this._execute(instance, state) }`)
+		JS("static execute(state, path)        { return instance => this._execute(instance, state, path) }"),
+		TS(`static execute${commonGenericDefinition}(state: SystemState<State>, path?: Path) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Action => this._execute(instance, state, path) }`)
 	),
 	D('S.traverse(iterator = a => a, post = b => b)',
 		'TODO: traverse and adapt same thing?',
-		JS("static traverse(iterator, post){ return instance => this._traverse(instance, iterator, post) }"),
+		JS("static traverse(iterator, post)    { return instance => this._traverse(instance, iterator, post) }"),
 		TS(`static traverse${commonGenericDefinition}(iterator: ((item: Process, path: Path) => Process), post: ((item: Process, path: Path) => Process)) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>) => this._traverse(instance, iterator, post) }`)
 	),
 	D('S.run (...input)',
 		'Execute the entire process either synchronously or asynchronously depending on the config.',
-		JS("static run(...input)           { return instance => this._run(instance, ...input) }"),
+		JS("static run(...input)               { return instance => this._run(instance, ...input) }"),
 		TS(`static run${commonGenericDefinition}(...input: Input) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Result => this._run(instance, ...input) }`)
 	),
 	D('S.runSync (...input)',
 		'Execute the entire process synchronously.',
-		JS("static runSync(...input)       { return instance => this._runSync(instance, ...input) }"),
+		JS("static runSync(...input)           { return instance => this._runSync(instance, ...input) }"),
 		TS(`static runSync${commonGenericDefinition}(...input: Input) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Result => this._runSync(instance, ...input) }`)
 	),
 	D('S.runAsync (...input)',
 		'Execute the entire process asynchronously. Always returns a promise.',
-		JS("static runAsync(...input)      { return instance => this._runAsync(instance, ...input) }"),
+		JS("static runAsync(...input)          { return instance => this._runAsync(instance, ...input) }"),
 		TS(`static runAsync${commonGenericDefinition}(...input: Input) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Promise<Result> => this._runAsync(instance, ...input) }`)
 	),
 	D('S.do(process) <default: null>',
@@ -2044,7 +2044,7 @@ D('Chain',
 			const newInstance = instance.with(S.do({ result: 'new' }))
 			return newInstance()
 		}, 'new'),
-		JS("static do(process)             { return instance => ({ process: instance.config.adapt.reduce((prev, modifier) => modifier.call(instance, prev), process), config: instance.config }) }"),
+		JS("static do(process = null)                    { return instance => ({ process: instance.config.adapt.reduce((prev, modifier) => modifier.call(instance, prev), process), config: instance.config }) }"),
 		TS(`static do${commonGenericDefinition}(process: Process) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.config.adapt.reduce((prev, modifier) => modifier.call(instance, prev), process), config: instance.config }) }`)
 	),
 	D('S.defaults(defaults) <default: { result: null }>',
@@ -2055,7 +2055,7 @@ D('Chain',
 			const newInstance = instance.with(S.defaults({ result: 'default' }))
 			return newInstance()
 		}, 'default'),
-		JS("static defaults(defaults)      { return instance => ({ process: instance.process, config: { ...instance.config, defaults }, }) }"),
+		JS("static defaults(defaults = S.config.defaults){ return instance => ({ process: instance.process, config: { ...instance.config, defaults }, }) }"),
 		TS(`static defaults<${commonGenericDefinitionInner}	NewState extends InitialState = State,\n>(defaults: NewState) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S<NewState, NewState[KeyWords.RS], Input, ActionNode<NewState, Result>, ProcessNode<NewState, Result, ActionNode<NewState, Result>>>, 'process' | 'config'> => ({ process: instance.process as unknown as ProcessNode<NewState, Result, ActionNode<NewState, Result>>, config: { ...instance.config, defaults } as unknown as Config<NewState, NewState[KeyWords.RS], Input, ActionNode<NewState, Result>, ProcessNode<NewState, Result, ActionNode<NewState, Result>>>, }) }`)
 	),
 	D('S.input(input) <default: (state => state)>',
@@ -2069,7 +2069,7 @@ D('Chain',
 			)
 			return instance('this', 'that')
 		}, 'this then that'),
-		JS("static input(input)            { return instance => ({ process: instance.process, config: { ...instance.config, input }, }) }"),
+		JS("static input(input = S.config.input)         { return instance => ({ process: instance.process, config: { ...instance.config, input }, }) }"),
 		TS(`static input<${commonGenericDefinitionInner}	NewInput extends Array<unknown> = Array<unknown>,\n>(input: (...input: NewInput) => Partial<InputSystemState<State>>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S<State, Result, NewInput, Action, Process>, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, input } as unknown as Config<State, Result, NewInput, Action, Process>, }) }`)
 	),
 	D('S.result(result) <default: (state => state.result)>',
@@ -2080,7 +2080,7 @@ D('Chain',
 				.with(S.result(state => state.myReturnValue))
 			return instance({ myReturnValue: 'start' })
 		}, 'start extra'),
-		JS("static result(result)          { return instance => ({ process: instance.process, config: { ...instance.config, result }, }) }"),
+		JS("static result(result = S.config.result)      { return instance => ({ process: instance.process, config: { ...instance.config, result }, }) }"),
 		TS(`static result<${commonGenericDefinitionInner}	NewResult extends unknown = Result,\n>(result: (state: SystemState<State>) => NewResult) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S<State, NewResult, Input, ActionNode<State, NewResult>, ProcessNode<State, NewResult, ActionNode<State, NewResult>>>, 'process' | 'config'> => ({ process: instance.process as unknown as ProcessNode<State, NewResult, ActionNode<State, NewResult>>, config: { ...instance.config, result } as unknown as Config<State, NewResult, Input, ActionNode<State, NewResult>, ProcessNode<State, NewResult, ActionNode<State, NewResult>>>, }) }`)
 	),
 	D('S.unstrict <default>',
@@ -2107,7 +2107,7 @@ D('Chain',
 				return instance()
 			}),
 		),
-		JS("static unstrict                 (instance) { return ({ process: instance.process, config: { ...instance.config, strict: false }, }) }"),
+		JS("static unstrict                               (instance) { return ({ process: instance.process, config: { ...instance.config, strict: false }, }) }"),
 		TS(`static unstrict${commonGenericDefinition}(instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, strict: false }, }) }`)
 	),
 	D('S.strict',
@@ -2130,7 +2130,7 @@ D('Chain',
 				return instance()
 			}, StateReferenceError),
 		),
-		JS("static strict                   (instance) { return ({ process: instance.process, config: { ...instance.config, strict: true }, }) }"),
+		JS("static strict                                 (instance) { return ({ process: instance.process, config: { ...instance.config, strict: true }, }) }"),
 		TS(`static strict${commonGenericDefinition} (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, strict: true }, }) }`)
 	),
 	D('S.strictTypes',
@@ -2146,7 +2146,7 @@ D('Chain',
 				return instance()
 			}, StateTypeError),
 		),
-		JS("static strictTypes              (instance) { return ({ process: instance.process, config: { ...instance.config, strict: S.StrictTypes }, }) }"),
+		JS("static strictTypes                            (instance) { return ({ process: instance.process, config: { ...instance.config, strict: S.StrictTypes }, }) }"),
 		TS(`static strictTypes${commonGenericDefinition} (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, strict: S.StrictTypes }, }) }`),
 	),
 	D('S.for(iterations = 10000) <default: 10000>',
@@ -2165,7 +2165,7 @@ D('Chain',
 				return instance()
 			}, MaxIterationsError),
 		),
-		JS("static for(iterations = 10000) { return instance => ({ process: instance.process, config: { ...instance.config, iterations }, }) }"),
+		JS("static for(iterations = S.config.iterations) { return instance => ({ process: instance.process, config: { ...instance.config, iterations }, }) }"),
 		TS(`static for${commonGenericDefinition}(iterations: number = 10000) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, iterations }, }) }`),
 	),
 	D('S.until(until) <default: (state => S.Return in state)>',
@@ -2183,7 +2183,7 @@ D('Chain',
 				.with(S.until(({ result }) => result === 'exit'))
 			return instance({ result: 0 })
 		}, 'exit'),
-		JS("static until(until)            { return instance => ({ process: instance.process, config: { ...instance.config, until }, }) }"),
+		JS("static until(until = S.config.until)         { return instance => ({ process: instance.process, config: { ...instance.config, until }, }) }"),
 		TS(`static until${commonGenericDefinition}(until: Config${commonGenericArguments}['until']) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, until }, }) }`),
 	),
 	D('S.forever',
@@ -2193,7 +2193,7 @@ D('Chain',
 			const instance = new S().with(S.forever)
 			return instance.config.iterations
 		}, Infinity),
-		JS("static forever                  (instance) { return ({ process: instance.process, config: { ...instance.config, iterations: Infinity }, }) }"),
+		JS("static forever                                (instance) { return ({ process: instance.process, config: { ...instance.config, iterations: Infinity }, }) }"),
 		TS(`static forever${commonGenericDefinition} (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, iterations: Infinity }, }) }`)
 	),
 	// D('S.step',
@@ -2231,7 +2231,7 @@ D('Chain',
 			)
 			return instance()
 		}, 'initial'),
-		JS("static sync                     (instance) { return ({ process: instance.process, config: { ...instance.config, async: false }, }) }"),
+		JS("static sync                                   (instance) { return ({ process: instance.process, config: { ...instance.config, async: false }, }) }"),
 		TS(`static sync${commonGenericDefinition} (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S<State, Awaited<Result>, Input, Action, Process>, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, async: false } as unknown as Config<State, Awaited<Result>, Input, Action, Process>, }) }`)
 	),
 	D('S.async',
@@ -2250,13 +2250,13 @@ D('Chain',
 			)
 			return await instance()
 		}, 'changed'),
-		JS("static async                    (instance) { return ({ process: instance.process, config: { ...instance.config, async: true }, }) }"),
+		JS("static async                                  (instance) { return ({ process: instance.process, config: { ...instance.config, async: true }, }) }"),
 		TS(`static async${commonGenericDefinition} (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S<State, Promise<Result>, Input, Action, Process>, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, async: true } as unknown as Config<State, Promise<Result>, Input, Action, Process>, }) }`),
 	),
 	D('S.pause(pause) <default: (() => false)>',
 		'Allows an async execution to be paused between steps.',
 		'Returns a function that will modify a given instance.',
-		JS("static pause(pause = S.config.pause){ return instance => ({ process: instance.process, config: { ...instance.config, pause }, }) }"),
+		JS("static pause(pause = S.config.pause)         { return instance => ({ process: instance.process, config: { ...instance.config, pause }, }) }"),
 		TS(`static pause${commonGenericDefinition}(pause: Config${commonGenericArguments}['pause'] = (S.config.pause as Config${commonGenericArguments}['pause'])) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, pause }, }) }`)
 	),
 	// D('S.delay(delay = 0) <default: 0>',
@@ -2288,7 +2288,7 @@ D('Chain',
 				}))
 			return instance(1, 2, 3)
 		}, 'customReturn'),
-		JS("static override(override)      { return instance => ({ process: instance.process, config: { ...instance.config, override } }) }"),
+		JS("static override(override = S.config.override){ return instance => ({ process: instance.process, config: { ...instance.config, override } }) }"),
 		TS(`static override${commonGenericDefinition}(override: ((...args: Input) => Result) | null) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, override } }) }`)
 	),
 	D('S.addNode(...nodes)',
@@ -2310,7 +2310,7 @@ D('Chain',
 			const instance = new S({ [specialSymbol]: true })
 			return instance({ result: 'start' })
 		}, 'start'),
-		JS("static addNode(...nodes)       { return instance => ({ process: instance.process, config: { ...instance.config, nodes: new NodeDefinitions(...instance.config.nodes.values(),...nodes) }, }) }"),
+		JS("static addNode(...nodes)                     { return instance => ({ process: instance.process, config: { ...instance.config, nodes: new NodeDefinitions(...instance.config.nodes.values(),...nodes) }, }) }"),
 		TS(`static addNode${commonGenericDefinition}(...nodes) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>) => ({ process: instance.process, config: { ...instance.config, nodes: new NodeDefinitions(...instance.config.nodes.values(),...nodes) }, }) }`)
 	),
 	D('S.adapt(...adapters)',
@@ -2329,7 +2329,7 @@ D('Chain',
 				})(this) }))
 			return instance({ result: 'unchanged' })
 		}, 'changed'),
-		JS("static adapt(...adapters)      { return instance => ({ process: adapters.reduce((prev, adapter) => adapter.call(instance, prev), instance.process), config: { ...instance.config, adapt: [ ...instance.config.adapt, ...adapters ] }, }) }"),
+		JS("static adapt(...adapters)                    { return instance => ({ process: adapters.reduce((prev, adapter) => adapter.call(instance, prev), instance.process), config: { ...instance.config, adapt: [ ...instance.config.adapt, ...adapters ] }, }) }"),
 		TS(`static adapt${commonGenericDefinition}(...adapters: Array<(process: Process) => Process>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick< S${commonGenericArguments}, 'process' | 'config'> => ({ process: adapters.reduce((prev, adapter) => adapter.call(instance, prev), instance.process), config: { ...instance.config, adapt: [ ...instance.config.adapt, ...adapters ] }, }) }`)
 	),
 	D('S.adaptStart(...adapters)',
@@ -2343,7 +2343,7 @@ D('Chain',
 			}))
 			return instance({ result: 'input' })
 		}, 'overridden'),
-		JS("static adaptStart(...adapters) { return instance => ({ process: instance.process, config: { ...instance.config, adaptStart: [ ...instance.config.adaptStart, ...adapters ] }, }) }"),
+		JS("static adaptStart(...adapters)               { return instance => ({ process: instance.process, config: { ...instance.config, adaptStart: [ ...instance.config.adaptStart, ...adapters ] }, }) }"),
 		TS(`static adaptStart${commonGenericDefinition}(...adapters: Array<(state: SystemState<State>) => SystemState<State>>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, adaptStart: [ ...instance.config.adaptStart, ...adapters ] }, }) }`),
 	),
 	
@@ -2358,7 +2358,7 @@ D('Chain',
 			}))
 			return instance({ result: 'input' })
 		}, 'overridden'),
-		JS("static adaptEnd(...adapters)   { return instance => ({ process: instance.process, config: { ...instance.config, adaptEnd: [ ...instance.config.adaptEnd, ...adapters ] }, }) }"),
+		JS("static adaptEnd(...adapters)                 { return instance => ({ process: instance.process, config: { ...instance.config, adaptEnd: [ ...instance.config.adaptEnd, ...adapters ] }, }) }"),
 		TS(`static adaptEnd${commonGenericDefinition}(...adapters: Array<(state: SystemState<State>) => SystemState<State>>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, adaptEnd: [ ...instance.config.adaptEnd, ...adapters ] }, }) }`)
 	),
 	
@@ -2555,8 +2555,8 @@ D('Instance',
 		'Execute a node in the process, return an action.',
 		"Executes the node in the process at the state's current path and returns it's action.",
 		'If the node is not executable it will be returned as the action.',
-		JS("execute(state)          { return S._execute(this, state) }"),
-		TS("execute(state: SystemState<State>) { return S._execute(this, state) }")
+		JS("execute(state, path)    { return S._execute(this, state, path) }"),
+		TS("execute(state: SystemState<State>, path?: Path) { return S._execute(this, state, path) }")
 	),
 	D('instance.traverse(iterator = a => a, post = b => b)',
 		'TODO: traverse and adapt same thing?',

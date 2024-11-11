@@ -1249,9 +1249,9 @@ Allow 1000 iterations by default
 
 Run util the return symbol is present by default.
 
-### Do not allow for asynchronous actions by default
+Do not allow for asynchronous actions by default
 
-Special settings for async
+Do not allow for asynchronous actions by default
 
 Do not override the execution method by default
 
@@ -1544,8 +1544,6 @@ Extract the useful parts of the config
 
 Turn the arguments into an initial condition
 
-If a delay is configured, wait before starting execution
-
 ### Merge the initial condition with the default initial state
 
 Default to an empty change object
@@ -1558,6 +1556,8 @@ Use the path from the initial state - allows for starting at arbitrary positions
 
 This should be fine for most finite machines, but may be too little for some constantly running machines.
 
+Pause execution based on the pause customisation method
+
 Check the configured `until` condition to see if we should exit.
 
 #### If the interaction are exceeded, Error
@@ -1565,16 +1565,6 @@ Check the configured `until` condition to see if we should exit.
 Throw new MaxIterationsError
 
 Execute the current node on the process and perform any required actions. Updating the currentState
-
-#### Check if the allowed execution time is exceeded every 10 steps
-
-Get the current time
-
-##### If the allowed time is exceeded
-
-Wait for the configured `wait` time
-
-Reset the start time of execution
 
 When returning, run the ends state adapters, then the result adapter to complete execution.
 
@@ -1869,21 +1859,9 @@ const instance = new S(async () => ({ result: 'changed' }))
 return await instance() // 'changed'
 ```
 
-## S.delay(delay = 0) <default: 0>
+## S.pause(pause) <default: (() => false)>
 
-Defines an initial delay before starting to execute the process.
-
-Returns a function that will modify a given instance.
-
-## S.allow(allow = 1000) <default: 1000>
-
-Defines the amount of time the process is allowed to run for before pausing.
-
-Returns a function that will modify a given instance.
-
-## S.wait(wait = 0) <default: 0>
-
-Defines the amount of time the process will pause for when the allowed time is exceeded.
+Allows an async execution to be paused between steps.
 
 Returns a function that will modify a given instance.
 
@@ -2009,7 +1987,7 @@ Config
 
 ```javascript
 const instance = new S()
-return instance.config // { defaults: { result: null }, iterations: 10000, strict: false, async: false, delay: 0, allow: 1000, wait: 0 }
+return instance.config // { defaults: { result: null }, iterations: 10000, strict: false, async: false }
 ```
 
 ```javascript
@@ -2019,10 +1997,10 @@ const modifiedInstance = instance
 	.for(10)
 	.defaults({ result: 'other' })
 	.strict
-	.delay(20)
-	.allow(100)
-	.wait(100)
-return modifiedInstance.config // { defaults: { result: 'other' }, iterations: 10, strict: true, async: true, delay: 20, allow: 100, wait: 100 }
+	// .delay(20)
+	// .allow(100)
+	// .wait(100)
+return modifiedInstance.config // { defaults: { result: 'other' }, iterations: 10, strict: true, async: true }
 ```
 
 ## Instance Constructor
@@ -2325,21 +2303,9 @@ const instance = new S(async () => ({ result: 'changed' }))
 return await instance() // 'changed'
 ```
 
-## instance.delay(delay = 0) <default: 0>
+## instance.pause(pause) <default: (() => false)>
 
-Defines an initial delay before starting to execute the process.
-
-Returns a new instance.
-
-## instance.allow(allow = 1000) <default: 1000>
-
-Defines the amount of time the process is allowed to run for before pausing.
-
-Returns a new instance.
-
-## instance.wait(wait = 0) <default: 0>
-
-Defines the amount of time the process will pause for when the allowed time is exceeded.
+Allows an async execution to be paused between steps.
 
 Returns a new instance.
 
