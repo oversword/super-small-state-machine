@@ -1,1 +1,1 @@
-declare module '@oversword/super-small-state-machine'
+declare module '@oversword/super-small-state-machine';
