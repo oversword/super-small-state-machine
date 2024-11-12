@@ -5,7 +5,7 @@ export const clone_object = <T extends unknown = unknown>(obj: T): T => {
 	return Object.fromEntries(Object.entries(obj).map(([key,value]) => [ key, clone_object(value) ])) as T;
 }
 export const unique_list_strings = <T extends unknown = unknown>(list: Array<T>, getId: ((item: T) => string) = item => item as string): Array<T> => Object.values(Object.fromEntries(list.map(item=>[getId(item),item])));
-const reduce_get_path_object = <T extends unknown = unknown, O extends unknown = unknown>(obj: T | O | undefined, step: PathUnit): T | undefined => obj ? obj[step] : undefined
+const reduce_get_path_object = <T extends unknown = unknown, O extends unknown = unknown>(obj: T | O | undefined, step: PathUnit): T | undefined => obj ? ((obj as any)[step] as T) : undefined
 export const get_path_object = <T extends unknown = unknown, O extends unknown = unknown>(object: O, path: Path): undefined | T => (path.reduce(reduce_get_path_object<T,O>, object) as (T | undefined))
 export const normalise_function = (functOrResult: Function | unknown): Function => (typeof functOrResult === 'function') ? functOrResult : () => functOrResult
 const reduce_deep_merge_object = <T extends unknown = unknown>(base: T, override: unknown): T => {
@@ -13,7 +13,7 @@ const reduce_deep_merge_object = <T extends unknown = unknown>(base: T, override
 		return override as T;
 	const allKeys = unique_list_strings(Object.keys(base).concat(Object.keys(override)));
 	return Object.fromEntries(allKeys.map(key => [
-		key, key in override ? deep_merge_object(base[key], override[key]) : base[key]
+		key, key in override ? deep_merge_object((base as Record<string,unknown>)[key], (override as Record<string,unknown>)[key]) : (base as Record<string,unknown>)[key]
 	])) as T;
 }
 export const deep_merge_object = <T extends unknown = unknown>(base: T, ...overrides: Array<unknown>): T => overrides.reduce(reduce_deep_merge_object<T>, base)
@@ -159,7 +159,7 @@ export class NodeDefinition<
 	}
 }
 export const N = NodeDefinition
-const exitFindNext = function (action, state) {
+const exitFindNext = function (this: S, _: ActionNode, state: SystemState) {
 	const path = S._proceed(this, state)
 	return path ? { ...state, [S.Path]: path } : { ...state, [S.Return]: true }
 }
@@ -197,28 +197,28 @@ export interface Config<
 }
 	export type ChangesNode<State extends InitialState = { [KeyWords.RS]: null }> = Partial<State>
 	const ChangesNode = new N<ChangesNode,ChangesNode>(NodeTypes.CH, {
-		typeof(object, objectType): object is ChangesNode { return Boolean(object && objectType === 'object') },
-		perform(action, state) { return exitFindNext.call(this, action, S._changes(this, state, action)) }
+		typeof(this: S, object, objectType): object is ChangesNode { return Boolean(object && objectType === 'object') },
+		perform(this: S, action, state) { return exitFindNext.call(this, action, S._changes(this, state, action)) }
 	})
 	export type SequenceNode<State extends InitialState = { [KeyWords.RS]: null }, Result extends unknown = State[KeyWords.RS], Action extends unknown = ActionNode<State, Result>> = Array<ProcessNode<State, Result, Action>>
 	const SequenceNode = new N<SequenceNode, Path>(NodeTypes.SQ, {
-		proceed(parPath, state, path) {
+		proceed(this: S, parPath, state, path) {
 			const parActs = get_path_object<SequenceNode>(this.process, parPath)
 			const childItem = path[parPath.length] as number
 			if (parActs && childItem+1 < parActs.length) return [ ...parPath, childItem+1 ]
 		},
-		typeof(object, objectType, isAction): object is SequenceNode { return ((!isAction) && objectType === 'object' && Array.isArray(object)) },
-		execute(node, state) { return node.length ? [ ...state[S.Path], 0 ] : null },
-		traverse(item, path, iterate, post) { return item.map((_,i) => iterate([...path,i])) },
+		typeof(this: S, object, objectType, isAction): object is SequenceNode { return ((!isAction) && objectType === 'object' && Array.isArray(object)) },
+		execute(this: S, node, state) { return node.length ? [ ...state[S.Path], 0 ] : null },
+		traverse(this: S, item, path, iterate, post) { return item.map((_,i) => iterate([...path,i])) },
 	})
 	export type FunctionNode<State extends InitialState = { [KeyWords.RS]: null }, Result extends unknown = State[KeyWords.RS], Action extends unknown = ActionNode<State, Result>> = (state: SystemState<State>) => Action | Promise<Action>
 	const FunctionNode = new N<FunctionNode>(NodeTypes.FN, {
-		typeof(object, objectType, isAction): object is FunctionNode { return (!isAction) && objectType === 'function' },
-		execute(node, state) { return node(state) },
+		typeof(this: S, object, objectType, isAction): object is FunctionNode { return (!isAction) && objectType === 'function' },
+		execute(this: S, node, state) { return node(state) },
 	})
 	const UndefinedNode = new N<undefined,undefined>(NodeTypes.UN, {
-		typeof(object, objectType): object is undefined { return objectType === 'undefined' },
-		execute(node, state) { throw new UndefinedNodeError(`There is nothing to execute at path [ ${state[S.Path].map(key => key.toString()).join(', ')} ]`, { instance: this, state, data: {node}, path: state[S.Path] }) },
+		typeof(this: S, object, objectType): object is undefined { return objectType === 'undefined' },
+		execute(this: S, node, state) { throw new UndefinedNodeError(`There is nothing to execute at path [ ${state[S.Path].map(key => key.toString()).join(', ')} ]`, { instance: this, state, data: {node}, path: state[S.Path] }) },
 		perform: exitFindNext
 	})
 	const EmptyNode = new N<null,null>(NodeTypes.EM, {
@@ -287,13 +287,13 @@ export interface Config<
 	})
 	export type DirectiveNode = { [S.Path]: AbsoluteDirectiveNode | SequenceDirectiveNode | MachineDirectiveNode }
 	const DirectiveNode = new N<DirectiveNode, DirectiveNode>(NodeTypes.DR, {
-		typeof(object, objectType, isAction): object is DirectiveNode { return Boolean(object && objectType === 'object' && (S.Path in (object as object))) },
-		perform(action, state) { return S._perform(this, state, action[S.Path]) }
+		typeof(this: S, object, objectType, isAction): object is DirectiveNode { return Boolean(object && objectType === 'object' && (S.Path in (object as object))) },
+		perform(this: S, action, state) { return S._perform(this, state, action[S.Path]) }
 	})
 	export type SequenceDirectiveNode = number
 	const SequenceDirectiveNode = new N<SequenceDirectiveNode, SequenceDirectiveNode>(NodeTypes.SD, {
-		typeof(object, objectType, isAction): object is SequenceDirectiveNode { return objectType === 'number' },
-		perform(action, state) {
+		typeof(this: S, object, objectType, isAction): object is SequenceDirectiveNode { return objectType === 'number' },
+		perform(this: S, action, state) {
 			const lastOf = S._closest(this, state[S.Path].slice(0,-1), NodeTypes.SQ)
 			if (!lastOf) throw new PathReferenceError(`A relative directive has been provided as a number (${String(action)}), but no sequence exists that this number could be an index of from path [ ${state[S.Path].map(key => key.toString()).join(', ')} ].`, { instance: this, state, path: state[S.Path], data: { action } })
 			return { ...state, [S.Path]: [...lastOf, action] }
@@ -301,8 +301,8 @@ export interface Config<
 	})
 	export type MachineDirectiveNode = string | symbol
 	const MachineDirectiveNode = new N<MachineDirectiveNode, MachineDirectiveNode>(NodeTypes.MD, {
-		typeof(object, objectType, isAction): object is MachineDirectiveNode { return objectType === 'string' || objectType === 'symbol' },
-		perform(action, state) {
+		typeof(this: S, object, objectType, isAction): object is MachineDirectiveNode { return objectType === 'string' || objectType === 'symbol' },
+		perform(this: S, action, state) {
 			const lastOf = S._closest(this, state[S.Path].slice(0,-1), NodeTypes.MC)
 			if (!lastOf) throw new PathReferenceError(`A relative directive has been provided as a ${typeof action} (${String(action)}), but no state machine exists that this ${typeof action} could be a state of from path [ ${state[S.Path].map(key => key.toString()).join(', ')} ].`, { instance: this, state, path: state[S.Path], data: { action } })
 			return { ...state, [S.Path]: [...lastOf, action] }
@@ -310,8 +310,8 @@ export interface Config<
 	})
 	export type AbsoluteDirectiveNode = Path
 	const AbsoluteDirectiveNode = new N<AbsoluteDirectiveNode, AbsoluteDirectiveNode>(NodeTypes.AD, {
-		typeof(object, objectType, isAction): object is AbsoluteDirectiveNode { return isAction && Array.isArray(object) },
-		perform(action, state) { return { ...state, [S.Path]: action } }
+		typeof(this: S, object, objectType, isAction): object is AbsoluteDirectiveNode { return isAction && Array.isArray(object) },
+		perform(this: S, action, state) { return { ...state, [S.Path]: action } }
 	})
 	export type ReturnNode<Result extends unknown = unknown> = { [S.Return]: Result } | typeof S.Return
 	const ReturnNode = new N<ReturnNode,ReturnNode>(NodeTypes.RT, {
@@ -461,11 +461,11 @@ public static _execute<
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>, state: SystemState<State>, path: Path = state[S.Path]): Action {
-	const node = get_path_object(instance.process, path)
+	const node = get_path_object<Process>(instance.process, path)!
 	const nodeType = instance.config.nodes.typeof(node)
 	const nodeDefinition = nodeType && instance.config.nodes.get(nodeType)
 	if (nodeDefinition && nodeDefinition.execute)
-		return nodeDefinition.execute.call(instance, node, state)
+		return nodeDefinition.execute.call(instance, node, state) as Action
 	return node as Action
 }
 public static _traverse<
@@ -474,10 +474,10 @@ public static _traverse<
 	Input extends Array<unknown> = [Partial<InputSystemState<State>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
-> (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>, iterator: ((item: Process, path: Path) => Process), post: ((item: Process, path: Path) => Process)): ((path?: Path) => Process) {
+> (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>, iterator: ((item: Process, path: Path) => Process), post: ((item: Process, path: Path) => Process)): Process {
 	const boundPost = post.bind(instance)
 	const iterate = (path: Path = []) => {
-		const item = get_path_object(instance.process, path)
+		const item = get_path_object<Process>(instance.process, path)!
 		const nodeType = instance.config.nodes.typeof(item)
 		const nodeDefinition = nodeType && instance.config.nodes.get(nodeType)
 		if (nodeDefinition && nodeDefinition.traverse)
@@ -627,7 +627,7 @@ export abstract class SuperSmallStateMachineChain<
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 	NewState extends InitialState = State,
->(defaults: NewState) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<NewState, NewState[KeyWords.RS], Input, ActionNode<NewState, Result>, ProcessNode<NewState, Result, ActionNode<NewState, Result>>>, 'process' | 'config'> => ({ process: instance.process as unknown as ProcessNode<NewState, Result, ActionNode<NewState, Result>>, config: { ...instance.config, defaults } as unknown as Config<NewState, NewState[KeyWords.RS], Input, ActionNode<NewState, Result>, ProcessNode<NewState, Result, ActionNode<NewState, Result>>>, }) }
+>(defaults: NewState) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<NewState, NewState[KeyWords.RS], [Partial<InputSystemState<NewState>>] | [], ActionNode<NewState, NewState[KeyWords.RS]>, ProcessNode<NewState, NewState[KeyWords.RS], ActionNode<NewState, NewState[KeyWords.RS]>>>, 'process' | 'config'> => ({ process: instance.process as unknown as ProcessNode<NewState, NewState[KeyWords.RS], ActionNode<NewState, NewState[KeyWords.RS]>>, config: { ...instance.config, defaults } as unknown as Config<NewState, NewState[KeyWords.RS], [Partial<InputSystemState<NewState>>] | [], ActionNode<NewState, NewState[KeyWords.RS]>, ProcessNode<NewState, NewState[KeyWords.RS], ActionNode<NewState, NewState[KeyWords.RS]>>>, }) }
 	static input<
 	State extends InitialState = { [KeyWords.RS]: null },
 	Result extends unknown = State[KeyWords.RS],
@@ -720,7 +720,7 @@ export abstract class SuperSmallStateMachineChain<
 	Input extends Array<unknown> = [Partial<InputSystemState<State>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
->(...nodes) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>) => ({ process: instance.process, config: { ...instance.config, nodes: new NodeDefinitions(...instance.config.nodes.values(),...nodes) }, }) }
+>(...nodes: any[]) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>) => ({ process: instance.process, config: { ...instance.config, nodes: new NodeDefinitions(...instance.config.nodes.values(),...nodes) }, }) }
 	static adapt<
 	State extends InitialState = { [KeyWords.RS]: null },
 	Result extends unknown = State[KeyWords.RS],
@@ -757,7 +757,7 @@ export abstract class SuperSmallStateMachineChain<
 >(...adapters: Array<((instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>) => Pick<S<NewState, NewResult, NewInput, NewAction, NewProcess>, 'process' | 'config'>)>) {
 		const flatAdapters = adapters.flat(Infinity)
 		return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): S<NewState, NewResult, NewInput, NewAction, NewProcess> => {
-			const result = flatAdapters.reduce((prev, adapter) => adapter.call(instance, prev), instance) as unknown as Pick<S<NewState, NewResult, NewInput, NewAction, NewProcess>, 'process' | 'config'>
+			const result = flatAdapters.reduce((prev, adapter) => adapter.call(instance, prev) as unknown as Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>, instance) as unknown as Pick<S<NewState, NewResult, NewInput, NewAction, NewProcess>, 'process' | 'config'>
 			return result instanceof S ? result : new S<NewState, NewResult, NewInput, NewAction, NewProcess>(result.process, result.config)
 		}
 	}
@@ -787,7 +787,7 @@ export default class S<
 	runSync (...input: Input): Result { return S._runSync(this, ...input) }
 	runAsync(...input: Input): Promise<Result> { return S._runAsync(this, ...input) }
 	do(process: Process): S<State, Result, Input, Action, Process> { return this.with(S.do(process)) }
-	defaults<NewState extends InitialState = State>(defaults: NewState): S<NewState, NewState[KeyWords.RS], Input, ActionNode<NewState, Result>, ProcessNode<NewState, Result, ActionNode<NewState, Result>>> { return this.with(S.defaults(defaults)) }
+	defaults<NewState extends InitialState = State>(defaults: NewState): S<NewState, NewState[KeyWords.RS], [Partial<InputSystemState<NewState>>] | [], ActionNode<NewState, NewState[KeyWords.RS]>, ProcessNode<NewState, NewState[KeyWords.RS], ActionNode<NewState, NewState[KeyWords.RS]>>> { return this.with(S.defaults(defaults)) }
 	input<NewInput extends Array<unknown> = Array<unknown>>(input: (...input: NewInput) => Partial<InputSystemState<State>>): S<State, Result, NewInput, Action, Process> { return this.with(S.input(input)) }
 	result<NewResult extends unknown = Result>(result: (state: SystemState<State>) => NewResult): S<State, NewResult, Input, ActionNode<State, NewResult>, ProcessNode<State, NewResult, ActionNode<State, NewResult>>> { return this.with(S.result(result)) }
 	get unstrict(): S<State, Result, Input, Action, Process> { return this.with(S.unstrict) }
@@ -800,7 +800,7 @@ export default class S<
 	get async(): S<State, Promise<Result>, Input, Action, Process> { return this.with(S.async) }
 	pause(pause: Config<State, Result, Input, Action, Process>['pause']): S<State, Result, Input, Action, Process> { return this.with(S.pause(pause)) }
 	override(override: ((...args: Input) => Result) | null): S<State, Result, Input, Action, Process> { return this.with(S.override(override)) }
-	addNode(...nodes) { return this.with(S.addNode(...nodes)) }
+	addNode(...nodes: any[]) { return this.with(S.addNode(...nodes)) }
 	adapt(...adapters: Array<(process: Process) => Process>): S<State, Result, Input, Action, Process> { return this.with(S.adapt(...adapters)) }
 	adaptStart(...adapters: Array<(state: SystemState<State>) => SystemState<State>>): S<State, Result, Input, Action, Process> { return this.with(S.adaptStart(...adapters)) }
 	adaptEnd(...adapters: Array<(state: SystemState<State>) => SystemState<State>>): S<State, Result, Input, Action, Process> { return this.with(S.adaptEnd(...adapters)) }
