@@ -1359,10 +1359,6 @@ D('Default Nodes',
 			D('Copy over the original path to preserve it.',
 				CS("[S.Path]: state[S.Path],"),
 			),
-			// D('Update the result if one was passed in as the return value.',
-			// 	JS("...(!action || action === S.Return ? {} : { [KeyWords.RS]: action[S.Return] })"),
-			// 	TS("...(!action || action === S.Return ? {} : { [KeyWords.RS]: action[S.Return] as null })"),
-			// ),
 			JS("} }"),
 			TS("})")
 		),
@@ -2025,7 +2021,7 @@ D('Chain',
 		JS("static do(process = null)                    { return instance => ({ process: instance.config.adapt.reduce((prev, modifier) => modifier.call(instance, prev), process), config: instance.config }) }"),
 		TS(`static do${commonGenericDefinition}(process: Process) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.config.adapt.reduce((prev, modifier) => modifier.call(instance, prev), process), config: instance.config }) }`)
 	),
-	D('S.defaults(defaults) <default: { result: null }>',
+	D('S.defaults(defaults) <default: { result: undefined }>',
 		'Defines the initial state to be used for all executions.',
 		'Returns a function that will modify a given instance.',
 		E.is(() => {
@@ -2351,7 +2347,7 @@ D('Instance',
 			const instance = new S()
 			return instance.config
 		}, { 
-			defaults: { result: null },
+			defaults: { result: undefined },
 			iterations: 10000,
 			strict: false,
 			async: false,
@@ -2517,7 +2513,7 @@ D('Instance',
 		JS("do(process)             { return this.with(S.do(process)) }"),
 		TS(`do(process: Process): S${commonGenericArguments} { return this.with(S.do(process)) }`)
 	),
-	D('instance.defaults(defaults) <default: { result: null }>',
+	D('instance.defaults(defaults) <default: { result: undefined }>',
 		'Defines the initial state to be used for all executions.',
 		'Returns a new instance.',
 		E.is(() => {

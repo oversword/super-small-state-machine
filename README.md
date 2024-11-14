@@ -33,7 +33,7 @@ Config
 
 ```javascript
 const instance = new S()
-return instance.config // { defaults: { result: null }, iterations: 10000, strict: false, async: false }
+return instance.config // { defaults: { result: undefined }, iterations: 10000, strict: false, async: false }
 ```
 
 ```javascript
@@ -179,7 +179,7 @@ const instance = new S({ result: 'old' })
 return instance() // 'new'
 ```
 
-## instance.defaults(defaults) <default: { result: null }>
+## instance.defaults(defaults) <default: { result: undefined }>
 
 Defines the initial state to be used for all executions.
 
@@ -545,7 +545,7 @@ const newInstance = instance.with(S.do({ result: 'new' }))
 return newInstance() // 'new'
 ```
 
-## S.defaults(defaults) <default: { result: null }>
+## S.defaults(defaults) <default: { result: undefined }>
 
 Defines the initial state to be used for all executions.
 
@@ -1760,7 +1760,7 @@ const instance = new S(S.Return)
 return instance({ result: 'start' }) // 'start'
 ```
 
-Using the return symbol as the key to an object will override the result variable with that value before returning.
+Using the return symbol as the key to an object will set the return property to that value before returning.
 
 ```javascript
 const instance = new S({ [S.Return]: 'custom' })
@@ -1769,7 +1769,7 @@ return instance({ result: 'start' }) // 'custom'
 
 ```javascript
 const instance = new S({ [S.Return]: 'custom' })
-return instance.result(state => state)({ result: 'start' }) // { result: 'custom' }
+return instance.result(state => state)({ result: 'start' }) // { result: 'start', [S.Return]: 'custom' }
 ```
 
 This definition is exported by the library as `{ ReturnNode }`
@@ -1788,11 +1788,9 @@ A return node is the `S.Return` symbol itself, or an object with an `S.Return` p
 
 Copy the original properties from the state
 
-Set `S.Return` to true
+Set `S.Return` to undefined or the given return value
 
 Copy over the original path to preserve it.
-
-Update the result if one was passed in as the return value.
 
 ## Export all the defaults nodes together in one list.
 
