@@ -82,7 +82,7 @@ export class NodeDefinition {
 export const N = NodeDefinition
 const exitFindNext = function (action, state) {
 	const path = S._proceed(this, state)
-	return path ? { ...state, [S.Path]: path } : { ...state, [S.Return]: true }
+	return path ? { ...state, [S.Path]: path } : { ...state, [S.Return]: undefined }
 }
 export class ChangesNode extends NodeDefinition {
 	static name = NodeTypes.CH
@@ -187,9 +187,8 @@ export class ReturnNode extends NodeDefinition {
 	static typeof(object, objectType) { return object === S.Return || Boolean(object && objectType === 'object' && (S.Return in object)) }
 	static perform(action, state) { return {
 		...state,
-		[S.Return]: true,
+		[S.Return]: !action || action === S.Return ? undefined : action[S.Return],
 		[S.Path]: state[S.Path],
-		...(!action || action === S.Return ? {} : { [KeyWords.RS]: action[S.Return] })
 	} }
 }
 export const nodes = [ ChangesNode, SequenceNode, FunctionNode, UndefinedNode, EmptyNode, ConditionNode, SwitchNode, MachineNode, DirectiveNode, AbsoluteDirectiveNode, MachineDirectiveNode, SequenceDirectiveNode, ReturnNode, ]
@@ -204,9 +203,9 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 	static nodeTypes   = NodeTypes
 	static types       = NodeTypes
 	static config = {
-		defaults: { [KeyWords.RS]: null },
-		input: (a = {}) => a,
-		result: a => a[KeyWords.RS],
+		defaults: { [KeyWords.RS]: undefined },
+		input: (state = {}) => state,
+		result:  state => state[S.Return] !== undefined ? state[S.Return] : state[KeyWords.RS],
 		strict: false,
 		iterations: 10000,
 		until: state => S.Return in state,

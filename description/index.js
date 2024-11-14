@@ -17,9 +17,9 @@ const symbols = {
 }
 
 const commonGenericDefinitionInner = `
-	State extends InitialState = { [KeyWords.RS]: null },
+	State extends InitialState = { [KeyWords.RS]: undefined },
 	Result extends unknown = State[KeyWords.RS],
-	Input extends Array<unknown> = [Partial<InputSystemState<State>>] | [],
+	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 `
@@ -374,7 +374,7 @@ D('Errors',
 		D('Declare contextual properties on the class',
 			JS("instance; state; data; path;"),
 			TS(`public instance?: Partial<S${commonGenericArguments}>`),
-			TS("public state?: SystemState<State>"),
+			TS("public state?: SystemState<State, Result>"),
 			TS("public data?: any"),
 			TS("public path?: Path")
 		),
@@ -610,15 +610,15 @@ D('Node Definition',
 	),
 	D('The execute method will be null by default.',
 		JS("static execute = null;"),
-		TS("public readonly execute: ((node: SelfType, state: SystemState<State>) => Action | Promise<Action>) | null = null")
+		TS("public readonly execute: ((node: SelfType, state: SystemState<State, Result>) => Action | Promise<Action>) | null = null")
 	),
 	D('The proceed method will be null by default.',
 		JS("static proceed = null;"),
-		TS("public readonly proceed: ((parPath: Path, state: SystemState<State>, path: Path) => undefined | null | Path) | null = null")
+		TS("public readonly proceed: ((parPath: Path, state: SystemState<State, Result>, path: Path) => undefined | null | Path) | null = null")
 	),
 	D('The perform method will be null by default.',
 		JS("static perform = null;"),
-		TS("public readonly perform: ((action: SelfActionType, state: SystemState<State>) => SystemState<State>) | null = null")
+		TS("public readonly perform: ((action: SelfActionType, state: SystemState<State, Result>) => SystemState<State, Result>) | null = null")
 	),
 	D('The traverse method will be null by default.',
 		JS("static traverse = null;"),
@@ -648,7 +648,7 @@ D('exitFindNext (action, state)',
 		CS("const path = S._proceed(this, state)"),
 	),
 	D('If it fails, we should return',
-		CS("return path ? { ...state, [S.Path]: path } : { ...state, [S.Return]: true }"),
+		CS("return path ? { ...state, [S.Path]: path } : { ...state, [S.Return]: undefined }"),
 	),
 	CS("}")
 ),
@@ -657,33 +657,33 @@ D('Extra types',
 	[KeyWords.RS]: unknown,
 	[key: string]: unknown,
 }
-export type SystemState<State extends InitialState = { [KeyWords.RS]: null }> = State & {
+export type SystemState<State extends InitialState = { [KeyWords.RS]: undefined }, Result extends unknown = State[KeyWords.RS]> = State & {
 	[S.Path]: Path
 	[S.Changes]: Partial<State>
-	[S.Return]?: boolean
+	[S.Return]?: Result | undefined
 }
-export type InputSystemState<State extends InitialState = { [KeyWords.RS]: null }> = State & Partial<Pick<SystemState<State>, typeof S.Path | typeof S.Return>>
+export type InputSystemState<State extends InitialState = { [KeyWords.RS]: undefined }, Result extends unknown = State[KeyWords.RS]> = State & Partial<Pick<SystemState<State, Result>, typeof S.Path | typeof S.Return>>
 
 export interface Config<
-	State extends InitialState = { [KeyWords.RS]: null },
+	State extends InitialState = { [KeyWords.RS]: undefined },
 	Result extends unknown = State[KeyWords.RS],
-	Input extends Array<unknown> = [Partial<InputSystemState<State>>] | [],
+	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 > {
 	defaults: State,
 	iterations: number,
-	until: (state: SystemState<State>) => boolean,
+	until: (state: SystemState<State, Result>) => boolean,
 	strict: boolean | typeof S.StrictTypes,
 	override: null | ((...args: Input) => Result),
 	adapt: Array<(process: Process) => Process>,
-	adaptStart: Array<(state: SystemState<State>) => SystemState<State>>,
-	adaptEnd: Array<(state: SystemState<State>) => SystemState<State>>,
-	input: (...input: Input) => Partial<InputSystemState<State>>,
-	result: (state: SystemState<State>) => Result,
+	adaptStart: Array<(state: SystemState<State, Result>) => SystemState<State, Result>>,
+	adaptEnd: Array<(state: SystemState<State, Result>) => SystemState<State, Result>>,
+	input: (...input: Input) => Partial<InputSystemState<State, Result>>,
+	result: (state: SystemState<State, Result>) => Result,
 	nodes: NodeDefinitions<State, Result, Input, Action, Process>,
 	async: boolean,
-	pause: (state: SystemState<State>, runs: number) => false | Promise<any>
+	pause: (state: SystemState<State, Result>, runs: number) => false | Promise<any>
 }`)
 ),
 
@@ -709,7 +709,7 @@ D('Default Nodes',
 		D('This definition is exported by the library as `{ ChangesNode }`',
 			E.exports('ChangesNode', testModule, './index.js'),
 		),
-		TS("export type ChangesNode<State extends InitialState = { [KeyWords.RS]: null }> = Partial<State>"),
+		TS("export type ChangesNode<State extends InitialState = { [KeyWords.RS]: undefined }> = Partial<State>"),
 		JS("export class ChangesNode extends NodeDefinition {"),
 		TS("const ChangesNode = new N<ChangesNode,ChangesNode>(NodeTypes.CH, {"),
 		D('Use the `NodeTypes.CH` (changes) value as the name.',
@@ -740,7 +740,7 @@ D('Default Nodes',
 		D('This definition is exported by the library as `{ SequenceNode }`',
 			E.exports('SequenceNode', testModule, './index.js'),
 		),
-		TS("export type SequenceNode<State extends InitialState = { [KeyWords.RS]: null }, Result extends unknown = State[KeyWords.RS], Action extends unknown = ActionNode<State, Result>> = Array<ProcessNode<State, Result, Action>>"),
+		TS("export type SequenceNode<State extends InitialState = { [KeyWords.RS]: undefined }, Result extends unknown = State[KeyWords.RS], Action extends unknown = ActionNode<State, Result>> = Array<ProcessNode<State, Result, Action>>"),
 		JS("export class SequenceNode extends NodeDefinition {"),
 		TS("const SequenceNode = new N<SequenceNode, Path>(NodeTypes.SQ, {"),
 		D('Use the `NodeTypes.SQ` (sequence) value as the name.',
@@ -817,7 +817,7 @@ D('Default Nodes',
 		D('This definition is exported by the library as `{ FunctionNode }`',
 			E.exports('FunctionNode', testModule, './index.js'),
 		),
-		TS("export type FunctionNode<State extends InitialState = { [KeyWords.RS]: null }, Result extends unknown = State[KeyWords.RS], Action extends unknown = ActionNode<State, Result>> = (state: SystemState<State>) => Action | Promise<Action>"),
+		TS("export type FunctionNode<State extends InitialState = { [KeyWords.RS]: undefined }, Result extends unknown = State[KeyWords.RS], Action extends unknown = ActionNode<State, Result>> = (state: SystemState<State, Result>) => Action | Promise<Action>"),
 		JS("export class FunctionNode extends NodeDefinition {"),
 		TS("const FunctionNode = new N<FunctionNode>(NodeTypes.FN, {"),
 		D('Use the `NodeTypes.FN` (function) value as the name.',
@@ -892,11 +892,11 @@ D('Default Nodes',
 	),
 	D('Condition Node',
 		TS(`export interface ConditionNode<
-			State extends InitialState = { [KeyWords.RS]: null },
+			State extends InitialState = { [KeyWords.RS]: undefined },
 			Result extends unknown = State[KeyWords.RS],
 			Action extends unknown = ActionNode<State, Result>,
 		> {
-			[KeyWords.IF]: (state: SystemState<State>) => boolean,
+			[KeyWords.IF]: (state: SystemState<State, Result>) => boolean,
 			[KeyWords.TN]?: ProcessNode<State, Result, Action>
 			[KeyWords.EL]?: ProcessNode<State, Result, Action>
 		}`),
@@ -987,11 +987,11 @@ D('Default Nodes',
 			E.exports('SwitchNode', testModule, './index.js'),
 		),
 		TS(`export interface SwitchNode<
-			State extends InitialState = { [KeyWords.RS]: null },
+			State extends InitialState = { [KeyWords.RS]: undefined },
 			Result extends unknown = State[KeyWords.RS],
 			Action extends unknown = ActionNode<State, Result>,
 		> {
-			[KeyWords.SW]: (state: SystemState<State>) => string | number,
+			[KeyWords.SW]: (state: SystemState<State, Result>) => string | number,
 			[KeyWords.CS]: Record<string | number, ProcessNode<State, Result, Action>>
 		}`),
 		JS("export class SwitchNode extends NodeDefinition {"),
@@ -1050,7 +1050,7 @@ D('Default Nodes',
 			E.exports('MachineNode', testModule, './index.js'),
 		),
 		TS(`export interface MachineNode<
-			State extends InitialState = { [KeyWords.RS]: null },
+			State extends InitialState = { [KeyWords.RS]: undefined },
 			Result extends unknown = State[KeyWords.RS],
 			Action extends unknown = ActionNode<State, Result>,
 		> {
@@ -1322,7 +1322,7 @@ D('Default Nodes',
 				return instance({ result: 'start' })
 			}, 'start')
 		),
-		D('Using the return symbol as the key to an object will override the result variable with that value before returning.',
+		D('Using the return symbol as the key to an object will set the return property to that value before returning.',
 			E.equals(() => {
 				const instance = new S({ [S.Return]: 'custom' })
 				return instance({ result: 'start' })
@@ -1330,7 +1330,7 @@ D('Default Nodes',
 			E.equals(() => {
 				const instance = new S({ [S.Return]: 'custom' })
 				return instance.result(state => state)({ result: 'start' })
-			}, { result: 'custom', [S.Return]: true }),
+			}, { result: 'start', [S.Return]: 'custom' }, symbols),
 		),
 		D('This definition is exported by the library as `{ ReturnNode }`',
 			E.exports('ReturnNode', testModule, './index.js'),
@@ -1351,16 +1351,18 @@ D('Default Nodes',
 			D('Copy the original properties from the state',
 				CS("...state,"),
 			),
-			D('Set `S.Return` to true',
-				CS("[S.Return]: true,"),
+			D('Set `S.Return` to undefined or the given return value',
+				JS("[S.Return]: !action || action === S.Return ? undefined : action[S.Return],"),
+				TS("[S.Return]: !action || action === S.Return ? undefined : action[S.Return] as undefined,"),
+
 			),
 			D('Copy over the original path to preserve it.',
 				CS("[S.Path]: state[S.Path],"),
 			),
-			D('Update the result if one was passed in as the return value.',
-				JS("...(!action || action === S.Return ? {} : { [KeyWords.RS]: action[S.Return] })"),
-				TS("...(!action || action === S.Return ? {} : { [KeyWords.RS]: action[S.Return] as null })"),
-			),
+			// D('Update the result if one was passed in as the return value.',
+			// 	JS("...(!action || action === S.Return ? {} : { [KeyWords.RS]: action[S.Return] })"),
+			// 	TS("...(!action || action === S.Return ? {} : { [KeyWords.RS]: action[S.Return] as null })"),
+			// ),
 			JS("} }"),
 			TS("})")
 		),
@@ -1371,7 +1373,7 @@ D('Default Nodes',
 export type Path = Array<PathUnit>
 
 export type ProcessNode<
-	State extends InitialState = { [KeyWords.RS]: null },
+	State extends InitialState = { [KeyWords.RS]: undefined },
 	Result extends unknown = State[KeyWords.RS],
 	Action extends unknown = ActionNode<State, Result>,
 > =
@@ -1386,7 +1388,7 @@ export type ProcessNode<
 | null
 
 export type ActionNode<
-	State extends InitialState = { [KeyWords.RS]: null },
+	State extends InitialState = { [KeyWords.RS]: undefined },
 	Result extends unknown = State[KeyWords.RS],
 > = DirectiveNode | AbsoluteDirectiveNode | SequenceDirectiveNode | MachineDirectiveNode | ReturnNode<Result>| ChangesNode<State> | null | undefined | void
 `),
@@ -1457,13 +1459,13 @@ D('Core',
 		JS("static config = {"),
 		TS("public static readonly config: Config = {"),
 		D('Initialise the result property as `null` by default',
-			CS("defaults: { [KeyWords.RS]: null },")
+			CS("defaults: { [KeyWords.RS]: undefined },")
 		),
 		D('Input the initial state by default',
-			CS("input: (a = {}) => a,"),
+			CS("input: (state = {}) => state,"),
 		),
 		D('Return the result property by default',
-			CS("result: a => a[KeyWords.RS],")
+			CS("result:  state => state[S.Return] !== undefined ? state[S.Return] : state[KeyWords.RS],")
 		),
 		D('Do not perform strict state checking by default',
 			CS("strict: false,"),
@@ -1557,7 +1559,7 @@ D('Core',
 			}
 		}, symbols),
 		JS("static _changes (instance, state = {}, changes = {}) {"),
-		TS(`public static _changes${commonGenericDefinition}(instance: Pick<S${commonGenericArguments}, 'process' | 'config'>, state: SystemState<State>, changes: Partial<State>): SystemState<State> {`),
+		TS(`public static _changes${commonGenericDefinition}(instance: Pick<S${commonGenericArguments}, 'process' | 'config'>, state: SystemState<State, Result>, changes: Partial<State>): SystemState<State, Result> {`),
 		D('If the strict state flag is truthy, perform state checking logic',
 			CS("if (instance.config.strict) {"),
 			D('Go through each property in the changes and check they all already exist',
@@ -1632,7 +1634,7 @@ D('Core',
 			}, symbols),
 		),
 		JS("static _proceed (instance, state = {}, path = state[S.Path] || []) {"),
-		TS(`public static _proceed${commonGenericDefinition}(instance: Pick<S${commonGenericArguments}, 'process' | 'config'>, state: SystemState<State>, path: Path = state[S.Path] || []): Path | null {`),
+		TS(`public static _proceed${commonGenericDefinition}(instance: Pick<S${commonGenericArguments}, 'process' | 'config'>, state: SystemState<State, Result>, path: Path = state[S.Path] || []): Path | null {`),
 		D('Return `null` (unsuccessful) if the root node is reached',
 			CS("if (path.length === 0) return null"),
 		),
@@ -1704,7 +1706,7 @@ D('Core',
 			}, symbols),
 		),
 		JS("static _perform (instance, state = {}, action = null) {"),
-		TS(`public static _perform${commonGenericDefinition}(instance: Pick<S${commonGenericArguments}, 'process' | 'config'>, state: SystemState<State>, action: Action = null as Action): SystemState<State> {`),
+		TS(`public static _perform${commonGenericDefinition}(instance: Pick<S${commonGenericArguments}, 'process' | 'config'>, state: SystemState<State, Result>, action: Action = null as Action): SystemState<State, Result> {`),
 		D('Get the current path, default to the root node.',
 			CS("const path = state[S.Path] || []"),
 		),
@@ -1747,7 +1749,7 @@ D('Core',
 			}, { result: 'second' })
 		),
 		JS("static _execute (instance, state = {}, path = state[S.Path] || []) {"),
-		TS(`public static _execute${commonGenericDefinition}(instance: Pick<S${commonGenericArguments}, 'process' | 'config'>, state: SystemState<State>, path: Path = state[S.Path]): Action {`),
+		TS(`public static _execute${commonGenericDefinition}(instance: Pick<S${commonGenericArguments}, 'process' | 'config'>, state: SystemState<State, Result>, path: Path = state[S.Path]): Action {`),
 		D('Get the node at the given `path`',
 			JS("const node = get_path_object(instance.process, path)"),
 			TS("const node = get_path_object<Process>(instance.process, path)!"),
@@ -1845,7 +1847,7 @@ D('Core',
 				CS("[S.Path]: modifiedInput[S.Path] || [],")
 			),
 			JS("}, modifiedInput))"),
-			TS("} as SystemState<State>, modifiedInput))")
+			TS("} as SystemState<State, Result>, modifiedInput))")
 		),
 		D('Repeat for a limited number of iterations.',
 			'This should be fine for most finite machines, but may be too little for some constantly running machines.',
@@ -1892,7 +1894,7 @@ D('Core',
 				CS("[S.Path]: modifiedInput[S.Path] || [],"),
 			),
 			JS("}, modifiedInput))"),
-			TS("} as SystemState<State>, modifiedInput))")
+			TS("} as SystemState<State, Result>, modifiedInput))")
 		),
 		D('Repeat for a limited number of iterations.',
 			CS("while (r < iterations) {"),
@@ -1970,27 +1972,27 @@ D('Chain',
 			}
 		}, symbols),
 		JS("static changes(state, changes)     { return instance => this._changes(instance, state, changes) }"),
-		TS(`static changes${commonGenericDefinition}(state: SystemState<State>, changes: Partial<State>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): SystemState<State> => this._changes(instance, state, changes) }`)
+		TS(`static changes${commonGenericDefinition}(state: SystemState<State, Result>, changes: Partial<State>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): SystemState<State, Result> => this._changes(instance, state, changes) }`)
 	),
 	D('S.proceed (state = {}, path = state[S.Path] || [])',
 		'Proceed to the next execution path.',
 		'Performs fallback logic when a node exits.',
 		JS("static proceed(state, path)        { return instance => this._proceed(instance, state, path) }"),
-		TS(`static proceed${commonGenericDefinition}(state: SystemState<State>, path: Path) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Path | null => this._proceed(instance, state, path) }`)
+		TS(`static proceed${commonGenericDefinition}(state: SystemState<State, Result>, path: Path) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Path | null => this._proceed(instance, state, path) }`)
 	),
 	D('S.perform (state = {}, action = null)',
 		'Perform actions on the state.',
 		'Applies any changes in the given `action` to the given `state`.',
 		'Proceeds to the next node if the action is not itself a directive or return.',
 		JS("static perform(state, action)      { return instance => this._perform(instance, state, action) }"),
-		TS(`static perform${commonGenericDefinition}(state: SystemState<State>, action: Action) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): SystemState<State> => this._perform(instance, state, action) }`)
+		TS(`static perform${commonGenericDefinition}(state: SystemState<State, Result>, action: Action) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): SystemState<State, Result> => this._perform(instance, state, action) }`)
 	),
 	D('S.execute (state = {}, path = state[S.Path] || [])',
 		'Execute a node in the process, return an action.',
 		"Executes the node in the process at the state's current path and returns it's action.",
 		'If the node is not executable it will be returned as the action.',
 		JS("static execute(state, path)        { return instance => this._execute(instance, state, path) }"),
-		TS(`static execute${commonGenericDefinition}(state: SystemState<State>, path?: Path) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Action => this._execute(instance, state, path) }`)
+		TS(`static execute${commonGenericDefinition}(state: SystemState<State, Result>, path?: Path) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Action => this._execute(instance, state, path) }`)
 	),
 	D('S.traverse(iterator = a => a, post = b => b)',
 		'TODO: traverse and adapt same thing?',
@@ -2046,7 +2048,7 @@ D('Chain',
 			return instance('this', 'that')
 		}, 'this then that'),
 		JS("static input(input = S.config.input)         { return instance => ({ process: instance.process, config: { ...instance.config, input }, }) }"),
-		TS(`static input<${commonGenericDefinitionInner}	NewInput extends Array<unknown> = Array<unknown>,\n>(input: (...input: NewInput) => Partial<InputSystemState<State>>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S<State, Result, NewInput, Action, Process>, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, input } as unknown as Config<State, Result, NewInput, Action, Process>, }) }`)
+		TS(`static input<${commonGenericDefinitionInner}	NewInput extends Array<unknown> = Array<unknown>,\n>(input: (...input: NewInput) => Partial<InputSystemState<State, Result>>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S<State, Result, NewInput, Action, Process>, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, input } as unknown as Config<State, Result, NewInput, Action, Process>, }) }`)
 	),
 	D('S.result(result) <default: (state => state.result)>',
 		'Allows the modification of the value the executable will return.',
@@ -2057,7 +2059,7 @@ D('Chain',
 			return instance({ myReturnValue: 'start' })
 		}, 'start extra'),
 		JS("static result(result = S.config.result)      { return instance => ({ process: instance.process, config: { ...instance.config, result }, }) }"),
-		TS(`static result<${commonGenericDefinitionInner}	NewResult extends unknown = Result,\n>(result: (state: SystemState<State>) => NewResult) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S<State, NewResult, Input, ActionNode<State, NewResult>, ProcessNode<State, NewResult, ActionNode<State, NewResult>>>, 'process' | 'config'> => ({ process: instance.process as unknown as ProcessNode<State, NewResult, ActionNode<State, NewResult>>, config: { ...instance.config, result } as unknown as Config<State, NewResult, Input, ActionNode<State, NewResult>, ProcessNode<State, NewResult, ActionNode<State, NewResult>>>, }) }`)
+		TS(`static result<${commonGenericDefinitionInner}	NewResult extends unknown = Result,\n>(result: (state: SystemState<State, Result>) => NewResult) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S<State, NewResult, Input, ActionNode<State, NewResult>, ProcessNode<State, NewResult, ActionNode<State, NewResult>>>, 'process' | 'config'> => ({ process: instance.process as unknown as ProcessNode<State, NewResult, ActionNode<State, NewResult>>, config: { ...instance.config, result } as unknown as Config<State, NewResult, Input, ActionNode<State, NewResult>, ProcessNode<State, NewResult, ActionNode<State, NewResult>>>, }) }`)
 	),
 	D('S.unstrict <default>',
 		'Execute without checking state properties when a state change is made.',
@@ -2279,7 +2281,7 @@ D('Chain',
 			return instance({ result: 'input' })
 		}, 'overridden'),
 		JS("static adaptStart(...adapters)               { return instance => ({ process: instance.process, config: { ...instance.config, adaptStart: [ ...instance.config.adaptStart, ...adapters ] }, }) }"),
-		TS(`static adaptStart${commonGenericDefinition}(...adapters: Array<(state: SystemState<State>) => SystemState<State>>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, adaptStart: [ ...instance.config.adaptStart, ...adapters ] }, }) }`),
+		TS(`static adaptStart${commonGenericDefinition}(...adapters: Array<(state: SystemState<State, Result>) => SystemState<State, Result>>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, adaptStart: [ ...instance.config.adaptStart, ...adapters ] }, }) }`),
 	),
 	
 	D('S.adaptEnd(...adapters)',
@@ -2294,7 +2296,7 @@ D('Chain',
 			return instance({ result: 'input' })
 		}, 'overridden'),
 		JS("static adaptEnd(...adapters)                 { return instance => ({ process: instance.process, config: { ...instance.config, adaptEnd: [ ...instance.config.adaptEnd, ...adapters ] }, }) }"),
-		TS(`static adaptEnd${commonGenericDefinition}(...adapters: Array<(state: SystemState<State>) => SystemState<State>>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, adaptEnd: [ ...instance.config.adaptEnd, ...adapters ] }, }) }`)
+		TS(`static adaptEnd${commonGenericDefinition}(...adapters: Array<(state: SystemState<State, Result>) => SystemState<State, Result>>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, adaptEnd: [ ...instance.config.adaptEnd, ...adapters ] }, }) }`)
 	),
 	
 	D('S.with(...adapters)',
@@ -2462,27 +2464,27 @@ D('Instance',
 			}
 		}, symbols),
 		JS("changes(state, changes) { return S._changes(this, state, changes) }"),
-		TS("changes(state: SystemState<State>, changes: Partial<State>): SystemState<State> { return S._changes(this, state, changes) }")
+		TS("changes(state: SystemState<State, Result>, changes: Partial<State>): SystemState<State, Result> { return S._changes(this, state, changes) }")
 	),
 	D('instance.proceed (state = {}, path = state[S.Path] || [])',
 		'Proceed to the next execution path.',
 		'Performs fallback logic when a node exits.',
 		JS("proceed(state, path)    { return S._proceed(this, state, path) }"),
-		TS("proceed(state: SystemState<State>, path: Path) { return S._proceed(this, state, path) }")
+		TS("proceed(state: SystemState<State, Result>, path: Path) { return S._proceed(this, state, path) }")
 	),
 	D('instance.perform (state = {}, action = null)',
 		'Perform actions on the state.',
 		'Applies any changes in the given `action` to the given `state`.',
 		'Proceeds to the next node if the action is not itself a directive or return.',
 		JS("perform(state, action)  { return S._perform(this, state, action) }"),
-		TS("perform(state: SystemState<State>, action: Action) { return S._perform(this, state, action) }")
+		TS("perform(state: SystemState<State, Result>, action: Action) { return S._perform(this, state, action) }")
 	),
 	D('instance.execute (state = {}, path = state[S.Path] || [])',
 		'Execute a node in the process, return an action.',
 		"Executes the node in the process at the state's current path and returns it's action.",
 		'If the node is not executable it will be returned as the action.',
 		JS("execute(state, path)    { return S._execute(this, state, path) }"),
-		TS("execute(state: SystemState<State>, path?: Path) { return S._execute(this, state, path) }")
+		TS("execute(state: SystemState<State, Result>, path?: Path) { return S._execute(this, state, path) }")
 	),
 	D('instance.traverse(iterator = a => a, post = b => b)',
 		'TODO: traverse and adapt same thing?',
@@ -2536,7 +2538,7 @@ D('Instance',
 			return instance('this', 'that')
 		}, 'this then that'),
 		JS("input(input)            { return this.with(S.input(input)) }"),
-		TS("input<NewInput extends Array<unknown> = Array<unknown>>(input: (...input: NewInput) => Partial<InputSystemState<State>>): S<State, Result, NewInput, Action, Process> { return this.with(S.input(input)) }")
+		TS("input<NewInput extends Array<unknown> = Array<unknown>>(input: (...input: NewInput) => Partial<InputSystemState<State, Result>>): S<State, Result, NewInput, Action, Process> { return this.with(S.input(input)) }")
 	),
 	D('instance.result(result) <default: (state => state.result)>',
 		'Allows the modification of the value the executable will return.',
@@ -2547,7 +2549,7 @@ D('Instance',
 			return instance({ myReturnValue: 'start' })
 		}, 'start extra'),
 		JS("result(result)          { return this.with(S.result(result)) }"),
-		TS("result<NewResult extends unknown = Result>(result: (state: SystemState<State>) => NewResult): S<State, NewResult, Input, ActionNode<State, NewResult>, ProcessNode<State, NewResult, ActionNode<State, NewResult>>> { return this.with(S.result(result)) }")
+		TS("result<NewResult extends unknown = Result>(result: (state: SystemState<State, Result>) => NewResult): S<State, NewResult, Input, ActionNode<State, NewResult>, ProcessNode<State, NewResult, ActionNode<State, NewResult>>> { return this.with(S.result(result)) }")
 	),
 	D('instance.unstrict <default>',
 		'Execute without checking state properties when a state change is made.',
@@ -2741,7 +2743,7 @@ D('Instance',
 			return instance({ result: 'input' })
 		}, 'overridden'),
 		JS("adaptStart(...adapters) { return this.with(S.adaptStart(...adapters)) }"),
-		TS(`adaptStart(...adapters: Array<(state: SystemState<State>) => SystemState<State>>): S${commonGenericArguments} { return this.with(S.adaptStart(...adapters)) }`)
+		TS(`adaptStart(...adapters: Array<(state: SystemState<State, Result>) => SystemState<State, Result>>): S${commonGenericArguments} { return this.with(S.adaptStart(...adapters)) }`)
 	),
 	
 	D('instance.adaptEnd(...adapters)',
@@ -2756,7 +2758,7 @@ D('Instance',
 			return instance({ result: 'start' })
 		}, 'overridden'),
 		JS("adaptEnd(...adapters)   { return this.with(S.adaptEnd(...adapters)) }"),
-		TS(`adaptEnd(...adapters: Array<(state: SystemState<State>) => SystemState<State>>): S${commonGenericArguments} { return this.with(S.adaptEnd(...adapters)) }`)
+		TS(`adaptEnd(...adapters: Array<(state: SystemState<State, Result>) => SystemState<State, Result>>): S${commonGenericArguments} { return this.with(S.adaptEnd(...adapters)) }`)
 	),
 	D('instance.with(...adapters)',
 		'Allows for the addition of predifined modules.',
@@ -3358,9 +3360,10 @@ D('Requirements',
 								...currentSubState,
 								[S.Path]: currentSubPath
 							}
-							const { [S.Path]: subPath, [S.Return]: subDone = false, ...subState } = this.perform(currentState, this.execute(currentState))
+							const stepResult = this.perform(currentState, this.execute(currentState))
+							const { [S.Path]: subPath, [S.Return]: subDone, ...subState } = stepResult
 							return {
-								subPath, subState, subDone
+								subPath, subState, subDone: S.Return in stepResult
 							}
 						}),
 						'final'
