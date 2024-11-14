@@ -62,7 +62,6 @@ export const KeyWords = {
 	CS: 'case',
 	DF: 'default',
 	IT: 'initial',
-	RS: 'result',
 }
 export class NodeDefinitions extends Map {
 	constructor(...nodes) { super(nodes.flat(Infinity).map(node => [node.name,node])) }
@@ -203,9 +202,9 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 	static nodeTypes   = NodeTypes
 	static types       = NodeTypes
 	static config = {
-		defaults: { [KeyWords.RS]: undefined },
+		defaults: {},
 		input: (state = {}) => state,
-		result:  state => state[S.Return] !== undefined ? state[S.Return] : state[KeyWords.RS],
+		result:  state => state[S.Return],
 		strict: false,
 		iterations: 10000,
 		until: state => S.Return in state,

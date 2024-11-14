@@ -25,8 +25,8 @@ export const get_closest_path = <T extends unknown = unknown, O extends unknown 
 }
 export const wait_time = (delay: number): Promise<void> => (delay ? new Promise(resolve => setTimeout(resolve, delay)) : Promise.resolve())
 export class SuperSmallStateMachineError<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
@@ -41,57 +41,57 @@ export class SuperSmallStateMachineError<
 	}
 }
 export class SuperSmallStateMachineReferenceError<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 > extends SuperSmallStateMachineError<State, Result, Input, Action, Process> {}
 export class SuperSmallStateMachineTypeError<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 > extends SuperSmallStateMachineError<State, Result, Input, Action, Process> {}
 export class StateReferenceError<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 > extends SuperSmallStateMachineReferenceError<State, Result, Input, Action, Process> {}
 export class StateTypeError<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 > extends SuperSmallStateMachineTypeError<State, Result, Input, Action, Process> {}
 export class NodeTypeError<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 > extends SuperSmallStateMachineTypeError<State, Result, Input, Action, Process> {}
 export class UndefinedNodeError<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 > extends SuperSmallStateMachineReferenceError<State, Result, Input, Action, Process> {}
 export class MaxIterationsError<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 > extends SuperSmallStateMachineError<State, Result, Input, Action, Process> {}
 export class PathReferenceError<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
@@ -119,11 +119,10 @@ export enum KeyWords {
 	CS = 'case',
 	DF = 'default',
 	IT = 'initial',
-	RS = 'result',
 }
 export class NodeDefinitions<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
@@ -137,8 +136,8 @@ export class NodeDefinitions<
 export class NodeDefinition<
 	SelfType extends unknown = never,
 	SelfActionType extends unknown = never,
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
@@ -164,19 +163,18 @@ const exitFindNext = function (this: S, _: ActionNode, state: SystemState) {
 	return path ? { ...state, [S.Path]: path } : { ...state, [S.Return]: undefined }
 }
 export interface InitialState {
-	[KeyWords.RS]: unknown,
 	[key: string]: unknown,
 }
-export type SystemState<State extends InitialState = { [KeyWords.RS]: undefined }, Result extends unknown = State[KeyWords.RS]> = State & {
+export type SystemState<State extends InitialState = InitialState, Result extends unknown = undefined> = State & {
 	[S.Path]: Path
 	[S.Changes]: Partial<State>
 	[S.Return]?: Result | undefined
 }
-export type InputSystemState<State extends InitialState = { [KeyWords.RS]: undefined }, Result extends unknown = State[KeyWords.RS]> = State & Partial<Pick<SystemState<State, Result>, typeof S.Path | typeof S.Return>>
+export type InputSystemState<State extends InitialState = InitialState, Result extends unknown = undefined> = State & Partial<Pick<SystemState<State, Result>, typeof S.Path | typeof S.Return>>
 
 export interface Config<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
@@ -195,12 +193,12 @@ export interface Config<
 	async: boolean,
 	pause: (state: SystemState<State, Result>, runs: number) => false | Promise<any>
 }
-	export type ChangesNode<State extends InitialState = { [KeyWords.RS]: undefined }> = Partial<State>
+	export type ChangesNode<State extends InitialState = InitialState> = Partial<State>
 	const ChangesNode = new N<ChangesNode,ChangesNode>(NodeTypes.CH, {
 		typeof(this: S, object, objectType): object is ChangesNode { return Boolean(object && objectType === 'object') },
 		perform(this: S, action, state) { return exitFindNext.call(this, action, S._changes(this, state, action)) }
 	})
-	export type SequenceNode<State extends InitialState = { [KeyWords.RS]: undefined }, Result extends unknown = State[KeyWords.RS], Action extends unknown = ActionNode<State, Result>> = Array<ProcessNode<State, Result, Action>>
+	export type SequenceNode<State extends InitialState = InitialState, Result extends unknown = undefined, Action extends unknown = ActionNode<State, Result>> = Array<ProcessNode<State, Result, Action>>
 	const SequenceNode = new N<SequenceNode, Path>(NodeTypes.SQ, {
 		proceed(this: S, parPath, state, path) {
 			const parActs = get_path_object<SequenceNode>(this.process, parPath)
@@ -211,7 +209,7 @@ export interface Config<
 		execute(this: S, node, state) { return node.length ? [ ...state[S.Path], 0 ] : null },
 		traverse(this: S, item, path, iterate, post) { return item.map((_,i) => iterate([...path,i])) },
 	})
-	export type FunctionNode<State extends InitialState = { [KeyWords.RS]: undefined }, Result extends unknown = State[KeyWords.RS], Action extends unknown = ActionNode<State, Result>> = (state: SystemState<State, Result>) => Action | Promise<Action>
+	export type FunctionNode<State extends InitialState = InitialState, Result extends unknown = undefined, Action extends unknown = ActionNode<State, Result>> = (state: SystemState<State, Result>) => Action | Promise<Action>
 	const FunctionNode = new N<FunctionNode>(NodeTypes.FN, {
 		typeof(this: S, object, objectType, isAction): object is FunctionNode { return (!isAction) && objectType === 'function' },
 		execute(this: S, node, state) { return node(state) },
@@ -226,8 +224,8 @@ export interface Config<
 		perform: exitFindNext
 	})
 	export interface ConditionNode<
-			State extends InitialState = { [KeyWords.RS]: undefined },
-			Result extends unknown = State[KeyWords.RS],
+			State extends InitialState = InitialState,
+			Result extends unknown = undefined,
 			Action extends unknown = ActionNode<State, Result>,
 		> {
 			[KeyWords.IF]: (state: SystemState<State, Result>) => boolean,
@@ -249,8 +247,8 @@ export interface Config<
 		}, path) }
 	})
 	export interface SwitchNode<
-			State extends InitialState = { [KeyWords.RS]: undefined },
-			Result extends unknown = State[KeyWords.RS],
+			State extends InitialState = InitialState,
+			Result extends unknown = undefined,
 			Action extends unknown = ActionNode<State, Result>,
 		> {
 			[KeyWords.SW]: (state: SystemState<State, Result>) => string | number,
@@ -270,8 +268,8 @@ export interface Config<
 		}, path) }
 	})
 	export interface MachineNode<
-			State extends InitialState = { [KeyWords.RS]: undefined },
-			Result extends unknown = State[KeyWords.RS],
+			State extends InitialState = InitialState,
+			Result extends unknown = undefined,
 			Action extends unknown = ActionNode<State, Result>,
 		> {
 			[KeyWords.IT]: ProcessNode<State, Result, Action>
@@ -326,8 +324,8 @@ export type PathUnit = SequenceDirectiveNode | MachineDirectiveNode
 export type Path = Array<PathUnit>
 
 export type ProcessNode<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Action extends unknown = ActionNode<State, Result>,
 > =
 | SequenceNode<State, Result, Action>
@@ -341,22 +339,22 @@ export type ProcessNode<
 | null
 
 export type ActionNode<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 > = DirectiveNode | AbsoluteDirectiveNode | SequenceDirectiveNode | MachineDirectiveNode | ReturnNode<Result>| ChangesNode<State> | null | undefined | void
 
 export const nodes = [ ChangesNode, SequenceNode, FunctionNode, UndefinedNode, EmptyNode, ConditionNode, SwitchNode, MachineNode, DirectiveNode, AbsoluteDirectiveNode, MachineDirectiveNode, SequenceDirectiveNode, ReturnNode, ]
 export class ExtensibleFunction extends Function { constructor(f: Function) { super(); return Object.setPrototypeOf(f, new.target.prototype); }; }
 	export interface SuperSmallStateMachineCore<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 > { process: Process; (...args: Input): Result; }
 export abstract class SuperSmallStateMachineCore<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
@@ -370,9 +368,9 @@ public static readonly kw:       typeof KeyWords = KeyWords
 public static readonly nodeTypes:typeof NodeTypes = NodeTypes
 public static readonly types:    typeof NodeTypes = NodeTypes
 public static readonly config: Config = {
-	defaults: { [KeyWords.RS]: undefined },
+	defaults: {},
 	input: (state = {}) => state,
-	result:  state => state[S.Return] !== undefined ? state[S.Return] : state[KeyWords.RS],
+	result:  state => state[S.Return],
 	strict: false,
 	iterations: 10000,
 	until: state => S.Return in state,
@@ -385,8 +383,8 @@ public static readonly config: Config = {
 	adaptEnd: [],
 }
 public static _closest<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
@@ -398,8 +396,8 @@ public static _closest<
 	})
 }
 public static _changes<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
@@ -422,8 +420,8 @@ public static _changes<
 	}
 }
 public static _proceed<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
@@ -440,8 +438,8 @@ public static _proceed<
 	return this._proceed(instance, state, parPath)
 }
 public static _perform<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
@@ -454,8 +452,8 @@ public static _perform<
 	throw new NodeTypeError(`Unknown action or action type: ${typeof action}${nodeType ? `, nodeType: ${String(nodeType)}` : ''} at [ ${path.map(key => key.toString()).join(', ')} ]`, { instance, state, path, data: { action } })
 }
 public static _execute<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
@@ -468,8 +466,8 @@ public static _execute<
 	return node as Action
 }
 public static _traverse<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
@@ -486,8 +484,8 @@ public static _traverse<
 	return iterate()
 }
 public static _run<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
@@ -496,8 +494,8 @@ public static _run<
 	return this._runSync(instance, ...input)
 }
 public static _runSync<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
@@ -518,8 +516,8 @@ public static _runSync<
 	return adaptResult.call(instance, adaptEnd.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
 }
 public static async _runAsync<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
@@ -543,207 +541,207 @@ public static async _runAsync<
 }
 }
 export abstract class SuperSmallStateMachineChain<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 > extends SuperSmallStateMachineCore<State, Result, Input, Action, Process> {
 	static closest<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(path: Path, ...nodeTypes: Array<NodeDefinition['name'] | Array<NodeDefinition['name']>>) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Path | null => this._closest(instance, path, ...nodeTypes) }
 	static changes<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(state: SystemState<State, Result>, changes: Partial<State>) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): SystemState<State, Result> => this._changes(instance, state, changes) }
 	static proceed<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(state: SystemState<State, Result>, path: Path) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Path | null => this._proceed(instance, state, path) }
 	static perform<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(state: SystemState<State, Result>, action: Action) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): SystemState<State, Result> => this._perform(instance, state, action) }
 	static execute<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(state: SystemState<State, Result>, path?: Path) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Action => this._execute(instance, state, path) }
 	static traverse<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(iterator: ((item: Process, path: Path) => Process), post: ((item: Process, path: Path) => Process)) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>) => this._traverse(instance, iterator, post) }
 	static run<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(...input: Input) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Result => this._run(instance, ...input) }
 	static runSync<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(...input: Input) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Result => this._runSync(instance, ...input) }
 	static runAsync<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(...input: Input) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Promise<Result> => this._runAsync(instance, ...input) }
 	static do<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(process: Process) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'> => ({ process: instance.config.adapt.reduce((prev, modifier) => modifier.call(instance, prev), process), config: instance.config }) }
 	static defaults<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 	NewState extends InitialState = State,
->(defaults: NewState) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<NewState, NewState[KeyWords.RS], [Partial<InputSystemState<NewState>>] | [], ActionNode<NewState, NewState[KeyWords.RS]>, ProcessNode<NewState, NewState[KeyWords.RS], ActionNode<NewState, NewState[KeyWords.RS]>>>, 'process' | 'config'> => ({ process: instance.process as unknown as ProcessNode<NewState, NewState[KeyWords.RS], ActionNode<NewState, NewState[KeyWords.RS]>>, config: { ...instance.config, defaults } as unknown as Config<NewState, NewState[KeyWords.RS], [Partial<InputSystemState<NewState>>] | [], ActionNode<NewState, NewState[KeyWords.RS]>, ProcessNode<NewState, NewState[KeyWords.RS], ActionNode<NewState, NewState[KeyWords.RS]>>>, }) }
+>(defaults: NewState) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<NewState, Result, [Partial<InputSystemState<NewState>>] | [], ActionNode<NewState, Result>, ProcessNode<NewState, Result, ActionNode<NewState, Result>>>, 'process' | 'config'> => ({ process: instance.process as unknown as ProcessNode<NewState, Result, ActionNode<NewState, Result>>, config: { ...instance.config, defaults } as unknown as Config<NewState, Result, [Partial<InputSystemState<NewState>>] | [], ActionNode<NewState, Result>, ProcessNode<NewState, Result, ActionNode<NewState, Result>>>, }) }
 	static input<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 	NewInput extends Array<unknown> = Array<unknown>,
 >(input: (...input: NewInput) => Partial<InputSystemState<State, Result>>) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<State, Result, NewInput, Action, Process>, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, input } as unknown as Config<State, Result, NewInput, Action, Process>, }) }
 	static result<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 	NewResult extends unknown = Result,
 >(result: (state: SystemState<State, Result>) => NewResult) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<State, NewResult, Input, ActionNode<State, NewResult>, ProcessNode<State, NewResult, ActionNode<State, NewResult>>>, 'process' | 'config'> => ({ process: instance.process as unknown as ProcessNode<State, NewResult, ActionNode<State, NewResult>>, config: { ...instance.config, result } as unknown as Config<State, NewResult, Input, ActionNode<State, NewResult>, ProcessNode<State, NewResult, ActionNode<State, NewResult>>>, }) }
 	static unstrict<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, strict: false }, }) }
 	static strict<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 > (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, strict: true }, }) }
 	static strictTypes<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 > (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, strict: S.StrictTypes }, }) }
 	static for<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(iterations: number = 10000) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, iterations }, }) }
 	static until<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(until: Config<State, Result, Input, Action, Process>['until']) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, until }, }) }
 	static forever<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 > (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, iterations: Infinity }, }) }
 	static sync<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 > (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<State, Awaited<Result>, Input, Action, Process>, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, async: false } as unknown as Config<State, Awaited<Result>, Input, Action, Process>, }) }
 	static async<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 > (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<State, Promise<Result>, Input, Action, Process>, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, async: true } as unknown as Config<State, Promise<Result>, Input, Action, Process>, }) }
 	static pause<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(pause: Config<State, Result, Input, Action, Process>['pause'] = (S.config.pause as Config<State, Result, Input, Action, Process>['pause'])) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, pause }, }) }
 	static override<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(override: ((...args: Input) => Result) | null) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, override } }) }
 	static addNode<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(...nodes: any[]) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>) => ({ process: instance.process, config: { ...instance.config, nodes: new NodeDefinitions(...instance.config.nodes.values(),...nodes) }, }) }
 	static adapt<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(...adapters: Array<(process: Process) => Process>) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick< S<State, Result, Input, Action, Process>, 'process' | 'config'> => ({ process: adapters.reduce((prev, adapter) => adapter.call(instance, prev), instance.process), config: { ...instance.config, adapt: [ ...instance.config.adapt, ...adapters ] }, }) }
 	static adaptStart<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(...adapters: Array<(state: SystemState<State, Result>) => SystemState<State, Result>>) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, adaptStart: [ ...instance.config.adaptStart, ...adapters ] }, }) }
 	static adaptEnd<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
 >(...adapters: Array<(state: SystemState<State, Result>) => SystemState<State, Result>>) { return (instance: Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'>): Pick<S<State, Result, Input, Action, Process>, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, adaptEnd: [ ...instance.config.adaptEnd, ...adapters ] }, }) }
 	static with<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
@@ -762,8 +760,8 @@ export abstract class SuperSmallStateMachineChain<
 	}
 }
 export default class S<
-	State extends InitialState = { [KeyWords.RS]: undefined },
-	Result extends unknown = State[KeyWords.RS],
+	State extends InitialState = InitialState,
+	Result extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Result>>] | [],
 	Action extends unknown = ActionNode<State, Result>,
 	Process extends unknown = ProcessNode<State, Result, Action>,
@@ -786,7 +784,7 @@ export default class S<
 	runSync (...input: Input): Result { return S._runSync(this, ...input) }
 	runAsync(...input: Input): Promise<Result> { return S._runAsync(this, ...input) }
 	do(process: Process): S<State, Result, Input, Action, Process> { return this.with(S.do(process)) }
-	defaults<NewState extends InitialState = State>(defaults: NewState): S<NewState, NewState[KeyWords.RS], [Partial<InputSystemState<NewState>>] | [], ActionNode<NewState, NewState[KeyWords.RS]>, ProcessNode<NewState, NewState[KeyWords.RS], ActionNode<NewState, NewState[KeyWords.RS]>>> { return this.with(S.defaults(defaults)) }
+	defaults<NewState extends InitialState = State>(defaults: NewState): S<NewState, Result, [Partial<InputSystemState<NewState>>] | [], ActionNode<NewState, Result>, ProcessNode<NewState, Result, ActionNode<NewState, Result>>> { return this.with(S.defaults(defaults)) }
 	input<NewInput extends Array<unknown> = Array<unknown>>(input: (...input: NewInput) => Partial<InputSystemState<State, Result>>): S<State, Result, NewInput, Action, Process> { return this.with(S.input(input)) }
 	result<NewResult extends unknown = Result>(result: (state: SystemState<State, Result>) => NewResult): S<State, NewResult, Input, ActionNode<State, NewResult>, ProcessNode<State, NewResult, ActionNode<State, NewResult>>> { return this.with(S.result(result)) }
 	get unstrict(): S<State, Result, Input, Action, Process> { return this.with(S.unstrict) }
