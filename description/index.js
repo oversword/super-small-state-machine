@@ -686,7 +686,7 @@ D('Default Nodes',
 		D('Overrides existing properties when provided',
 			E.is(() => {
 				const instance = new S({ output: 'overridden' })
-					.result(({ output, [S.Return]: result = output }) => result)
+					.result(({ output }) => output)
 				return instance({ output: 'start' })
 			}, 'overridden'),
 		),
@@ -694,7 +694,7 @@ D('Default Nodes',
 		D('Adds new properties while preserving existing properties',
 			E.equals(() => {
 				const instance = new S({ output: { newValue: true } })
-					.result(({ output, [S.Return]: result = output }) => result)
+					.result(({ output }) => output)
 				return instance({ output: { existingValue: true } })
 			}, {
 				existingValue: true,
@@ -728,8 +728,7 @@ D('Default Nodes',
 				const instance = new S([
 					({ output }) => ({ output: output + ' addition1' }),
 					({ output }) => ({ output: output + ' addition2' }),
-				])
-					.result(({ output, [S.Return]: result = output }) => result)
+				]).result(({ output }) => output)
 				return instance({ output: 'start' })
 			}, 'start addition1 addition2'),
 		),
@@ -780,7 +779,7 @@ D('Default Nodes',
 		D('A function can return a state change',
 			E.is(() => {
 				const instance = new S(({ output }) => ({ output: output + ' addition' }))
-					.result(({ output, [S.Return]: result = output }) => result)
+					.result(({ output }) => output)
 				return instance({ output: 'start' })
 			}, 'start addition'),
 		),
@@ -792,8 +791,7 @@ D('Default Nodes',
 					{ output: 'skipped' },
 					S.Return,
 					{ output: 'second' },
-				])
-					.result(({ output, [S.Return]: result = output }) => result)
+				]).result(({ output }) => output)
 				return instance({ output: 'start' })
 			}, 'second'),
 		),
@@ -807,8 +805,7 @@ D('Default Nodes',
 			E.is(() => {
 				const instance = new S(() => {
 					// Arbitrary code
-				})
-					.result(({ output, [S.Return]: result = output }) => result)
+				}).result(({ output }) => output)
 				return instance({ output: 'start' })
 			}, 'start'),
 		),
@@ -856,9 +853,11 @@ D('Default Nodes',
 		),
 		D('When used as an action, undefined only moves to the next node.',
 			E.equals(() => {
-				const instance = new S([() => undefined, { output: 'second' }])
-					.result(({ output, [S.Return]: result = output }) => result)
-				return instance({ output: 'start' })
+				const instance = new S([
+					() => undefined,
+					{ [S.Return]: 'second' }
+				])
+				return instance()
 			}, 'second'),
 			JS("static perform = exitFindNext"),
 			TS("perform: exitFindNext")
@@ -882,7 +881,7 @@ D('Default Nodes',
 		D('Empty is a no-op, and will do nothing except move to the next node',
 			E.equals(() => {
 				const instance = new S([null, { output: 'second' }, () => null])
-					.result(({ output, [S.Return]: result = output }) => result)
+					.result(({ output }) => output)
 				return instance({ output: 'start' })
 			}, 'second'),
 			JS("static perform = exitFindNext"),
@@ -922,24 +921,22 @@ D('Default Nodes',
 			D("If truthy, direct to the `'then'` clause if it exists",
 				E.is(() => {
 					const instance = new S({
-						if: ({ output }) => output === 'start',
-						then: { output: 'truthy' },
-						else: { output: 'falsey' },
+						if: ({ input }) => input === 'the same',
+						then: { [S.Return]: 'truthy' },
+						else: { [S.Return]: 'falsey' },
 					})
-						.result(({ output, [S.Return]: result = output }) => result)
-					return instance({ output: 'start' })
+					return instance({ input: 'the same' })
 				}, 'truthy'),
 				CS("return KeyWords.TN in node ? [ ...state[S.Path], KeyWords.TN ] : null"),
 			),
 			D("Otherwise, direct to the `'else'` clause if it exists",
 				E.is(() => {
 					const instance = new S({
-						if: ({ output }) => output === 'start',
-						then: { output: 'truthy' },
-						else: { output: 'falsey' },
+						if: ({ input }) => input === 'the same',
+						then: { [S.Return]: 'truthy' },
+						else: { [S.Return]: 'falsey' },
 					})
-						.result(({ output, [S.Return]: result = output }) => result)
-					return instance({ output: 'other' })
+					return instance({ input: 'NOT the same' })
 				}, 'falsey'),
 				CS("return KeyWords.EL in node ? [ ...state[S.Path], KeyWords.EL ] : null"),
 			),
@@ -970,16 +967,16 @@ D('Default Nodes',
 	D('Switch Node',
 		E.equals(() => {
 			const instance = new S({
-				switch: ({ output }) => output,
+				switch: ({ input }) => input,
 				case: {
-					start: { output: 'first' },
-					two: { output: 'second' },
-					default: { output: 'none' },
+					start: { [S.Return]: 'first' },
+					two: { [S.Return]: 'second' },
+					default: { [S.Return]: 'none' },
 				}
-			}).result(({ output, [S.Return]: result = output }) => result)
-			const output1 = instance({ output: 'start' })
-			const output2 = instance({ output: 'two' })
-			const output3 = instance({ output: 'other' })
+			})
+			const output1 = instance({ input: 'start' })
+			const output2 = instance({ input: 'two' })
+			const output3 = instance({ input: 'other' })
 			return { output1, output2, output3 }
 		}, {
 			output1: 'first',
@@ -1046,8 +1043,7 @@ D('Default Nodes',
 					'next',
 				],
 				next: { output: 'second' }
-			})
-				.result(({ output, [S.Return]: result = output }) => result)
+			}).result(({ output }) => output)
 			return instance({ output: 'start' })
 		}, 'second'),
 		D('This definition is exported by the library as `{ MachineNode }`',
@@ -1097,8 +1093,7 @@ D('Default Nodes',
 						{ [S.Path]: 'next' }
 					],
 					next: { output: 'second' }
-				})
-					.result(({ output, [S.Return]: result = output }) => result)
+				}).result(({ output }) => output)
 				return instance({ output: 'start' })
 			}, 'second'),
 		),
@@ -1110,8 +1105,7 @@ D('Default Nodes',
 						{ [S.Path]: 'next', output: 'ignored' }
 					],
 					next: S.Return
-				})
-					.result(({ output, [S.Return]: result = output }) => result)
+				}).result(({ output }) => output)
 				return instance({ output: 'start' })
 			}, 'first'),
 		),
@@ -1139,30 +1133,25 @@ D('Default Nodes',
 		D('Numbers indicate a goto for a sequence. It is not recommended to use this as it may be unclear, but it must be possible, and should be considered system-only.',
 			E.is(() => {
 				const instance = new S([
-					{ output: 'first' },
-					4,
-					{ output: 'skip' },
-					S.Return,
-					{ output: 'second' },
+					2,
+					{ [S.Return]: 'skipped' },
+					{ [S.Return]: 'second' },
 				])
-					.result(({ output, [S.Return]: result = output }) => result)
-				return instance({ output: 'start' })
+				return instance()
 			}, 'second')
 		),
 		D('Slightly less not recommended is transitioning in a sequence conditonally. If you\'re making an incredibly basic state machine this is acceptable.',
 			E.is(() => {
 				const instance = new S([
 					{
-						if: ({ output }) => output === 'start',
-						then: 3,
-						else: 1,
+						if: ({ input }) => input === 'skip',
+						then: 2,
+						else: 1
 					},
-					{ output: 'skip' },
-					S.Return,
-					{ output: 'second' },
+					{ [S.Return]: 'skipped' },
+					{ [S.Return]: 'second' },
 				])
-					.result(({ output, [S.Return]: result = output }) => result)
-				return instance({ output: 'start' })
+				return instance({ input: 'skip' })
 			}, 'second'),
 		),
 		D('This definition is exported by the library as `{ SequenceDirectiveNode }`',
@@ -1206,8 +1195,7 @@ D('Default Nodes',
 						'next'
 					],
 					next: { output: 'second' }
-				})
-					.result(({ output, [S.Return]: result = output }) => result)
+				}).result(({ output }) => output)
 				return instance({ output: 'start' })
 			}, 'second')
 		),
@@ -1220,8 +1208,7 @@ D('Default Nodes',
 						myState
 					],
 					[myState]: { output: 'second' }
-				})
-					.result(({ output, [S.Return]: result = output }) => result)
+				}).result(({ output }) => output)
 				return instance({ output: 'start' })
 			}, 'second'),
 		),
@@ -1267,10 +1254,9 @@ D('Default Nodes',
 					],
 					next: [
 						{ output: 'skipped' },
-						S.Return,
+						({ output }) => ({ [S.Return]: output }),
 					]
 				})
-					.result(({ output, [S.Return]: result = output }) => result)
 				return instance({ output: 'start' })
 			}, 'first')
 		),
@@ -1283,10 +1269,9 @@ D('Default Nodes',
 					],
 					next: [
 						{ output: 'skipped' },
-						S.Return,
+						({ output }) => ({ [S.Return]: output }),
 					]
 				})
-					.result(({ output, [S.Return]: result = output }) => result)
 				return instance({ output: 'start' })
 			}, 'first')
 		),
@@ -1299,10 +1284,9 @@ D('Default Nodes',
 					],
 					next: [
 						{ output: 'not skipped' },
-						S.Return,
+						({ output }) => ({ [S.Return]: output }),
 					]
 				})
-				.result(({ output, [S.Return]: result = output }) => result)
 				return instance({ output: 'start' })
 			}, 'not skipped'),
 		),
@@ -1328,13 +1312,18 @@ D('Default Nodes',
 	),
 	D('Return Node',
 		'Causes the entire process to terminate immediately and return, setting `S.Return` to `true` on the state.',
-		'If the symbol is used on its own, the it will simply return whatever value is in the "result".',
-		D('It is reccomended you use the result variable for this purpose.',
+		D('If the symbol is used with a `.result` configuration, then it will return according to the given method.',
 			E.is(() => {
 				const instance = new S(S.Return)
-					.result(({ output, [S.Return]: result = output }) => result)
+					.result(({ output }) => output)
 				return instance({ output: 'start' })
 			}, 'start')
+		),
+		D('If the symbol is used on its own, then it will simply return `undefined`.',
+			E.is(() => {
+				const instance = new S(S.Return)
+				return instance({ output: 'start' })
+			}, undefined)
 		),
 		D('Using the return symbol as the key to an object will set the return property to that value before returning.',
 			E.equals(() => {
@@ -1343,7 +1332,6 @@ D('Default Nodes',
 			}, 'custom'),
 			E.equals(() => {
 				const instance = new S({ [S.Return]: 'custom' })
-					.result(({ output, [S.Return]: result = output }) => result)
 				return instance.result(state => state)({ output: 'start' })
 			}, { output: 'start', [S.Return]: 'custom' }, symbols),
 		),
@@ -1360,7 +1348,7 @@ D('Default Nodes',
 			JS("static typeof(object, objectType) { return object === S.Return || Boolean(object && objectType === 'object' && (S.Return in object)) }"),
 			TS("typeof: (object, objectType): object is ReturnNode => object === S.Return || Boolean(object && objectType === 'object' && (S.Return in (object as object))),")
 		),
-		D('Perform a return by setting the result to the return value and setting the `S.Return` flag on the state to `true`',
+		D('Perform a return by setting the `S.Return` property on the state to the return value',
 			JS("static perform(action, state) { return {"),
 			TS("perform: (action, state) => ({"),
 			D('Copy the original properties from the state',
@@ -1424,7 +1412,7 @@ D('Core',
 	TS(`export abstract class SuperSmallStateMachineCore${commonGenericDefinition} extends ExtensibleFunction {`),
 	D('Symbols',
 		D('Return',
-			'Use for intentionally exiting the entire process, can be used in an object to override the result value before returning',
+			'Use for intentionally exiting the entire process, can be used in an object to return a specific value',
 			E.success(() => {
 				return { [S.Return]: "value" }
 			}),
@@ -1469,13 +1457,13 @@ D('Core',
 	D('Config',
 		JS("static config = {"),
 		TS("public static readonly config: Config = {"),
-		D('Initialise the result property as `null` by default',
+		D('Initialise an empty state by default',
 			CS("defaults: {},")
 		),
 		D('Input the initial state by default',
 			CS("input: (state = {}) => state,"),
 		),
-		D('Return the result property by default',
+		D('Return the `S.Return` property by default',
 			CS("result:  state => state[S.Return],")
 		),
 		D('Do not perform strict state checking by default',
@@ -1524,7 +1512,6 @@ D('Core',
 					]
 				}
 			])
-				.result(({ output, [S.Return]: result = output }) => result)
 			return S._closest(instance, [0, 'then', 1], 'sequence')
 		}, [0, 'then']),
 		JS("static _closest (instance, path = [], ...nodeTypes) {"),
@@ -1747,7 +1734,6 @@ D('Core',
 					() => ({ output: 'second' }),
 					() => ({ output: 'third' }),
 				])
-				.result(({ output, [S.Return]: result = output }) => result)
 				return S._execute(instance, { [S.Path]: [1] })
 			}, { output: 'second' })
 		),
@@ -1758,7 +1744,6 @@ D('Core',
 					({ output: 'second' }),
 					({ output: 'third' }),
 				])
-				.result(({ output, [S.Return]: result = output }) => result)
 				return S._execute(instance, { [S.Path]: [1] })
 			}, { output: 'second' })
 		),
@@ -1954,7 +1939,6 @@ D('Chain',
 					]
 				}
 			])
-			.result(({ output, [S.Return]: result = output }) => result)
 			return S.closest([0, 'then', 1], 'sequence')(instance)
 		}, [0, 'then']),
 		JS("static closest(path, ...nodeTypes) { return instance => this._closest(instance, path, ...nodeTypes) }"),
@@ -2033,9 +2017,8 @@ D('Chain',
 		'Defines a process to execute, overrides the existing process.',
 		'Returns a function that will modify a given instance.',
 		E.is(() => {
-			const instance = new S({ output: 'old' })
-				.result(({ output, [S.Return]: result = output }) => result)
-			const newInstance = instance.with(S.do({ output: 'new' }))
+			const instance = new S({ [S.Return]: 'old' })
+			const newInstance = instance.with(S.do({ [S.Return]: 'new' }))
 			return newInstance()
 		}, 'new'),
 		JS("static do(process = null)                    { return instance => ({ process: instance.config.adapt.reduce((prev, modifier) => modifier.call(instance, prev), process), config: instance.config }) }"),
@@ -2045,8 +2028,7 @@ D('Chain',
 		'Defines the initial state to be used for all executions.',
 		'Returns a function that will modify a given instance.',
 		E.is(() => {
-			const instance = new S()
-				.result(({ output, [S.Return]: result = output }) => result)
+			const instance = new S(({ output }) => ({ [S.Return]: output }))
 			const newInstance = instance.with(S.defaults({ output: 'default' }))
 			return newInstance()
 		}, 'default'),
@@ -2067,7 +2049,7 @@ D('Chain',
 		JS("static input(input = S.config.input)         { return instance => ({ process: instance.process, config: { ...instance.config, input }, }) }"),
 		TS(`static input<${commonGenericDefinitionInner}	NewInput extends Array<unknown> = Array<unknown>,\n>(input: (...input: NewInput) => Partial<InputSystemState<State, Result>>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S<State, Result, NewInput, Action, Process>, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, input } as unknown as Config<State, Result, NewInput, Action, Process>, }) }`)
 	),
-	D('S.result(result) <default: (state => state.result)>',
+	D('S.result(result) <default: (state => state[S.Return])>',
 		'Allows the modification of the value the executable will return.',
 		'Returns a function that will modify a given instance.',
 		E.is(() => {
@@ -2154,7 +2136,6 @@ D('Chain',
 					0
 				])
 				.with(
-					S.result(({ output, [S.Return]: result = output }) => result),
 					S.defaults({ output: 0 }),
 					S.for(10)
 				)
@@ -2177,7 +2158,7 @@ D('Chain',
 				}
 			])
 				.with(
-					S.result(({ output, [S.Return]: result = output }) => result),
+					S.result(({ output }) => output),
 					S.until(({ output }) => output === 'exit')
 				)
 			return instance({ output: 0 })
@@ -2199,15 +2180,13 @@ D('Chain',
 		'Execute synchronously and not allow for asynchronous actions.',
 		'Will modify the given instance.',
 		E.is(() => {
-			const instance = new S(async () => ({ output: 'changed' }))
+			const instance = new S(async () => ({ [S.Return]: 'returned' }))
 			.with(
-				S.result(({ output, [S.Return]: result = output }) => result),
 				S.async,
 				S.sync,
-				S.defaults({ output: 'initial' })
 			)
 			return instance()
-		}, 'initial'),
+		}, undefined),
 		JS("static sync                                   (instance) { return ({ process: instance.process, config: { ...instance.config, async: false }, }) }"),
 		TS(`static sync${commonGenericDefinition} (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S<State, Awaited<Result>, Input, Action, Process>, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, async: false } as unknown as Config<State, Awaited<Result>, Input, Action, Process>, }) }`)
 	),
@@ -2215,22 +2194,16 @@ D('Chain',
 		'Execute asynchronously and allow for asynchronous actions.',
 		'Will modify the given instance.',
 		E.is(() => {
-			const instance = new S(async () => ({ output: 'changed' }))
-			.with(
-				S.result(({ output, [S.Return]: result = output }) => result),
-				S.defaults({ output: 'initial' })
-			)
+			const instance = new S(async () => ({ [S.Return]: 'returned' }))
 			return instance()
-		}, 'initial'),
+		}, undefined),
 		E.is(async () => {
-			const instance = new S(async () => ({ output: 'changed' }))
+			const instance = new S(async () => ({ [S.Return]: 'returned' }))
 			.with(
-				S.result(({ output, [S.Return]: result = output }) => result),
-				S.defaults({ output: 'initial' }),
 				S.async
 			)
 			return await instance()
-		}, 'changed'),
+		}, 'returned'),
 		JS("static async                                  (instance) { return ({ process: instance.process, config: { ...instance.config, async: true }, }) }"),
 		TS(`static async${commonGenericDefinition} (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S<State, Promise<Result>, Input, Action, Process>, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, async: true } as unknown as Config<State, Promise<Result>, Input, Action, Process>, }) }`),
 	),
@@ -2244,16 +2217,15 @@ D('Chain',
 		'Overrides the method that will be used when the executable is called.',
 		'Returns a function that will modify a given instance.',
 		E.is(() => {
-			const instance = new S({ output: 'definedResult' })
+			const instance = new S({ [S.Return]: 'definedResult' })
 				.with(
-					S.result(({ output, [S.Return]: result = output }) => result),
-					S.override(function (...args) {
+					S.override(function (a, b, c) {
 						// console.log({ scope: this, args }) // { scope: { process: { output: 'definedResult' } }, args: [1, 2, 3] }
-						return 'customReturn'
+						return `customResult. a: ${a}, b: ${b}, c: ${c}`
 					})
 				)
 			return instance(1, 2, 3)
-		}, 'customReturn'),
+		}, 'customResult. a: 1, b: 2, c: 3'),
 		JS("static override(override = S.config.override){ return instance => ({ process: instance.process, config: { ...instance.config, override } }) }"),
 		TS(`static override${commonGenericDefinition}(override: ((...args: Input) => Result) | null) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, override } }) }`)
 	),
@@ -2292,19 +2264,17 @@ D('Chain',
 			const replaceMe = Symbol('replace me')
 			const instance = new S([
 				replaceMe,
-				S.Return,
 			]).with(
-				S.result(({ output, [S.Return]: result = output }) => result),
 				S.adapt(function (process) {
 					return S.traverse((node) => {
 						if (node === replaceMe)
-							return { output: 'changed' }
+							return { [S.Return]: 'replaced' }
 						return node
 					})(this)
 				})
 			)
-			return instance({ output: 'unchanged' })
-		}, 'changed'),
+			return instance()
+		}, 'replaced'),
 		JS("static adapt(...adapters)                    { return instance => ({ process: adapters.reduce((prev, adapter) => adapter.call(instance, prev), instance.process), config: { ...instance.config, adapt: [ ...instance.config.adapt, ...adapters ] }, }) }"),
 		TS(`static adapt${commonGenericDefinition}(...adapters: Array<(process: Process) => Process>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick< S${commonGenericArguments}, 'process' | 'config'> => ({ process: adapters.reduce((prev, adapter) => adapter.call(instance, prev), instance.process), config: { ...instance.config, adapt: [ ...instance.config.adapt, ...adapters ] }, }) }`)
 	),
@@ -2314,7 +2284,7 @@ D('Chain',
 		E.equals(() => {
 			const instance = new S()
 			.with(
-				S.result(({ output, [S.Return]: result = output }) => result),
+				S.result(({ output }) => output),
 				S.adaptStart(state => ({
 					...state,
 					output: 'overridden'
@@ -2332,7 +2302,7 @@ D('Chain',
 		E.equals(() => {
 			const instance = new S()
 			.with(
-				S.result(({ output, [S.Return]: result = output }) => result),
+				S.result(({ output }) => output),
 				S.adaptEnd(state => ({
 					...state,
 					output: 'overridden'
@@ -2555,9 +2525,8 @@ D('Instance',
 		'Defines a process to execute, overrides the existing process.',
 		'Returns a new instance.',
 		E.is(() => {
-			const instance = new S({ output: 'old' })
-				.result(({ output, [S.Return]: result = output }) => result)
-				.do({ output: 'new' })
+			const instance = new S({ [S.Return]: 'old' })
+				.do({ [S.Return]: 'new' })
 			return instance()
 		}, 'new'),
 		JS("do(process)             { return this.with(S.do(process)) }"),
@@ -2567,8 +2536,7 @@ D('Instance',
 		'Defines the initial state to be used for all executions.',
 		'Returns a new instance.',
 		E.is(() => {
-			const instance = new S()
-				.result(({ output, [S.Return]: result = output }) => result)
+			const instance = new S(({ output }) => ({ [S.Return]: output }))
 				.defaults({ output: 'default' })
 			return instance()
 		}, 'default'),
@@ -2638,8 +2606,10 @@ D('Instance',
 		'Checking state property types when an state change is made.',
 		'Creates a new instance.',
 		E.error(() => {
-			const instance = new S([() => ({ knownVariable: 45 }), ({ knownVariable }) => ({ output: knownVariable })])
-				.result(({ output, [S.Return]: result = output }) => result)
+			const instance = new S([
+				() => ({ knownVariable: 45 }),
+				({ knownVariable }) => ({ [S.Return]: knownVariable })
+			])
 				.defaults({ knownVariable: true })
 				.strictTypes
 			return instance()
@@ -2655,7 +2625,6 @@ D('Instance',
 				({ output }) => ({ output: output + 1}),
 				0
 			])
-				.result(({ output, [S.Return]: result = output }) => result)
 				.defaults({ output: 0 })
 				.for(10)
 			return instance()
@@ -2674,7 +2643,7 @@ D('Instance',
 					else: 0
 				}
 			])
-				.result(({ output, [S.Return]: result = output }) => result)
+				.result(({ output }) => output)
 				.until(({ output }) => output === 'exit')
 			return instance({ output: 0 })
 		}, 'exit'),
@@ -2695,13 +2664,11 @@ D('Instance',
 		'Execute synchronously and not allow for asynchronous actions.',
 		'Creates a new instance.',
 		E.is(() => {
-			const instance = new S(async () => ({ output: 'changed' }))
+			const instance = new S(async () => ({ [S.Return]: 'returned' }))
 				.async
 				.sync
-				.result(({ output, [S.Return]: result = output }) => result)
-				.defaults({ output: 'initial' })
 			return instance()
-		}, 'initial'),
+		}, undefined),
 		JS("get sync()              { return this.with(S.sync) }"),
 		TS("get sync(): S<State, Awaited<Result>, Input, Action, Process> { return this.with(S.sync) }"),
 	),
@@ -2709,18 +2676,14 @@ D('Instance',
 		'Execute asynchronously and allow for asynchronous actions.',
 		'Creates a new instance.',
 		E.is(() => {
-			const instance = new S(async () => ({ output: 'changed' }))
-				.result(({ output, [S.Return]: result = output }) => result)
-				.defaults({ output: 'initial' })
+			const instance = new S(async () => ({ [S.Return]: 'returned' }))
 			return instance()
-		}, 'initial'),
+		}, undefined),
 		E.is(async () => {
-			const instance = new S(async () => ({ output: 'changed' }))
-				.result(({ output, [S.Return]: result = output }) => result)
-				.defaults({ output: 'initial' })
+			const instance = new S(async () => ({ [S.Return]: 'returned' }))
 				.async
 			return await instance()
-		}, 'changed'),
+		}, 'returned'),
 		JS("get async()             { return this.with(S.async) }"),
 		TS("get async(): S<State, Promise<Result>, Input, Action, Process> { return this.with(S.async) }")
 	),
@@ -2734,14 +2697,13 @@ D('Instance',
 		'Overrides the method that will be used when the executable is called.',
 		'Returns a new instance.',
 		E.is(() => {
-			const instance = new S({ output: 'definedResult' })
-				.result(({ output, [S.Return]: result = output }) => result)
-				.override(function (...args) {
+			const instance = new S({ [S.Return]: 'definedResult' })
+				.override(function (a, b, c) {
 					// console.log({ scope: this, args }) // { scope: { process: { output: 'definedResult' } }, args: [1, 2, 3] }
-					return 'customReturn'
+					return `customResult. a: ${a}, b: ${b}, c: ${c}`
 				})
 			return instance(1, 2, 3)
-		}, 'customReturn'),
+		}, 'customResult. a: 1, b: 2, c: 3'),
 		JS("override(override)      { return this.with(S.override(override)) }"),
 		TS(`override(override: ((...args: Input) => Result) | null): S${commonGenericArguments} { return this.with(S.override(override)) }`)
 	),
@@ -2775,17 +2737,15 @@ D('Instance',
 			const replaceMe = Symbol('replace me')
 			const instance = new S([
 				replaceMe,
-				S.Return,
-			])
-			.result(({ output, [S.Return]: result = output }) => result)
-			.adapt(function (process) {
+			]).adapt(function (process) {
 				return S.traverse((node) => {
 					if (node === replaceMe)
-						return { output: 'changed' }
+						return { [S.Return]: 'replaced' }
 					return node
-				})(this) })
-			return instance({ output: 'unchanged' })
-		}, 'changed'),
+				})(this)
+			})
+			return instance()
+		}, 'replaced'),
 		JS("adapt(...adapters)      { return this.with(S.adapt(...adapters)) }"),
 		TS(`adapt(...adapters: Array<(process: Process) => Process>): S${commonGenericArguments} { return this.with(S.adapt(...adapters)) }`)
 	),
@@ -2794,7 +2754,7 @@ D('Instance',
 		'Returns a new instance.',
 		E.equals(() => {
 			const instance = new S()
-				.result(({ output, [S.Return]: result = output }) => result)
+				.result(({ output }) => output)
 				.adaptStart(state => ({
 					...state,
 					output: 'overridden'
@@ -2810,7 +2770,7 @@ D('Instance',
 		'Returns a new instance.',
 		E.equals(() => {
 			const instance = new S()
-				.result(({ output, [S.Return]: result = output }) => result)
+				.result(({ output }) => output)
 				.adaptEnd(state => ({
 					...state,
 					output: 'overridden'
@@ -2840,8 +2800,7 @@ D('Requirements',
 	D('Execution',
 		D('Can execute function',
 			E.is(() => {
-				const instance = new S(({ input }) => ({ output: (input + 5) * 47 }))
-					.result(({ output, [S.Return]: result = output }) => result)
+				const instance = new S(({ input }) => ({ [S.Return]: (input + 5) * 47 }))
 					.defaults({
 						input: -5,
 					})
@@ -2856,7 +2815,7 @@ D('Requirements',
 					({ input }) => ({ output: input * 9 }),
 					({ output }) => ({ output: output + 15 })
 				])
-					.result(({ output, [S.Return]: result = output }) => result)
+					.result(({ output }) => output)
 					.defaults({
 						input: 0,
 					})
@@ -2869,10 +2828,9 @@ D('Requirements',
 			E.is(() => {
 				const instance = new S({
 					if: ({ input }) => input === 25,
-					then: () => ({ output: 44 }),
-					else: () => ({ output: 55 }),
+					then: () => ({ [S.Return]: 44 }),
+					else: () => ({ [S.Return]: 55 }),
 				})
-					.result(({ output, [S.Return]: result = output }) => result)
 					.defaults({
 						input: 0,
 					})
@@ -2885,10 +2843,9 @@ D('Requirements',
 			E.is(() => {
 				const instance = new S({
 					if: ({ input }) => input === 25,
-					then: () => ({ output: 44 }),
-					else: () => ({ output: 55 }),
+					then: () => ({ [S.Return]: 44 }),
+					else: () => ({ [S.Return]: 55 }),
 				})
-					.result(({ output, [S.Return]: result = output }) => result)
 					.defaults({
 						input: 0,
 					})
@@ -2902,13 +2859,12 @@ D('Requirements',
 				const instance = new S({
 					switch: ({ mode }) => mode,
 					case: {
-						first: () => ({ output: 1 }),
-						second: () => ({ output: 2 }),
-						third: () => ({ output: 3 }),
-						default: () => ({ output: -1 }),
+						first: () => ({ [S.Return]: 1 }),
+						second: () => ({ [S.Return]: 2 }),
+						third: () => ({ [S.Return]: 3 }),
+						default: () => ({ [S.Return]: -1 }),
 					}
 				})
-					.result(({ output, [S.Return]: result = output }) => result)
 					.defaults({
 						mode: 'none'
 					})
@@ -2922,13 +2878,12 @@ D('Requirements',
 				const instance = new S({
 					switch: ({ mode }) => mode,
 					case: {
-						first: () => ({ output: 1 }),
-						second: () => ({ output: 2 }),
-						third: () => ({ output: 3 }),
-						default: () => ({ output: -1 }),
+						first: () => ({ [S.Return]: 1 }),
+						second: () => ({ [S.Return]: 2 }),
+						third: () => ({ [S.Return]: 3 }),
+						default: () => ({ [S.Return]: -1 }),
 					}
 				})
-					.result(({ output, [S.Return]: result = output }) => result)
 					.defaults({
 						mode: 'none'
 					})
@@ -2952,10 +2907,10 @@ D('Requirements',
 						{
 							if: ({ output }) => output < 1000,
 							then: 'secondState',
+							else: ({ output }) => ({ [S.Return]: output })
 						}
 					]
 				})
-					.result(({ output, [S.Return]: result = output }) => result)
 					.defaults({
 						input: 0,
 					})
@@ -2973,9 +2928,9 @@ D('Requirements',
 					{
 						if: ({ input }) => input > 0,
 						then: 1,
+						else: ({ output }) => ({ [S.Return]: output })
 					}
 				])
-					.result(({ output, [S.Return]: result = output }) => result)
 					.defaults({
 						output: 0,
 						input: 1,
@@ -3047,7 +3002,7 @@ D('Requirements',
 					},
 					then: ({ input }) => ({ output: input }),
 				})
-					.result(({ output, [S.Return]: result = output }) => result)
+					.result(({ output }) => output)
 					.defaults({
 						input: 0,
 					})
@@ -3064,15 +3019,11 @@ D('Requirements',
 				const instance = new S({
 					initial: { [S.Path]: ['second',0] },
 					second: [
-						({ output }) => ({ output: output + 4 })
+						({ input }) => ({ [S.Return]: input + 4 })
 					]
 				})
-					.defaults({
-						output: 0,
-					})
-					.result(({ output, [S.Return]: result = output }) => result)
 				return instance({
-					output: 5,
+					input: 5,
 				})
 			}, 9)
 		),
@@ -3081,15 +3032,11 @@ D('Requirements',
 				const instance = new S({
 					initial: { [S.Path]: 'second' },
 					second: [
-						({ output }) => ({ output: output + 4 })
+						({ input }) => ({ [S.Return]: input + 4 })
 					]
 				})
-					.defaults({
-						output: 0,
-					})
-					.result(({ output, [S.Return]: result = output }) => result)
 				return instance({
-					output: 5,
+					input: 5,
 				})
 			}, 9)
 		),
@@ -3103,14 +3050,11 @@ D('Requirements',
 					final: [
 						{
 							if: ({ output }) => output < 7,
-							then: 'initial'
+							then: 'initial',
+							else: ({ output }) => ({ [S.Return]: output })
 						}
 					]
 				})
-					.defaults({
-						output: 9,
-					})
-					.result(({ output, [S.Return]: result = output }) => result)
 				return instance({
 					output: 0,
 				})
@@ -3127,14 +3071,11 @@ D('Requirements',
 					[testSymbol]: [
 						{
 							if: ({ output }) => output < 7,
-							then: 'initial'
+							then: 'initial',
+							else: ({ output }) => ({ [S.Return]: output })
 						}
 					]
 				})
-					.defaults({
-						output: 9,
-					})
-					.result(({ output, [S.Return]: result = output }) => result)
 				return instance({
 					output: 0,
 				})
@@ -3146,13 +3087,10 @@ D('Requirements',
 					({ output }) => ({ output: output + 1 }),
 					{
 						if: ({ output }) => output < 7,
-						then: 0
+						then: 0,
+						else: ({ output }) => ({ [S.Return]: output })
 					}
 				])
-					.defaults({
-						output: 9,
-					})
-					.result(({ output, [S.Return]: result = output }) => result)
 				return instance({
 					output: 0,
 				})
@@ -3164,14 +3102,10 @@ D('Requirements',
 					({ output }) => ({ output: output - 1 }),
 					{
 						if: ({ output }) => output <= 0,
-						then: S.Return,
+						then: ({ output }) => ({ [S.Return]: output }),
 						else: 0
 					}
 				])
-					.defaults({
-						output: -1,
-					})
-					.result(({ output, [S.Return]: result = output }) => result)
 				return instance({
 					output: 6,
 				})
@@ -3202,7 +3136,7 @@ D('Requirements',
 					.defaults({
 						output: 0,
 					})
-					.result(({ output, [S.Return]: result = output }) => result)
+					.result(({ output }) => output)
 				return instance({
 					output: 99
 				})
@@ -3216,15 +3150,11 @@ D('Requirements',
 				const instance = new S({
 					initial: () => ['second',0],
 					second: [
-						({ output }) => ({ output: output + 4 })
+						({ input }) => ({ [S.Return]: input + 4 })
 					]
 				})
-				.result(({ output, [S.Return]: result = output }) => result)
-					.defaults({
-						output: 0,
-					})
 				return instance({
-					output: 5,
+					input: 5,
 				})
 			}, 9)
 		),
@@ -3233,15 +3163,11 @@ D('Requirements',
 				const instance = new S({
 					initial: () => ({ [S.Path]: ['second',0] }),
 					second: [
-						({ output }) => ({ output: output + 4 })
+						({ input }) => ({ [S.Return]: input + 4 })
 					]
 				})
-				.result(({ output, [S.Return]: result = output }) => result)
-					.defaults({
-						output: 0,
-					})
 				return instance({
-					output: 5,
+					input: 5,
 				})
 			}, 9)
 		),
@@ -3250,15 +3176,11 @@ D('Requirements',
 				const instance = new S({
 					initial: () => ({ [S.Path]: 'second' }),
 					second: [
-						({ output }) => ({ output: output + 4 })
+						({ input }) => ({ [S.Return]: input + 4 })
 					]
 				})
-				.result(({ output, [S.Return]: result = output }) => result)
-					.defaults({
-						output: 0,
-					})
 				return instance({
-					output: 5,
+					input: 5,
 				})
 			}, 9)
 		),
@@ -3272,14 +3194,11 @@ D('Requirements',
 					final: [
 						{
 							if: ({ output }) => output < 7,
-							then: () => 'initial'
+							then: () => 'initial',
+							else: ({ output }) => ({ [S.Return]: output })
 						}
 					]
 				})
-				.result(({ output, [S.Return]: result = output }) => result)
-					.defaults({
-						output: 9,
-					})
 				return instance({
 					output: 0,
 				})
@@ -3296,14 +3215,11 @@ D('Requirements',
 					[testSymbol]: [
 						{
 							if: ({ output }) => output < 7,
-							then: () => 'initial'
+							then: () => 'initial',
+							else: ({ output }) => ({ [S.Return]: output })
 						}
 					]
 				})
-				.result(({ output, [S.Return]: result = output }) => result)
-					.defaults({
-						output: 9,
-					})
 				return instance({
 					output: 0,
 				})
@@ -3315,13 +3231,10 @@ D('Requirements',
 					({ output }) => ({ output: output + 1 }),
 					{
 						if: ({ output }) => output < 7,
-						then: () => 0
+						then: () => 0,
+						else: ({ output }) => ({ [S.Return]: output })
 					}
 				])
-				.result(({ output, [S.Return]: result = output }) => result)
-					.defaults({
-						output: 9,
-					})
 				return instance({
 					output: 0,
 				})
@@ -3337,7 +3250,7 @@ D('Requirements',
 						else: 0
 					}
 				])
-				.result(({ output, [S.Return]: result = output }) => result)
+					.result(({ output }) => output)
 					.defaults({
 						output: -1,
 					})
@@ -3356,7 +3269,7 @@ D('Requirements',
 						else: 0
 					}
 				])
-				.result(({ output, [S.Return]: result = output }) => result)
+					.result(({ output, [S.Return]: result = output }) => result)
 					.defaults({
 						output: -1,
 					})
@@ -3371,7 +3284,7 @@ D('Requirements',
 					.defaults({
 						output: 0,
 					})
-					.result(({ output, [S.Return]: result = output }) => result)
+					.result(({ output }) => output)
 				return instance({
 					output: 99
 				})
@@ -3400,12 +3313,13 @@ D('Requirements',
 								if: ({ input }) => input > 1,
 								then: 0
 							}
-						]).defaults({
-							output: 1,
-							input: 1,
-						}))
-						.input(({ realInput }) => ({ input: realInput, output: 1 }))
-						.result(({output}) => ({ output })),
+						])
+							.defaults({
+								output: 1,
+								input: 1,
+							}))
+							.input(({ realInput }) => ({ input: realInput, output: 1 }))
+							.result(({ output }) => ({ output })),
 						({ realInput }) => ({ realInput: realInput - 1}),
 						({ stack,output }) => ({ stack: [...stack,output]}),
 						'testEnd'
@@ -3473,8 +3387,7 @@ D('Requirements',
 						subState: {},
 						subPath: [],
 						subDone: false,
-					})
-					.result(({ output, [S.Return]: result = output }) => result)
+					}).result(({ output, [S.Return]: result = output }) => result)
 				return instance({
 					input: 10,
 				})
@@ -3491,14 +3404,14 @@ D('Examples',
 				({ input }) => ({ input: input-1 }),
 				{
 					if: ({ input }) => input > 1,
-					then: 0
+					then: 0,
+					else: ({ output }) => ({ [S.Return]: output })
 				}
 			],)
 				.defaults({
 					output: 1,
 					input: 1,
 				})
-				.result(({ output, [S.Return]: result = output }) => result)
 			return instance({
 				input: 7
 			})
@@ -3527,7 +3440,7 @@ D('Examples',
 					{
 						if: ({ input }) => input > 1,
 						then: 'fib',
-						else: S.Return,
+						else: ({ output }) => ({ [S.Return]: output })
 					}
 				]
 			})
@@ -3536,7 +3449,6 @@ D('Examples',
 					output: 0,
 					output2: 0,
 				})
-				.result(({ output, [S.Return]: result = output }) => result)
 			return instance({
 				input: 12,
 			})
@@ -3564,7 +3476,7 @@ D('Examples',
 						exitOrLoop: {
 							if: ({ input }) => input > 1,
 							then: 'fib',
-							else: S.Return,
+							else: ({ output }) => ({ [S.Return]: output })
 						}
 					},
 					actions: {
@@ -3588,7 +3500,6 @@ D('Examples',
 					output: 0,
 					output2: 0,
 				})
-				.result(({ output, [S.Return]: result = output }) => result)
 			return instance({
 				input: 12,
 			})
@@ -3618,13 +3529,14 @@ D('Examples',
 						then: 0,
 					},
 					({ output }) => ({ [S.Return]: output.join('_') })
-				]).defaults( {
-					input: 0,
-					output: []
-				})
-				.result(({ output, [S.Return]: result = output }) => result)
-				.async
-				.with(parallelPlugin)
+				])
+					.defaults( {
+						input: 0,
+						output: []
+					})
+					.result(({ output, [S.Return]: result = output }) => result)
+					.async
+					.with(parallelPlugin)
 				return instance({
 					input: 10 
 				})
@@ -3658,7 +3570,6 @@ D('Examples',
 						input: 0,
 						output: []
 					})
-					.result(({ output, [S.Return]: result = output }) => result)
 					.with(parallelPlugin)
 				return instance({
 					input: 10 
@@ -3709,7 +3620,6 @@ D('Examples',
 						output: 0,
 						output2: 0,
 					})
-					.result(({ output, [S.Return]: result = output }) => result)
 					.async
 					.with(eventsPlugin({
 						nextNumber: {},
@@ -3773,7 +3683,6 @@ D('Examples',
 						output: 0,
 						output2: 0,
 					})
-					.result(({ output, [S.Return]: result = output }) => result)
 					.async
 					.with(describedPlugin({
 						actions:{
