@@ -20,7 +20,7 @@ export class ParallelNode extends SequenceNode {
 		return Promise.all(node.map(parallel => new S(parallel, this.config).async.input((state) => {
 			const { [S.Path]:__path, [S.Changes]: __changes, [S.Return]: __return, ...pureState } = state
 			return pureState
-		}).result((state) => state[S.Changes])(state)))
+		}).output((state) => state[S.Changes])(state)))
 			.then(res => deep_merge_object({}, ...res))
 	}
 	static traverse(item, path, iterate, post) {

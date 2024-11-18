@@ -19,7 +19,7 @@ export class StateMachineInstance /*extends Promise*/ {
 		this.#resolve = promiseResolve
 		this.#reject = promiseReject
 
-		this.#runner = runner.override(null).result(a => a).input(a => a).async
+		this.#runner = runner.override(null).output(a => a).input(a => a).async
 		const modifiedInput = runner.config.input(...input)
 		this.#partialPromise = this.#runner(modifiedInput)
 		try {
@@ -116,6 +116,6 @@ const eventsPlugin = events => instance => {
     .override(function (...input) { return new StateMachineInstance(this, ...input) })
     .addNode(EventEmitterNode)
 		.addNode(EventHandlerNode)
-    .adaptStart(state => ({ event: null, ...state }))
+    .before(state => ({ event: null, ...state }))
 }
 export default eventsPlugin

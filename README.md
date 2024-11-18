@@ -25,15 +25,15 @@ Conditions (including switch) have clauses
 Process
 
 ```javascript
-const instance = new S({ output: 'value' })
-return instance.process // { output: 'value' }
+const instance = new S({ result: 'value' })
+return instance.process // { result: 'value' }
 ```
 
 Config
 
 ```javascript
 const instance = new S()
-return instance.config // { defaults: { output: undefined }, iterations: 10000, strict: false, async: false }
+return instance.config // { defaults: { result: undefined }, iterations: 10000, strict: false, async: false }
 ```
 
 ```javascript
@@ -41,9 +41,9 @@ const instance = new S()
 const modifiedInstance = instance
 	.async
 	.for(10)
-	.defaults({ output: 'other' })
+	.defaults({ result: 'other' })
 	.strict
-return modifiedInstance.config // { defaults: { output: 'other' }, iterations: 10, strict: true, async: true }
+return modifiedInstance.config // { defaults: { result: 'other' }, iterations: 10, strict: true, async: true }
 ```
 
 ## Instance Constructor
@@ -76,7 +76,7 @@ Neither of these arguments are required, and it is not recommended to configure 
 const instance = new S(process)
 	.defaults({})
 	.input()
-	.result() // Succeeds
+	.output() // Succeeds
 ```
 
 Create an ExtensibleFunction that can execute the `run` or `override` method in scope of the new SuperSmallStateMachine instance.
@@ -96,9 +96,9 @@ Returns `null` if no ancestor matches the one of the given `nodeTypes`.
 ```javascript
 const instance = new S([
 	{
-		if: ({ output }) => output === 'start',
+		if: ({ result }) => result === 'start',
 		then: [
-			{ output: 'second' },
+			{ result: 'second' },
 			S.Return,
 		]
 	}
@@ -116,7 +116,7 @@ This will ignore any symbols in `changes`, and forward the important symbols of 
 
 ```javascript
 const instance = new S()
-const output = instance.changes({
+const result = instance.changes({
 	[S.Path]: ['preserved'],
 	[S.Changes]: {},
 	preserved: 'value',
@@ -126,7 +126,7 @@ const output = instance.changes({
 	[S.Changes]: { ignored: true },
 	common: 'changed',
 })
-return output // { common: 'changed', preserved: 'value', [S.Path]: [ 'preserved' ], [S.Changes]: { ignored: undefined, common: 'changed' } }
+return result // { common: 'changed', preserved: 'value', [S.Path]: [ 'preserved' ], [S.Changes]: { ignored: undefined, common: 'changed' } }
 ```
 
 ## instance.proceed (state = {}, path = state[S.Path] || [])
@@ -186,8 +186,8 @@ Defines the initial state to be used for all executions.
 Returns a new instance.
 
 ```javascript
-const instance = new S(({ output }) => ({ [S.Return]: output }))
-	.defaults({ output: 'default' })
+const instance = new S(({ result }) => ({ [S.Return]: result }))
+	.defaults({ result: 'default' })
 return instance() // 'default'
 ```
 
@@ -204,7 +204,7 @@ const instance = new S(({ first, second }) => ({ [S.Return]: `${first} then ${se
 return instance('this', 'that') // 'this then that'
 ```
 
-## instance.result(result) <default: (state => state.result)>
+## instance.output(output) <default: (state => state.output)>
 
 Allows the modification of the value the executable will return.
 
@@ -212,7 +212,7 @@ Returns a new instance.
 
 ```javascript
 const instance = new S(({ myReturnValue }) => ({ myReturnValue: myReturnValue + ' extra' }))
-	.result(state => state.myReturnValue)
+	.output(state => state.myReturnValue)
 return instance({ myReturnValue: 'start' }) // 'start extra'
 ```
 
@@ -280,10 +280,10 @@ Returns a new instance.
 
 ```javascript
 const instance = new S([
-	({ output }) => ({ output: output + 1}),
+	({ result }) => ({ result: result + 1}),
 	0
 ])
-	.defaults({ output: 0 })
+	.defaults({ result: 0 })
 	.for(10)
 return instance() // MaxIterationsError
 ```
@@ -294,16 +294,16 @@ Stops execution of the machine once the given condition is met, and attempts to 
 
 ```javascript
 const instance = new S([
-	({ output }) => ({ output: output + 1 }),
+	({ result }) => ({ result: result + 1 }),
 	{
-		if: ({ output }) => output > 4,
-		then: [{ output: 'exit' }, { output:'ignored' }],
+		if: ({ result }) => result > 4,
+		then: [{ result: 'exit' }, { result:'ignored' }],
 		else: 0
 	}
 ])
-	.result(({ output }) => output)
-	.until(({ output }) => output === 'exit')
-return instance({ output: 0 }) // 'exit'
+	.output(({ result }) => result)
+	.until(({ result }) => result === 'exit')
+return instance({ result: 0 }) // 'exit'
 ```
 
 ## instance.forever
@@ -362,7 +362,7 @@ Returns a new instance.
 ```javascript
 const instance = new S({ [S.Return]: 'definedResult' })
 	.override(function (a, b, c) {
-		// console.log({ scope: this, args }) // { scope: { process: { output: 'definedResult' } }, args: [1, 2, 3] }
+		// console.log({ scope: this, args }) // { scope: { process: { result: 'definedResult' } }, args: [1, 2, 3] }
 		return `customResult. a: ${a}, b: ${b}, c: ${c}`
 	})
 return instance(1, 2, 3) // 'customResult. a: 1, b: 2, c: 3'
@@ -382,16 +382,16 @@ class SpecialNode extends NodeDefinition {
 	static execute(){ return { [S.Return]: 'specialValue' } }
 }
 const instance = new S({ [specialSymbol]: true })
-	.result(({ output, [S.Return]: result = output }) => result)
+	.output(({ result, [S.Return]: output = result }) => output)
 	.addNode(SpecialNode)
-return instance({ output: 'start' }) // 'specialValue'
+return instance({ result: 'start' }) // 'specialValue'
 ```
 
 ```javascript
 const specialSymbol = Symbol('My Symbol')
 const instance = new S({ [specialSymbol]: true })
-	.result(({ output, [S.Return]: result = output }) => result)
-return instance({ output: 'start' }) // 'start'
+	.output(({ result, [S.Return]: output = result }) => output)
+return instance({ result: 'start' }) // 'start'
 ```
 
 ## instance.adapt(...adapters)
@@ -412,7 +412,7 @@ const instance = new S([
 return instance() // 'replaced'
 ```
 
-## instance.adaptStart(...adapters)
+## instance.before(...adapters)
 
 Transforms the state before execution.
 
@@ -420,15 +420,15 @@ Returns a new instance.
 
 ```javascript
 const instance = new S()
-	.result(({ output }) => output)
-	.adaptStart(state => ({
+	.output(({ result }) => result)
+	.before(state => ({
 		...state,
-		output: 'overridden'
+		result: 'overridden'
 	}))
-return instance({ output: 'input' }) // 'overridden'
+return instance({ result: 'input' }) // 'overridden'
 ```
 
-## instance.adaptEnd(...adapters)
+## instance.after(...adapters)
 
 Transforms the state after execution.
 
@@ -436,12 +436,12 @@ Returns a new instance.
 
 ```javascript
 const instance = new S()
-	.result(({ output }) => output)
-	.adaptEnd(state => ({
+	.output(({ result }) => result)
+	.after(state => ({
 		...state,
-		output: 'overridden'
+		result: 'overridden'
 	}))
-return instance({ output: 'start' }) // 'overridden'
+return instance({ result: 'start' }) // 'overridden'
 ```
 
 ## instance.with(...adapters)
@@ -467,9 +467,9 @@ Returns `null` if no ancestor matches the one of the given `nodeTypes`.
 ```javascript
 const instance = new S([
 	{
-		if: ({ output }) => output === 'start',
+		if: ({ result }) => result === 'start',
 		then: [
-			{ output: 'second' },
+			{ result: 'second' },
 			S.Return,
 		]
 	}
@@ -487,7 +487,7 @@ This will ignore any symbols in `changes`, and forward the important symbols of 
 
 ```javascript
 const instance = new S()
-const output = S.changes({
+const result = S.changes({
 	[S.Path]: ['preserved'],
 	[S.Changes]: {},
 	preserved: 'value',
@@ -497,7 +497,7 @@ const output = S.changes({
 	[S.Changes]: { ignored: true },
 	common: 'changed',
 })(instance)
-return output // { common: 'changed', preserved: 'value', [S.Path]: [ 'preserved' ], [S.Changes]: { ignored: undefined, common: 'changed' } }
+return result // { common: 'changed', preserved: 'value', [S.Path]: [ 'preserved' ], [S.Changes]: { ignored: undefined, common: 'changed' } }
 ```
 
 ## S.proceed (state = {}, path = state[S.Path] || [])
@@ -557,8 +557,8 @@ Defines the initial state to be used for all executions.
 Returns a function that will modify a given instance.
 
 ```javascript
-const instance = new S(({ output }) => ({ [S.Return]: output }))
-const newInstance = instance.with(S.defaults({ output: 'default' }))
+const instance = new S(({ result }) => ({ [S.Return]: result }))
+const newInstance = instance.with(S.defaults({ result: 'default' }))
 return newInstance() // 'default'
 ```
 
@@ -577,7 +577,7 @@ const instance = new S(({ first, second }) => ({ [S.Return]: `${first} then ${se
 return instance('this', 'that') // 'this then that'
 ```
 
-## S.result(result) <default: (state => state[S.Return])>
+## S.output(output) <default: (state => state[S.Return])>
 
 Allows the modification of the value the executable will return.
 
@@ -585,7 +585,7 @@ Returns a function that will modify a given instance.
 
 ```javascript
 const instance = new S(({ myReturnValue }) => ({ myReturnValue: myReturnValue + ' extra' }))
-	.with(S.result(state => state.myReturnValue))
+	.with(S.output(state => state.myReturnValue))
 return instance({ myReturnValue: 'start' }) // 'start extra'
 ```
 
@@ -670,11 +670,11 @@ A limited number of iterations will cause the machine to exit early
 
 ```javascript
 const instance = new S([
-	({ output }) => ({ output: output + 1}),
+	({ result }) => ({ result: result + 1}),
 	0
 ])
 .with(
-	S.defaults({ output: 0 }),
+	S.defaults({ result: 0 }),
 	S.for(10)
 )
 return instance() // MaxIterationsError
@@ -688,18 +688,18 @@ Returns a function that will modify a given instance.
 
 ```javascript
 const instance = new S([
-	({ output }) => ({ output: output + 1 }),
+	({ result }) => ({ result: result + 1 }),
 	{
-		if: ({ output }) => output > 4,
-		then: [{ output: 'exit' }, { output:'ignored' }],
+		if: ({ result }) => result > 4,
+		then: [{ result: 'exit' }, { result:'ignored' }],
 		else: 0
 	}
 ])
 	.with(
-		S.result(({ output }) => output),
-		S.until(({ output }) => output === 'exit')
+		S.output(({ result }) => result),
+		S.until(({ result }) => result === 'exit')
 	)
-return instance({ output: 0 }) // 'exit'
+return instance({ result: 0 }) // 'exit'
 ```
 
 ## S.forever
@@ -763,7 +763,7 @@ Returns a function that will modify a given instance.
 const instance = new S({ [S.Return]: 'definedResult' })
 	.with(
 		S.override(function (a, b, c) {
-			// console.log({ scope: this, args }) // { scope: { process: { output: 'definedResult' } }, args: [1, 2, 3] }
+			// console.log({ scope: this, args }) // { scope: { process: { result: 'definedResult' } }, args: [1, 2, 3] }
 			return `customResult. a: ${a}, b: ${b}, c: ${c}`
 		})
 	)
@@ -785,19 +785,19 @@ class SpecialNode extends NodeDefinition {
 }
 const instance = new S({ [specialSymbol]: true })
 	.with(
-		S.result(({ output, [S.Return]: result = output }) => result),
+		S.output(({ result, [S.Return]: output = result }) => output),
 		S.addNode(SpecialNode)
 	)
-return instance({ output: 'start' }) // 'specialValue'
+return instance({ result: 'start' }) // 'specialValue'
 ```
 
 ```javascript
 const specialSymbol = Symbol('My Symbol')
 const instance = new S({ [specialSymbol]: true })
 	.with(
-		S.result(({ output, [S.Return]: result = output }) => result)
+		S.output(({ result, [S.Return]: output = result }) => output)
 	)
-return instance({ output: 'start' }) // 'start'
+return instance({ result: 'start' }) // 'start'
 ```
 
 ## S.adapt(...adapters)
@@ -822,7 +822,7 @@ const instance = new S([
 return instance() // 'replaced'
 ```
 
-## S.adaptStart(...adapters)
+## S.before(...adapters)
 
 Transforms the state before execution.
 
@@ -831,16 +831,16 @@ Returns a function that will modify a given instance.
 ```javascript
 const instance = new S()
 .with(
-	S.result(({ output }) => output),
-	S.adaptStart(state => ({
+	S.output(({ result }) => result),
+	S.before(state => ({
 		...state,
-		output: 'overridden'
+		result: 'overridden'
 	}))
 )
-return instance({ output: 'input' }) // 'overridden'
+return instance({ result: 'input' }) // 'overridden'
 ```
 
-## S.adaptEnd(...adapters)
+## S.after(...adapters)
 
 Transforms the state after execution.
 
@@ -849,13 +849,13 @@ Returns a function that will modify a given instance.
 ```javascript
 const instance = new S()
 .with(
-	S.result(({ output }) => output),
-	S.adaptEnd(state => ({
+	S.output(({ result }) => result),
+	S.after(state => ({
 		...state,
-		output: 'overridden'
+		result: 'overridden'
 	}))
 )
-return instance({ output: 'input' }) // 'overridden'
+return instance({ result: 'input' }) // 'overridden'
 ```
 
 ## S.with(...adapters)
@@ -953,9 +953,9 @@ Returns `null` if no ancestor matches the one of the given `nodeTypes`.
 ```javascript
 const instance = new S([
 	{
-		if: ({ output }) => output === 'start',
+		if: ({ result }) => result === 'start',
 		then: [
-			{ output: 'second' },
+			{ result: 'second' },
 			S.Return,
 		]
 	}
@@ -981,7 +981,7 @@ This will ignore any symbols in `changes`, and forward the important symbols of 
 
 ```javascript
 const instance = new S()
-const output = S._changes(instance, {
+const result = S._changes(instance, {
 	[S.Path]: ['preserved'],
 	[S.Changes]: {},
 	preserved: 'value',
@@ -991,7 +991,7 @@ const output = S._changes(instance, {
 	[S.Changes]: { ignored: true },
 	common: 'changed',
 })
-return output // { common: 'changed', preserved: 'value', [S.Path]: [ 'preserved' ], [S.Changes]: { ignored: undefined, common: 'changed' } }
+return result // { common: 'changed', preserved: 'value', [S.Path]: [ 'preserved' ], [S.Changes]: { ignored: undefined, common: 'changed' } }
 ```
 
 ### If the strict state flag is truthy, perform state checking logic
@@ -1119,22 +1119,22 @@ Executes the node in the process at the state's current path and returns it's ac
 
 ```javascript
 const instance = new S([
-	() => ({ output: 'first' }),
-	() => ({ output: 'second' }),
-	() => ({ output: 'third' }),
+	() => ({ result: 'first' }),
+	() => ({ result: 'second' }),
+	() => ({ result: 'third' }),
 ])
-return S._execute(instance, { [S.Path]: [1] }) // { output: 'second' }
+return S._execute(instance, { [S.Path]: [1] }) // { result: 'second' }
 ```
 
 If the node is not executable it will be returned as the action.
 
 ```javascript
 const instance = new S([
-	({ output: 'first' }),
-	({ output: 'second' }),
-	({ output: 'third' }),
+	({ result: 'first' }),
+	({ result: 'second' }),
+	({ result: 'third' }),
 ])
-return S._execute(instance, { [S.Path]: [1] }) // { output: 'second' }
+return S._execute(instance, { [S.Path]: [1] }) // { result: 'second' }
 ```
 
 Get the node at the given `path`
@@ -1175,7 +1175,7 @@ Traverse it
 
 If it cannot be traversed, it is a leaf node
 
-Call the primary method and return the result
+Call the primary method
 
 ## S._run (instance, ...input)
 
@@ -1215,7 +1215,7 @@ Throw new MaxIterationsError
 
 Execute the current node on the process and perform any required actions. Updating the currentState
 
-When returning, run the ends state adapters, then the result adapter to complete execution.
+When returning, run the ends state adapters, then the output adapter to complete execution.
 
 ## S._runAsync (instance, ...input)
 
@@ -1247,7 +1247,7 @@ Throw new MaxIterationsError
 
 Execute the current node on the process and perform any required actions. Updating the currentState
 
-When returning, run the ends state adapters, then the result adapter to complete execution.
+When returning, run the ends state adapters, then the output adapter to complete execution.
 
 # Default Nodes
 
@@ -1258,17 +1258,17 @@ Updates the state by deep-merging the properties. Arrays will not be deep merged
 Overrides existing properties when provided
 
 ```javascript
-const instance = new S({ output: 'overridden' })
-	.result(({ output }) => output)
-return instance({ output: 'start' }) // 'overridden'
+const instance = new S({ result: 'overridden' })
+	.output(({ result }) => result)
+return instance({ result: 'start' }) // 'overridden'
 ```
 
 Adds new properties while preserving existing properties
 
 ```javascript
-const instance = new S({ output: { newValue: true } })
-	.result(({ output }) => output)
-return instance({ output: { existingValue: true } }) // { existingValue: true, newValue: true }
+const instance = new S({ result: { newValue: true } })
+	.output(({ result }) => result)
+return instance({ result: { existingValue: true } }) // { existingValue: true, newValue: true }
 ```
 
 This definition is exported by the library as `{ ChangesNode }`
@@ -1293,10 +1293,10 @@ Sequences will execute each index in order
 
 ```javascript
 const instance = new S([
-	({ output }) => ({ output: output + ' addition1' }),
-	({ output }) => ({ output: output + ' addition2' }),
-]).result(({ output }) => output)
-return instance({ output: 'start' }) // 'start addition1 addition2'
+	({ result }) => ({ result: result + ' addition1' }),
+	({ result }) => ({ result: result + ' addition2' }),
+]).output(({ result }) => result)
+return instance({ result: 'start' }) // 'start addition1 addition2'
 ```
 
 This definition is exported by the library as `{ SequenceNode }`
@@ -1332,22 +1332,22 @@ You can return any of the previously mentioned action types from a function, or 
 A function can return a state change
 
 ```javascript
-const instance = new S(({ output }) => ({ output: output + ' addition' }))
-	.result(({ output }) => output)
-return instance({ output: 'start' }) // 'start addition'
+const instance = new S(({ result }) => ({ result: result + ' addition' }))
+	.output(({ result }) => result)
+return instance({ result: 'start' }) // 'start addition'
 ```
 
 A function can return a directive
 
 ```javascript
 const instance = new S([
-	{ output: 'first' },
+	{ result: 'first' },
 	() => 4,
-	{ output: 'skipped' },
+	{ result: 'skipped' },
 	S.Return,
-	{ output: 'second' },
-]).result(({ output }) => output)
-return instance({ output: 'start' }) // 'second'
+	{ result: 'second' },
+]).output(({ result }) => result)
+return instance({ result: 'start' }) // 'second'
 ```
 
 A function can return a return statement
@@ -1362,8 +1362,8 @@ A function can do anything without needing to return (set and forget)
 ```javascript
 const instance = new S(() => {
 	// Arbitrary code
-}).result(({ output }) => output)
-return instance({ output: 'start' }) // 'start'
+}).output(({ result }) => result)
+return instance({ result: 'start' }) // 'start'
 ```
 
 This definition is exported by the library as `{ FunctionNode }`
@@ -1428,9 +1428,9 @@ Empty is the `null` keyword.
 Empty is a no-op, and will do nothing except move to the next node
 
 ```javascript
-const instance = new S([null, { output: 'second' }, () => null])
-	.result(({ output }) => output)
-return instance({ output: 'start' }) // 'second'
+const instance = new S([null, { result: 'second' }, () => null])
+	.output(({ result }) => result)
+return instance({ result: 'start' }) // 'second'
 ```
 
 ## Condition Node
@@ -1475,11 +1475,9 @@ return instance({ input: 'NOT the same' }) // 'falsey'
 
 ### Traverse a condition by iterating on the then and else clauses.
 
-Run `post` on the result to allow the interception of the condition method.
+Run `post` on the output to allow the interception of the condition method.
 
 Copy over the original properties to preserve any custom symbols.
-
-Copy over the `'if'` property
 
 Iterate on the `'then'` clause if it exists
 
@@ -1526,21 +1524,49 @@ Check again if the key exists (`'default'` clause may not be defined), if it doe
 
 Copy over the original properties to preserve any custom symbols.
 
-Copy over the `'switch'` property
-
 Iterate over each of the `'case'` clauses.
+
+## While Node
+
+This definition is exported by the library as `{ WhileNode }`
+
+```javascript
+import { WhileNode } from './index.js'
+	
+return WhileNode; // success
+```
+
+Use the `NodeTypes.WH` (switch) value as the name.
+
+A while node is an object with the `'while'` property.
+
+### Execute a while by evaluating the `'while'` property and directing to the `'do'` clause if `true`.
+
+#### Evaluate the `'while'` property as a function that returns a boolean.
+
+If `true`, execute the `'do'` clause
+
+If the condition is false, exit the while loop.
+
+Proceed by re-entering the while loop.
+
+### Traverse a while by iterating over the `'do'` clause
+
+Copy over the original properties to preserve any custom symbols.
+
+Iterate over the `'do'` clause.
 
 ## Machine Node
 
 ```javascript
 const instance = new S({
 	initial: [
-		() => ({ output: 'first' }),
+		() => ({ result: 'first' }),
 		'next',
 	],
-	next: { output: 'second' }
-}).result(({ output }) => output)
-return instance({ output: 'start' }) // 'second'
+	next: { result: 'second' }
+}).output(({ result }) => result)
+return instance({ result: 'start' }) // 'second'
 ```
 
 This definition is exported by the library as `{ MachineNode }`
@@ -1570,12 +1596,12 @@ Transitioning is also possible by using and object with the `S.Path` key set to 
 ```javascript
 const instance = new S({
 	initial: [
-		{ output: 'first' },
+		{ result: 'first' },
 		{ [S.Path]: 'next' }
 	],
-	next: { output: 'second' }
-}).result(({ output }) => output)
-return instance({ output: 'start' }) // 'second'
+	next: { result: 'second' }
+}).output(({ result }) => result)
+return instance({ result: 'start' }) // 'second'
 ```
 
 It is not possible to send any other information in this object, such as a state change.
@@ -1583,12 +1609,12 @@ It is not possible to send any other information in this object, such as a state
 ```javascript
 const instance = new S({
 	initial: [
-		{ output: 'first' },
-		{ [S.Path]: 'next', output: 'ignored' }
+		{ result: 'first' },
+		{ [S.Path]: 'next', result: 'ignored' }
 	],
 	next: S.Return
-}).result(({ output }) => output)
-return instance({ output: 'start' }) // 'first'
+}).output(({ result }) => result)
+return instance({ result: 'start' }) // 'first'
 ```
 
 This definition is exported by the library as `{ DirectiveNode }`
@@ -1662,12 +1688,12 @@ Directives are the natural way of proceeding in state machines, using the name o
 ```javascript
 const instance = new S({
 	initial: [
-		{ output: 'first' },
+		{ result: 'first' },
 		'next'
 	],
-	next: { output: 'second' }
-}).result(({ output }) => output)
-return instance({ output: 'start' }) // 'second'
+	next: { result: 'second' }
+}).output(({ result }) => result)
+return instance({ result: 'start' }) // 'second'
 ```
 
 You can also use symbols as state names.
@@ -1676,12 +1702,12 @@ You can also use symbols as state names.
 const myState = Symbol('MyState')
 const instance = new S({
 	initial: [
-		{ output: 'first' },
+		{ result: 'first' },
 		myState
 	],
-	[myState]: { output: 'second' }
-}).result(({ output }) => output)
-return instance({ output: 'start' }) // 'second'
+	[myState]: { result: 'second' }
+}).output(({ result }) => result)
+return instance({ result: 'start' }) // 'second'
 ```
 
 This definition is exported by the library as `{ MachineDirectiveNode }`
@@ -1715,15 +1741,15 @@ Using an absolute directive in a directive object works
 ```javascript
 const instance = new S({
 	initial: [
-		{ output: 'first' },
+		{ result: 'first' },
 		{ [S.Path]: ['next',1] }
 	],
 	next: [
-		{ output: 'skipped' },
-		({ output }) => ({ [S.Return]: output }),
+		{ result: 'skipped' },
+		({ result }) => ({ [S.Return]: result }),
 	]
 })
-return instance({ output: 'start' }) // 'first'
+return instance({ result: 'start' }) // 'first'
 ```
 
 Using an absolute directive as a return value works
@@ -1731,15 +1757,15 @@ Using an absolute directive as a return value works
 ```javascript
 const instance = new S({
 	initial: [
-		{ output: 'first' },
+		{ result: 'first' },
 		() => ['next',1]
 	],
 	next: [
-		{ output: 'skipped' },
-		({ output }) => ({ [S.Return]: output }),
+		{ result: 'skipped' },
+		({ result }) => ({ [S.Return]: result }),
 	]
 })
-return instance({ output: 'start' }) // 'first'
+return instance({ result: 'start' }) // 'first'
 ```
 
 Using an absolute directive as an action does NOT work.
@@ -1747,15 +1773,15 @@ Using an absolute directive as an action does NOT work.
 ```javascript
 const instance = new S({
 	initial: [
-		{ output: 'first' },
+		{ result: 'first' },
 		['next',1]
 	],
 	next: [
-		{ output: 'not skipped' },
-		({ output }) => ({ [S.Return]: output }),
+		{ result: 'not skipped' },
+		({ result }) => ({ [S.Return]: result }),
 	]
 })
-return instance({ output: 'start' }) // 'not skipped'
+return instance({ result: 'start' }) // 'not skipped'
 ```
 
 This definition is exported by the library as `{ AbsoluteDirectiveNode }`
@@ -1776,19 +1802,19 @@ An absolute directive is performed by setting `S.Path` to the path
 
 Causes the entire process to terminate immediately and return, setting `S.Return` to `true` on the state.
 
-If the symbol is used with a `.result` configuration, then it will return according to the given method.
+If the symbol is used with a `.output` configuration, then it will return according to the given method.
 
 ```javascript
 const instance = new S(S.Return)
-	.result(({ output }) => output)
-return instance({ output: 'start' }) // 'start'
+	.output(({ result }) => result)
+return instance({ result: 'start' }) // 'start'
 ```
 
 If the symbol is used on its own, then it will simply return `undefined`.
 
 ```javascript
 const instance = new S(S.Return)
-return instance({ output: 'start' }) // undefined
+return instance({ result: 'start' }) // undefined
 ```
 
 Using the return symbol as the key to an object will set the return property to that value before returning.
@@ -1800,7 +1826,7 @@ return instance() // 'custom'
 
 ```javascript
 const instance = new S({ [S.Return]: 'custom' })
-return instance.result(state => state)({ output: 'start' }) // { output: 'start', [S.Return]: 'custom' }
+return instance.output(state => state)({ result: 'start' }) // { result: 'start', [S.Return]: 'custom' }
 ```
 
 This definition is exported by the library as `{ ReturnNode }`
@@ -1820,8 +1846,6 @@ A return node is the `S.Return` symbol itself, or an object with an `S.Return` p
 Copy the original properties from the state
 
 Set `S.Return` to undefined or the given return value
-
-Copy over the original path to preserve it.
 
 ## Export all the defaults nodes together in one list.
 
