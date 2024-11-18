@@ -1,13 +1,9 @@
-import D, { E, JS, TS, CS } from './d.js'
-import S, { clone_object, NodeDefinition, normalise_function, StateReferenceError, StateTypeError, unique_list_strings, wait_time } from '../index.js'
-import * as testModule from '../index.js'
-import describedPlugin, { a, c, t } from '../plugin/described.js'
-import eventsPlugin, { emit } from '../plugin/events.js'
-import parallelPlugin, { parallel } from '../plugin/parallel.js'
-import { get_path_object } from '../index.js'
-import { deep_merge_object } from '../index.js'
-import { UndefinedNodeError } from '../index.js'
-import { MaxIterationsError } from '../index.js'
+import D, { E, JS, TS, CS } from './d/index.js'
+import S, { clone_object, NodeDefinition, normalise_function, StateReferenceError, StateTypeError, unique_list_strings, wait_time, get_path_object, deep_merge_object, UndefinedNodeError, MaxIterationsError } from './index.js'
+import * as testModule from './index.js'
+import describedPlugin, { a, c, t } from './plugin/described.js'
+import eventsPlugin, { emit } from './plugin/events.js'
+import parallelPlugin, { parallel } from './plugin/parallel.js'
 
 const symbols = {
 	'S.Path': S.Path,
