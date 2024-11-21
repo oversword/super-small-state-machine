@@ -175,10 +175,11 @@ D('Library Methods',
 		),
 		D('',
 			JS("if (Array.isArray(object)) return [ ...object.slice(0,path[0]), set_path_object(object[path[0]], path.slice(1), value), ...object.slice(1+path[0]) ]"),
-			TS("if (Array.isArray(object)) return [ ...object.slice(0, path[0] as number), set_path_object(object[path[0]], path.slice(1), value), ...object.slice(1 + (path[0] as number)) ] as T")
+			TS("if (Array.isArray(object)) return [ ...object.slice(0, path[0] as number), set_path_object(object[path[0] as number], path.slice(1), value), ...object.slice(1 + (path[0] as number)) ] as T")
 		),
 		D('',
-			CS("return { ...object, [path[0]]: set_path_object(object[path[0]], path.slice(1), value), }")
+			JS("return { ...object, [path[0]]: set_path_object(object[path[0]], path.slice(1), value), }"),
+			TS("return { ...object, [path[0]]: set_path_object((object as Record<string,unknown>)[path[0] as string], path.slice(1), value), }")
 		),
 		CS("}")
 	),

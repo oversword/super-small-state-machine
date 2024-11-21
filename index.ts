@@ -9,8 +9,8 @@ const reduce_get_path_object = <T extends unknown = unknown, O extends unknown =
 export const get_path_object = <T extends unknown = unknown, O extends unknown = unknown>(object: O, path: Path = []): undefined | T => (path.reduce(reduce_get_path_object<T,O>, object) as (T | undefined))
 export const set_path_object = <T extends unknown = unknown>(object: T, path: Path = [], value: unknown = undefined): T => {
 	if (path.length === 0 || typeof object !== 'object' || !object) return value as T
-	if (Array.isArray(object)) return [ ...object.slice(0, path[0] as number), set_path_object(object[path[0]], path.slice(1), value), ...object.slice(1 + (path[0] as number)) ] as T
-	return { ...object, [path[0]]: set_path_object(object[path[0]], path.slice(1), value), }
+	if (Array.isArray(object)) return [ ...object.slice(0, path[0] as number), set_path_object(object[path[0] as number], path.slice(1), value), ...object.slice(1 + (path[0] as number)) ] as T
+	return { ...object, [path[0]]: set_path_object((object as Record<string,unknown>)[path[0] as string], path.slice(1), value), }
 }
 export const update_path_object = <T extends unknown = unknown, O extends unknown = unknown>(object: O, path: Path = [], transformer = (original: T | undefined, path: Path, object: O): T => original as T) => set_path_object(object, path, transformer(get_path_object<T>(object, path), path, object))
 const map_list_path_object = ([ key, value ]: [ string, unknown ]): Array<Path> => list_path_object(value).map(path => [ key, ...path ])
