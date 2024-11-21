@@ -530,8 +530,8 @@ public static _runSync<
 	Action extends unknown = ActionNode<State, Output>,
 	Process extends unknown = ProcessNode<State, Output, Action>,
 >(instance: Pick<S<State, Output, Input, Action, Process>, 'process' | 'config'>, ...input: Input): Output {
-	const { until, iterations, input: inputModifier, output: outputModifier, before, after, defaults } = { ...this.config, ...instance.config }
-	const modifiedInput = inputModifier.apply(instance, input) || {}
+	const { until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults } = { ...this.config, ...instance.config }
+	const modifiedInput = adaptInput.apply(instance, input) || {}
 	let r = 0, currentState = before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
 		[S.Changes]: {},
 		...defaults,
@@ -543,7 +543,7 @@ public static _runSync<
 			throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
 		currentState = this._perform(instance, currentState, this._execute(instance, currentState))
 	}
-	return outputModifier.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
+	return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
 }
 public static async _runAsync<
 	State extends InitialState = InitialState,
@@ -552,8 +552,8 @@ public static async _runAsync<
 	Action extends unknown = ActionNode<State, Output>,
 	Process extends unknown = ProcessNode<State, Output, Action>,
 >(instance: Pick<S<State, Output, Input, Action, Process>, 'process' | 'config'>, ...input: Input): Promise<Output> {
-	const { pause, until, iterations, input: inputModifier, output: outputModifier, before, after, defaults } = { ...this.config, ...instance.config }
-	const modifiedInput = (await inputModifier.apply(instance, input)) || {}
+	const { pause, until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults } = { ...this.config, ...instance.config }
+	const modifiedInput = (await adaptInput.apply(instance, input)) || {}
 	let r = 0, currentState = before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
 		[S.Changes]: {},
 		...defaults,
@@ -567,7 +567,7 @@ public static async _runAsync<
 			throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
 		currentState = this._perform(instance, currentState, await this._execute(instance, currentState))
 	}
-	return outputModifier.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
+	return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
 }
 }
 export abstract class SuperSmallStateMachineChain<

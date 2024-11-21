@@ -1930,10 +1930,10 @@ D('Core',
 		JS("static _runSync (instance, ...input) {"),
 		TS(`public static _runSync${commonGenericDefinition}(instance: Pick<S${commonGenericArguments}, 'process' | 'config'>, ...input: Input): Output {`),
 		D('Extract the useful parts of the config',
-			CS("const { until, iterations, input: inputModifier, output: outputModifier, before, after, defaults } = { ...this.config, ...instance.config }")
+			CS("const { until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults } = { ...this.config, ...instance.config }")
 		),
 		D('Turn the arguments into an initial condition',
-			CS("const modifiedInput = inputModifier.apply(instance, input) || {}")
+			CS("const modifiedInput = adaptInput.apply(instance, input) || {}")
 		),
 		D('Merge the initial condition with the default initial state',
 			CS("let r = 0, currentState = before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {"),
@@ -1968,7 +1968,7 @@ D('Core',
 			CS("}")
 		),
 		D('When returning, run the ends state adapters, then the output adapter to complete execution.',
-			CS("return outputModifier.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))")
+			CS("return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))")
 		),
 		CS("}")
 	),
@@ -1977,10 +1977,10 @@ D('Core',
 		JS("static async _runAsync (instance, ...input) {"),
 		TS(`public static async _runAsync${commonGenericDefinition}(instance: Pick<S${commonGenericArguments}, 'process' | 'config'>, ...input: Input): Promise<Output> {`),
 		D('Extract the useful parts of the config',
-			CS("const { pause, until, iterations, input: inputModifier, output: outputModifier, before, after, defaults } = { ...this.config, ...instance.config }"),
+			CS("const { pause, until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults } = { ...this.config, ...instance.config }"),
 		),
 		D('Turn the arguments into an initial condition',
-			CS("const modifiedInput = (await inputModifier.apply(instance, input)) || {}"),
+			CS("const modifiedInput = (await adaptInput.apply(instance, input)) || {}"),
 		),
 		D('Merge the initial condition with the default initial state',
 			CS("let r = 0, currentState = before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {"),
@@ -2018,7 +2018,7 @@ D('Core',
 			CS("}"),
 		),
 		D('When returning, run the ends state adapters, then the output adapter to complete execution.',
-			CS("return outputModifier.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))"),
+			CS("return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))"),
 		),
 		CS("}"),
 	),
@@ -2393,7 +2393,7 @@ D('Chain',
 			)
 			return instance({ result: 'input' })
 		}, 'overridden'),
-		JS("static before(...adapters)               { return instance => ({ process: instance.process, config: { ...instance.config, before: [ ...instance.config.before, ...adapters ] }, }) }"),
+		JS("static before(...adapters)                   { return instance => ({ process: instance.process, config: { ...instance.config, before: [ ...instance.config.before, ...adapters ] }, }) }"),
 		TS(`static before${commonGenericDefinition}(...adapters: Array<(state: SystemState<State, Output>) => SystemState<State, Output>>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, before: [ ...instance.config.before, ...adapters ] }, }) }`),
 	),
 	
@@ -2411,7 +2411,7 @@ D('Chain',
 			)
 			return instance({ result: 'input' })
 		}, 'overridden'),
-		JS("static after(...adapters)                 { return instance => ({ process: instance.process, config: { ...instance.config, after: [ ...instance.config.after, ...adapters ] }, }) }"),
+		JS("static after(...adapters)                    { return instance => ({ process: instance.process, config: { ...instance.config, after: [ ...instance.config.after, ...adapters ] }, }) }"),
 		TS(`static after${commonGenericDefinition}(...adapters: Array<(state: SystemState<State, Output>) => SystemState<State, Output>>) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> => ({ process: instance.process, config: { ...instance.config, after: [ ...instance.config.after, ...adapters ] }, }) }`)
 	),
 	
@@ -2862,7 +2862,7 @@ D('Instance',
 				}))
 			return instance({ result: 'input' })
 		}, 'overridden'),
-		JS("before(...adapters) { return this.with(S.before(...adapters)) }"),
+		JS("before(...adapters)     { return this.with(S.before(...adapters)) }"),
 		TS(`before(...adapters: Array<(state: SystemState<State, Output>) => SystemState<State, Output>>): S${commonGenericArguments} { return this.with(S.before(...adapters)) }`)
 	),
 	
@@ -2878,7 +2878,7 @@ D('Instance',
 				}))
 			return instance({ result: 'start' })
 		}, 'overridden'),
-		JS("after(...adapters)   { return this.with(S.after(...adapters)) }"),
+		JS("after(...adapters)      { return this.with(S.after(...adapters)) }"),
 		TS(`after(...adapters: Array<(state: SystemState<State, Output>) => SystemState<State, Output>>): S${commonGenericArguments} { return this.with(S.after(...adapters)) }`)
 	),
 	D('instance.with(...adapters)',

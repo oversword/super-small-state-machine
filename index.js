@@ -308,8 +308,8 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 		return this._runSync(instance, ...input)
 	}
 	static _runSync (instance, ...input) {
-		const { until, iterations, input: inputModifier, output: outputModifier, before, after, defaults } = { ...this.config, ...instance.config }
-		const modifiedInput = inputModifier.apply(instance, input) || {}
+		const { until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults } = { ...this.config, ...instance.config }
+		const modifiedInput = adaptInput.apply(instance, input) || {}
 		let r = 0, currentState = before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
 			[S.Changes]: {},
 			...defaults,
@@ -321,11 +321,11 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
 			currentState = this._perform(instance, currentState, this._execute(instance, currentState))
 		}
-		return outputModifier.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
+		return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
 	}
 	static async _runAsync (instance, ...input) {
-		const { pause, until, iterations, input: inputModifier, output: outputModifier, before, after, defaults } = { ...this.config, ...instance.config }
-		const modifiedInput = (await inputModifier.apply(instance, input)) || {}
+		const { pause, until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults } = { ...this.config, ...instance.config }
+		const modifiedInput = (await adaptInput.apply(instance, input)) || {}
 		let r = 0, currentState = before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
 			[S.Changes]: {},
 			...defaults,
@@ -339,7 +339,7 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
 			currentState = this._perform(instance, currentState, await this._execute(instance, currentState))
 		}
-		return outputModifier.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
+		return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
 	}
 }
 export class SuperSmallStateMachineChain extends SuperSmallStateMachineCore {
@@ -368,8 +368,8 @@ export class SuperSmallStateMachineChain extends SuperSmallStateMachineCore {
 	static override(override = S.config.override){ return instance => ({ process: instance.process, config: { ...instance.config, override } }) }
 	static addNode(...nodes)                     { return instance => ({ process: instance.process, config: { ...instance.config, nodes: new NodeDefinitions(...instance.config.nodes.values(),...nodes) }, }) }
 	static adapt(...adapters)                    { return instance => ({ process: adapters.reduce((prev, adapter) => adapter.call(instance, prev), instance.process), config: { ...instance.config, adapt: [ ...instance.config.adapt, ...adapters ] }, }) }
-	static before(...adapters)               { return instance => ({ process: instance.process, config: { ...instance.config, before: [ ...instance.config.before, ...adapters ] }, }) }
-	static after(...adapters)                 { return instance => ({ process: instance.process, config: { ...instance.config, after: [ ...instance.config.after, ...adapters ] }, }) }
+	static before(...adapters)                   { return instance => ({ process: instance.process, config: { ...instance.config, before: [ ...instance.config.before, ...adapters ] }, }) }
+	static after(...adapters)                    { return instance => ({ process: instance.process, config: { ...instance.config, after: [ ...instance.config.after, ...adapters ] }, }) }
 	static with(...adapters) {
 		const flatAdapters = adapters.flat(Infinity)
 		return instance => {
@@ -412,8 +412,8 @@ export default class S extends SuperSmallStateMachineChain {
 	override(override)      { return this.with(S.override(override)) }
 	addNode(...nodes)       { return this.with(S.addNode(...nodes)) }
 	adapt(...adapters)      { return this.with(S.adapt(...adapters)) }
-	before(...adapters) { return this.with(S.before(...adapters)) }
-	after(...adapters)   { return this.with(S.after(...adapters)) }
+	before(...adapters)     { return this.with(S.before(...adapters)) }
+	after(...adapters)      { return this.with(S.after(...adapters)) }
 	with(...transformers)   { return S.with(...transformers)(this) }
 }
 export const StateMachine = S
