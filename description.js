@@ -248,13 +248,15 @@ D('Library Methods',
 			CS("const allKeys = unique_list_strings(Object.keys(base).concat(Object.keys(override)));"),
 		),
 		D('Make a new object with the combined keys',
-			CS("return Object.fromEntries(allKeys.map(key => ["),
-			D('Merge each value recursively if the key exists in both objects',
-				JS("key, key in override ? deep_merge_object(base[key], override[key]) : base[key]"),
-				TS("key, key in override ? deep_merge_object((base as Record<string,unknown>)[key], (override as Record<string,unknown>)[key]) : (base as Record<string,unknown>)[key]")
-			),
-			JS("]));"),
-			TS("])) as T;")
+			// CS("return Object.fromEntries(allKeys.map(key => ["),
+			JS("return Object.fromEntries(allKeys.map(key => [ key, key in override ? deep_merge_object(base[key], override[key]) : base[key] ]));"),
+			TS("return Object.fromEntries(allKeys.map(key => [ key, key in override ? deep_merge_object((base as Record<string,unknown>)[key], (override as Record<string,unknown>)[key]) : (base as Record<string,unknown>)[key] ])) as T;"),
+			// D('Merge each value recursively if the key exists in both objects',
+			// 	JS("key, key in override ? deep_merge_object(base[key], override[key]) : base[key]"),
+			// 	TS("key, key in override ? deep_merge_object((base as Record<string,unknown>)[key], (override as Record<string,unknown>)[key]) : (base as Record<string,unknown>)[key]")
+			// ),
+			// JS("]));"),
+			// TS("])) as T;")
 		),
 		CS("}"),
 	),
@@ -355,6 +357,10 @@ D('Library Methods',
 		),
 		JS("export const deep_merge_object = (base, ...overrides) => overrides.reduce(reduce_deep_merge_object, base)"),
 		TS("export const deep_merge_object = <T extends unknown = unknown>(base: T, ...overrides: Array<unknown>): T => overrides.reduce(reduce_deep_merge_object<T>, base)")
+	),
+	D('shallow_merge_object',
+		TS('export const shallow_merge_object = <T extends unknown = unknown>(a: T, ...objects: Array<Partial<T>>): T => Object.fromEntries(([] as Array<[string, unknown]>).concat(...[a,...objects].map(object => Object.entries(object)))) as T'),
+		JS('export const shallow_merge_object = (...objects) => Object.fromEntries([].concat(...objects.map(object => Object.entries(object))))')
 	),
 	D('get_closest_path (object, path = [], condition = (node, path, object) => boolean)',
 		'Returns the path of the closest node that matches the given `conditon`. It will check all ancestors including the node at the given `path`.',
@@ -729,6 +735,7 @@ export interface Config<
 	input: (...input: Input) => Partial<InputSystemState<State, Output>>,
 	output: (state: SystemState<State, Output>) => Output,
 	nodes: NodeDefinitions<State, Output, Input, Action, Process>,
+	deep: boolean,
 	async: boolean,
 	pause: (state: SystemState<State, Output>, runs: number) => false | Promise<any>
 }`)
@@ -747,9 +754,9 @@ D('Default Nodes',
 
 		D('Adds new properties while preserving existing properties',
 			E.equals(() => {
-				const instance = new S({ result: { newValue: true } })
-					.output(({ result }) => result)
-				return instance({ result: { existingValue: true } })
+				const instance = new S({ newValue: true })
+					.output(state => state)
+				return instance({ existingValue: true })
 			}, {
 				existingValue: true,
 				newValue: true
@@ -1070,15 +1077,15 @@ D('Default Nodes',
 			TS("},"),
 		),
 		D("Traverse a switch by iterating over the `'case'` clauses",
-			JS("static traverse(item, path, iterate, post) { return post({"),
-			TS("traverse: (item, path, iterate, post) => { return post({"),
-			D('Copy over the original properties to preserve any custom symbols.',
-				CS("...item,"),
-			),
-			D("Iterate over each of the `'case'` clauses.",
-				CS("[KeyWords.CS]: Object.fromEntries(Object.keys(item[KeyWords.CS]).map(key => [ key, iterate([...path,KeyWords.CS,key]) ])),"),
-			),
-			CS("}, path) }"),
+			JS("static traverse(item, path, iterate, post) { return post({ ...item, [KeyWords.CS]: Object.fromEntries(Object.keys(item[KeyWords.CS]).map(key => [ key, iterate([...path,KeyWords.CS,key]) ])), }, path) }"),
+			TS("traverse: (item, path, iterate, post) => post({ ...item, [KeyWords.CS]: Object.fromEntries(Object.keys(item[KeyWords.CS]).map(key => [ key, iterate([...path,KeyWords.CS,key]) ])), }, path)"),
+			// D('Copy over the original properties to preserve any custom symbols.',
+			// 	CS("...item,"),
+			// ),
+			// D("Iterate over each of the `'case'` clauses.",
+			// 	CS("[KeyWords.CS]: Object.fromEntries(Object.keys(item[KeyWords.CS]).map(key => [ key, iterate([...path,KeyWords.CS,key]) ])),"),
+			// ),
+			// CS("}, path) }"),
 		),
 		JS("}"),
 		TS("})"),
@@ -1126,15 +1133,17 @@ D('Default Nodes',
 			TS("proceed: parPath => parPath,"),
 		),
 		D("Traverse a while by iterating over the `'do'` clause",
-			JS("static traverse(item, path, iterate, post) { return post({"),
-			TS("traverse: (item, path, iterate, post) => { return post({"),
-			D('Copy over the original properties to preserve any custom symbols.',
-				CS("...item,"),
-			),
-			D("Iterate over the `'do'` clause.",
-				CS("...(KeyWords.DO in item ? { [KeyWords.DO]: iterate([...path,KeyWords.DO]) } : {}),"),
-			),
-			CS("}, path) }"),
+			JS("static traverse(item, path, iterate, post) { return post({ ...item, ...(KeyWords.DO in item ? { [KeyWords.DO]: iterate([...path,KeyWords.DO]) } : {}), }, path) }"),
+			TS("traverse: (item, path, iterate, post) => { return post({ ...item, ...(KeyWords.DO in item ? { [KeyWords.DO]: iterate([...path,KeyWords.DO]) } : {}), }, path) },"),
+			// JS("static traverse(item, path, iterate, post) { return post({"),
+			// TS("traverse: (item, path, iterate, post) => { return post({"),
+			// D('Copy over the original properties to preserve any custom symbols.',
+			// 	CS("...item,"),
+			// ),
+			// D("Iterate over the `'do'` clause.",
+			// 	CS("...(KeyWords.DO in item ? { [KeyWords.DO]: iterate([...path,KeyWords.DO]) } : {}),"),
+			// ),
+			// CS("}, path) }"),
 		),
 		JS("}"),
 		TS("})"),
@@ -1175,15 +1184,17 @@ D('Default Nodes',
 			TS("execute: (node, state) => [ ...state[S.Path], KeyWords.IT ],"),
 		),
 		D('Traverse a machine by iterating over all the stages',
-			JS("static traverse(item, path, iterate, post) { return post({"),
-			TS("traverse: (item, path, iterate, post) => { return post({"),
-			D('Copy over the original properties to preserve any custom symbols.',
-				CS("...item,"),
-			),
-			D("Iterate over each of the stages.",
-				CS("...Object.fromEntries(Object.keys(item).map(key => [ key, iterate([...path,key]) ]))"),
-			),
-			CS("}, path) }"),
+			JS("static traverse(item, path, iterate, post) { return post({ ...item, ...Object.fromEntries(Object.keys(item).map(key => [ key, iterate([...path,key]) ])) }, path) }"),
+			TS("traverse: (item, path, iterate, post) => { return post({ ...item, ...Object.fromEntries(Object.keys(item).map(key => [ key, iterate([...path,key]) ])) }, path) },"),
+			// JS("static traverse(item, path, iterate, post) { return post({"),
+			// TS("traverse: (item, path, iterate, post) => { return post({"),
+			// D('Copy over the original properties to preserve any custom symbols.',
+			// 	CS("...item,"),
+			// ),
+			// D("Iterate over each of the stages.",
+			// 	CS("...Object.fromEntries(Object.keys(item).map(key => [ key, iterate([...path,key]) ]))"),
+			// ),
+			// CS("}, path) }"),
 		),
 		JS("}"),
 		TS("})")
@@ -1453,18 +1464,20 @@ D('Default Nodes',
 			TS("typeof: (object, objectType): object is ReturnNode => object === S.Return || Boolean(object && objectType === 'object' && (S.Return in (object as object))),")
 		),
 		D('Perform a return by setting the `S.Return` property on the state to the return value',
-			JS("static perform(action, state) { return {"),
-			TS("perform: (action, state) => ({"),
-			D('Copy the original properties from the state',
-				CS("...state,"),
-			),
-			D('Set `S.Return` to undefined or the given return value',
-				JS("[S.Return]: !action || action === S.Return ? undefined : action[S.Return],"),
-				TS("[S.Return]: !action || action === S.Return ? undefined : action[S.Return] as undefined,"),
+			JS("static perform(action, state) { return { ...state, [S.Return]: !action || action === S.Return ? undefined : action[S.Return], } }"),
+			TS("perform: (action, state) => { return { ...state, [S.Return]: !action || action === S.Return ? undefined : action[S.Return] as undefined, } },"),
+			// JS("static perform(action, state) { return {"),
+			// TS("perform: (action, state) => ({"),
+			// D('Copy the original properties from the state',
+			// 	CS("...state,"),
+			// ),
+			// D('Set `S.Return` to undefined or the given return value',
+			// 	JS("[S.Return]: !action || action === S.Return ? undefined : action[S.Return],"),
+			// 	TS("[S.Return]: !action || action === S.Return ? undefined : action[S.Return] as undefined,"),
 
-			),
-			JS("} }"),
-			TS("})")
+			// ),
+			// JS("} }"),
+			// TS("})")
 		),
 		JS("}"),
 		TS("})")
@@ -1583,6 +1596,9 @@ D('Core',
 		D('Do not allow for asynchronous actions by default',
 			CS("async: false,"),
 		),
+		D('Shallow merge changes by default',
+			CS("deep: false,"),
+		),
 		D('Do not override the execution method by default',
 			CS("override: null,"),
 		),
@@ -1686,12 +1702,17 @@ D('Core',
 			CS("}"),
 		),
 		D('Collect all the changes in the changes object.',
-			CS("const allChanges = deep_merge_object(state[S.Changes] || {}, changes)"),
+			// CS("const allChanges = deep_merge_object(state[S.Changes] || {}, changes)"),
+			CS("const merge = instance.config.deep ? deep_merge_object : shallow_merge_object"),
+			CS("const allChanges = merge(state[S.Changes] || {}, changes)"),
 		),
 		D('Return a new object',
 			CS("return {"),
 			D('Deep merge the current state with the new changes',
-				CS("...deep_merge_object(state, allChanges),"),
+				CS("...state,"),
+			),
+			D('Deep merge the current state with the new changes',
+				CS("...merge(state, allChanges),"),
 			),
 			D('Carry over the original path.',
 				CS("[S.Path]: state[S.Path],"),
@@ -1947,6 +1968,9 @@ D('Core',
 			D('Use the path from the initial state - allows for starting at arbitrary positions',
 				CS("[S.Path]: modifiedInput[S.Path] || [],")
 			),
+			D('Use the path from the initial state - allows for starting at arbitrary positions',
+				CS("...(S.Return in modifiedInput ? {[S.Return]: modifiedInput[S.Return]} : {})"),
+			),
 			JS("}, modifiedInput))"),
 			TS("} as SystemState<State, Output>, modifiedInput))")
 		),
@@ -1994,6 +2018,9 @@ D('Core',
 			D('Use the path from the initial state - allows for starting at arbitrary positions',
 				CS("[S.Path]: modifiedInput[S.Path] || [],"),
 			),
+			D('Use the path from the initial state - allows for starting at arbitrary positions',
+				CS("...(S.Return in modifiedInput ? {[S.Return]: modifiedInput[S.Return]} : {})"),
+			),
 			JS("}, modifiedInput))"),
 			TS("} as SystemState<State, Output>, modifiedInput))")
 		),
@@ -2014,7 +2041,7 @@ D('Core',
 				),
 			),
 			D('Execute the current node on the process and perform any required actions. Updating the currentState',
-				CS("currentState = this._perform(instance, currentState, await this._execute(instance, currentState))"),
+				CS("currentState = await this._perform(instance, currentState, await this._execute(instance, currentState))"),
 			),
 			CS("}"),
 		),
@@ -2161,6 +2188,28 @@ D('Chain',
 		}, 'start extra'),
 		JS("static output(output = S.config.output)      { return instance => ({ process: instance.process, config: { ...instance.config, output }, }) }"),
 		TS(`static output<${commonGenericDefinitionInner}	NewResult extends unknown = Output,\n>(output: (state: SystemState<State, Output>) => NewResult) { return (instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S<State, NewResult, Input, ActionNode<State, NewResult>, ProcessNode<State, NewResult, ActionNode<State, NewResult>>>, 'process' | 'config'> => ({ process: instance.process as unknown as ProcessNode<State, NewResult, ActionNode<State, NewResult>>, config: { ...instance.config, output } as unknown as Config<State, NewResult, Input, ActionNode<State, NewResult>, ProcessNode<State, NewResult, ActionNode<State, NewResult>>>, }) }`)
+	),
+	D('S.shallow <default>',
+		'Shallow merges the state every time a state change in made.',
+		'Returns a function that will modify a given instance.',
+		// E.is(() => {
+		// 	const instance = new S(({ myReturnValue }) => ({ myReturnValue: myReturnValue + ' extra' }))
+		// 		.with(S.output(state => state.myReturnValue))
+		// 	return instance({ myReturnValue: 'start' })
+		// }, 'start extra'),
+		JS("static shallow                                (instance) { return ({ process: instance.process, config: { ...instance.config, deep: false }, }) }"),
+		TS(`static shallow${commonGenericDefinition}(instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, deep: false }, }) }`)
+	),
+	D('S.deep',
+		'Deep merges the all properties in the state every time a state change in made.',
+		'Returns a function that will modify a given instance.',
+		// E.is(() => {
+		// 	const instance = new S(({ myReturnValue }) => ({ myReturnValue: myReturnValue + ' extra' }))
+		// 		.with(S.output(state => state.myReturnValue))
+		// 	return instance({ myReturnValue: 'start' })
+		// }, 'start extra'),
+		JS("static deep                                   (instance) { return ({ process: instance.process, config: { ...instance.config, deep: true }, }) }"),
+		TS(`static deep${commonGenericDefinition}(instance: Pick<S${commonGenericArguments}, 'process' | 'config'>): Pick<S${commonGenericArguments}, 'process' | 'config'> { return ({ process: instance.process, config: { ...instance.config, deep: true }, }) }`)
 	),
 	D('S.unstrict <default>',
 		'Execute without checking state properties when a state change is made.',
@@ -2668,6 +2717,44 @@ D('Instance',
 		JS("output(output)          { return this.with(S.output(output)) }"),
 		TS("output<NewResult extends unknown = Output>(output: (state: SystemState<State, Output>) => NewResult): S<State, NewResult, Input, ActionNode<State, NewResult>, ProcessNode<State, NewResult, ActionNode<State, NewResult>>> { return this.with(S.output(output)) }")
 	),
+	D('instance.shallow <default>',
+		'Shallow merges the state every time a state change in made.',
+		'Creates a new instance.',
+		// E.error(() => {
+		// 	const instance = new S(() => ({ unknownVariable: false}))
+		// 		.defaults({ knownVariable: true })
+		// 		.strict
+		// 	return instance()
+		// }, StateReferenceError),
+		// E.success(() => {
+		// 	const instance = new S(() => ({ unknownVariable: false}))
+		// 		.defaults({ knownVariable: true })
+		// 		.strict
+		// 		.unstrict
+		// 	return instance()
+		// }),
+		JS("get shallow()           { return this.with(S.shallow) }"),
+		TS(`get shallow(): S${commonGenericArguments} { return this.with(S.shallow) }`)
+	),
+	D('instance.deep',
+		'Deep merges the all properties in the state every time a state change in made.',
+		'Creates a new instance.',
+		// E.error(() => {
+		// 	const instance = new S(() => ({ unknownVariable: false}))
+		// 		.defaults({ knownVariable: true })
+		// 		.strict
+		// 	return instance()
+		// }, StateReferenceError),
+		// E.success(() => {
+		// 	const instance = new S(() => ({ unknownVariable: false}))
+		// 		.defaults({ knownVariable: true })
+		// 		.strict
+		// 		.unstrict
+		// 	return instance()
+		// }),
+		JS("get deep()              { return this.with(S.deep) }"),
+		TS(`get deep(): S${commonGenericArguments} { return this.with(S.deep) }`)
+	),
 	D('instance.unstrict <default>',
 		'Execute without checking state properties when a state change is made.',
 		'Creates a new instance.',
@@ -2894,8 +2981,8 @@ D('Instance',
 		TS(`with<NewState extends InitialState = State, NewResult extends unknown = Output, NewInput extends Array<unknown> = Input, NewAction extends unknown = Action, NewProcess extends unknown = Process>(...transformers: Array<(instance: Pick<S${commonGenericArguments}, 'process' | 'config'>) => Pick<S<NewState, NewResult, NewInput, NewAction, NewProcess>, 'process' | 'config'>>): S<NewState, NewResult, NewInput, NewAction, NewProcess> { return S.with<State, Output, Input, Action, Process, NewState, NewResult, NewInput, NewAction, NewProcess>(...transformers)(this) }`)
 	),
 	CS("}"),
-	CS("export const StateMachine = S"),
-	CS("export const SuperSmallStateMachine = S"),
+	CS("\nexport const StateMachine = S"),
+	CS("\nexport const SuperSmallStateMachine = S"),
 ),
 
 D('Requirements',

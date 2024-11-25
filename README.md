@@ -216,6 +216,18 @@ const instance = new S(({ myReturnValue }) => ({ myReturnValue: myReturnValue + 
 return instance({ myReturnValue: 'start' }) // 'start extra'
 ```
 
+## instance.shallow <default>
+
+Shallow merges the state every time a state change in made.
+
+Creates a new instance.
+
+## instance.deep
+
+Deep merges the all properties in the state every time a state change in made.
+
+Creates a new instance.
+
 ## instance.unstrict <default>
 
 Execute without checking state properties when a state change is made.
@@ -589,6 +601,18 @@ const instance = new S(({ myReturnValue }) => ({ myReturnValue: myReturnValue + 
 return instance({ myReturnValue: 'start' }) // 'start extra'
 ```
 
+## S.shallow <default>
+
+Shallow merges the state every time a state change in made.
+
+Returns a function that will modify a given instance.
+
+## S.deep
+
+Deep merges the all properties in the state every time a state change in made.
+
+Returns a function that will modify a given instance.
+
 ## S.unstrict <default>
 
 Execute without checking state properties when a state change is made.
@@ -934,6 +958,8 @@ Do not allow for asynchronous actions by default
 
 Do not allow for asynchronous actions by default
 
+Shallow merge changes by default
+
 Do not override the execution method by default
 
 Use the provided nodes by default.
@@ -1011,6 +1037,8 @@ Throw a StateTypeError if a property changes types.
 Collect all the changes in the changes object.
 
 ### Return a new object
+
+Deep merge the current state with the new changes
 
 Deep merge the current state with the new changes
 
@@ -1201,6 +1229,8 @@ Use the defaults as an initial state
 
 Use the path from the initial state - allows for starting at arbitrary positions
 
+Use the path from the initial state - allows for starting at arbitrary positions
+
 ### Repeat for a limited number of iterations.
 
 This should be fine for most finite machines, but may be too little for some constantly running machines.
@@ -1230,6 +1260,8 @@ Turn the arguments into an initial condition
 Default to an empty change object
 
 Use the defaults as an initial state
+
+Use the path from the initial state - allows for starting at arbitrary positions
 
 Use the path from the initial state - allows for starting at arbitrary positions
 
@@ -1266,9 +1298,9 @@ return instance({ result: 'start' }) // 'overridden'
 Adds new properties while preserving existing properties
 
 ```javascript
-const instance = new S({ result: { newValue: true } })
-	.output(({ result }) => result)
-return instance({ result: { existingValue: true } }) // { existingValue: true, newValue: true }
+const instance = new S({ newValue: true })
+	.output(state => state)
+return instance({ existingValue: true }) // { existingValue: true, newValue: true }
 ```
 
 This definition is exported by the library as `{ ChangesNode }`
@@ -1520,11 +1552,7 @@ If the key exists in the `'case'` caluses, use the key, otherwise use the `'defa
 
 Check again if the key exists (`'default'` clause may not be defined), if it does, redirect to the case, otherwise do nothing.
 
-### Traverse a switch by iterating over the `'case'` clauses
-
-Copy over the original properties to preserve any custom symbols.
-
-Iterate over each of the `'case'` clauses.
+Traverse a switch by iterating over the `'case'` clauses
 
 ## While Node
 
@@ -1550,11 +1578,7 @@ If the condition is false, exit the while loop.
 
 Proceed by re-entering the while loop.
 
-### Traverse a while by iterating over the `'do'` clause
-
-Copy over the original properties to preserve any custom symbols.
-
-Iterate over the `'do'` clause.
+Traverse a while by iterating over the `'do'` clause
 
 ## Machine Node
 
@@ -1583,11 +1607,7 @@ A machine is an object with the `'initial'` property. A machine cannot be used a
 
 Execute a machine by directing to the `'initial'` stages.
 
-### Traverse a machine by iterating over all the stages
-
-Copy over the original properties to preserve any custom symbols.
-
-Iterate over each of the stages.
+Traverse a machine by iterating over all the stages
 
 ## Directive Node
 
@@ -1841,11 +1861,7 @@ Use the `NodeTypes.RT` (return) value as the name.
 
 A return node is the `S.Return` symbol itself, or an object with an `S.Return` property.
 
-### Perform a return by setting the `S.Return` property on the state to the return value
-
-Copy the original properties from the state
-
-Set `S.Return` to undefined or the given return value
+Perform a return by setting the `S.Return` property on the state to the return value
 
 ## Export all the defaults nodes together in one list.
 

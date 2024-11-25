@@ -30,7 +30,7 @@ export class StateMachineInstance /*extends Promise*/ {
 	}
 	async #progressUtilWaitingForEvents() {
 		while (true) {
-			const res = await this.#partialPromise
+			const {[S.Return]: returnValue, ...res} = await this.#partialPromise
 			const node = get_path_object(this.#runner.process, res[S.Path])
 			const nodeType = this.#runner.config.nodes.typeof(node)
 			if (nodeType === eventEmitter) {
@@ -54,7 +54,7 @@ export class StateMachineInstance /*extends Promise*/ {
 						[S.Path]: [...res[S.Path],'on',event.name]
 					})
 			} else {
-				this.#resolve(res[S.kw.RS])
+				this.#resolve(res.result)
 				return;
 			}
 		}
