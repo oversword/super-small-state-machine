@@ -1285,7 +1285,7 @@ When returning, run the ends state adapters, then the output adapter to complete
 
 ## Changes Node
 
-Updates the state by deep-merging the properties. Arrays will not be deep merged.
+Updates the state by merging the properties. Arrays will not be merged.
 
 Overrides existing properties when provided
 
