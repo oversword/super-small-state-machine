@@ -93,7 +93,7 @@ export const emit = callback => ({
 })
 
 export class EventHandlerNode extends N {
-	static name = eventHandler
+	static type = eventHandler
 	static typeof(object, objectType) {
 		if (objectType !== 'object' || !object) return;
 		if ('on' in object) return true;
@@ -103,7 +103,7 @@ export class EventHandlerNode extends N {
 }
 
 export class EventEmitterNode extends N {
-	static name = eventEmitter
+	static type = eventEmitter
 	static typeof(object, objectType) {
 		if (objectType !== 'object' || !object) return;
 		if (eventEmitter in object) return true;

@@ -151,7 +151,7 @@ Executes the node in the process at the state's current path and returns it's ac
 
 If the node is not executable it will be returned as the action.
 
-## instance.traverse(iterator = a => a, post = b => b)
+## instance.traverse(iterator = a => a)
 
 TODO: traverse and adapt same thing?
 
@@ -388,8 +388,8 @@ Returns a new instance.
 
 ```javascript
 const specialSymbol = Symbol('My Symbol')
-class SpecialNode extends NodeDefinition {
-	static name = 'special'
+class SpecialNode extends N {
+	static type = 'special'
 	static typeof(object, objectType) { return Boolean(objectType === 'object' && object && specialSymbol in object)}
 	static execute(){ return { [S.Return]: 'specialValue' } }
 }
@@ -534,7 +534,7 @@ Executes the node in the process at the state's current path and returns it's ac
 
 If the node is not executable it will be returned as the action.
 
-## S.traverse(iterator = a => a, post = b => b)
+## S.traverse(iterator = a => a)
 
 TODO: traverse and adapt same thing?
 
@@ -802,8 +802,8 @@ Returns a function that will modify a given instance.
 
 ```javascript
 const specialSymbol = Symbol('My Symbol')
-class SpecialNode extends NodeDefinition {
-	static name = 'special'
+class SpecialNode extends N {
+	static type = 'special'
 	static typeof(object, objectType) { return Boolean(objectType === 'object' && object && specialSymbol in object)}
 	static execute(){ return { [S.Return]: 'specialValue' } }
 }
@@ -938,7 +938,9 @@ Possible value of `config.strict`, used to indicate strict types as well as valu
 
 Key Words
 
-Node Types
+Node NodeTypes
+
+All the defaults nodes together in one list.
 
 ## Config
 
@@ -1022,15 +1024,13 @@ return result // { common: 'changed', preserved: 'value', [S.Path]: [ 'preserved
 
 ### If the strict state flag is truthy, perform state checking logic
 
-#### Go through each property in the changes and check they all already exist
+Go through each property in the changes and check they all already exist
 
 Throw a StateReferenceError if a property is referenced that did not previosly exist.
 
-#### If the strict state flag is set to the Strict Types Symbol, perform type checking logic.
+### If the strict state flag is set to the Strict Types Symbol, perform type checking logic.
 
-##### Go through each property and check the JS type is the same as the initial values.
-
-Collect all the errors, using the same logic as above.
+Go through each property and check the JS type is the same as the initial values.
 
 Throw a StateTypeError if a property changes types.
 
@@ -1079,15 +1079,9 @@ Return `null` (unsuccessful) if the root node is reached
 
 Get the next closest ancestor that can be proceeded
 
-If no such node exists, return `null` (unsuccessful)
-
-Get this closest ancestor
-
 Determine what type of node the ancestor is
 
-Get the node defintion for the ancestor
-
-If the node definition cannot be proceeded, return `null` (unsuccessful)
+If the node is unrecognised, throw a TypeEror
 
 Call the `proceed` method of the ancestor node to get the next path.
 
@@ -1129,17 +1123,11 @@ const instance = new S([
 return S._perform(instance, { [S.Path]: [0] }, null) // { [S.Path]: [ 1 ] }
 ```
 
-Get the current path, default to the root node.
-
 Get the node type of the given `action`
 
 Gets the node definition for the action
 
-### If the action can be performed
-
 Perform the action on the state
-
-Throw a NodeTypeError if the action cannot be performed
 
 ## S._execute (instance, state = {}, path = state[S.Path] || [])
 
@@ -1169,25 +1157,15 @@ Get the node at the given `path`
 
 Get the type of that node
 
-Get the definition of the node
+If the node is not recognised, throw a NodeTypeError
 
-### If the node can be executed
+Execute the node and return an action
 
-Execute the node and return its resulting action
-
-If it cannot be executed, return the node to be used as an action
-
-## S._traverse(instance, iterator = a => a, post = b => b)
+## S._traverse(instance, iterator = a => a)
 
 Traverses a process, mapping each node to a new value, effectively cloning the process.
 
 You can customise how each leaf node is mapped by supplying the `iterator` method
-
-You can also customise how branch nodes are mapped by supplying the `post` method
-
-The post method will be called after child nodes have been processed by the `iterator`
-
-Make sure the post functions is scoped to the given instance
 
 ### Create an interation function to be used recursively
 
@@ -1195,13 +1173,9 @@ Get the node at the given `path`
 
 Get the type of the node
 
-Get the definition of the node
+If the node is not recognised, throw a NodeTypeError
 
-#### If the node can be traversed
-
-Traverse it
-
-If it cannot be traversed, it is a leaf node
+Call the iterator for all nodes as a transformer
 
 Call the primary method
 
@@ -1303,15 +1277,15 @@ const instance = new S({ newValue: true })
 return instance({ existingValue: true }) // { existingValue: true, newValue: true }
 ```
 
-This definition is exported by the library as `{ ChangesNode }`
+This definition is exported by the library as `{ Changes }`
 
 ```javascript
-import { ChangesNode } from './index.js'
+import { Changes } from './index.js'
 	
-return ChangesNode; // success
+return Changes; // success
 ```
 
-Use the `NodeTypes.CH` (changes) value as the name.
+Use the `NodeTypes.CH` (changes) value as the type.
 
 Any object not caught by other conditions should qualify as a state change.
 
@@ -1331,17 +1305,17 @@ const instance = new S([
 return instance({ result: 'start' }) // 'start addition1 addition2'
 ```
 
-This definition is exported by the library as `{ SequenceNode }`
+This definition is exported by the library as `{ Sequence }`
 
 ```javascript
-import { SequenceNode } from './index.js'
+import { Sequence } from './index.js'
 	
-return SequenceNode; // success
+return Sequence; // success
 ```
 
-Use the `NodeTypes.SQ` (sequence) value as the name.
+Use the `NodeTypes.SQ` (sequence) value as the type.
 
-### Proceed by running the next item in the sequence
+### Proceed by running the next node in the sequence
 
 Get the sequence at the path
 
@@ -1353,7 +1327,7 @@ A sequence is an array. A sequence cannot be an action, that will be interpreted
 
 Execute a sequence by directing to the first node (so long as it has nodes)
 
-Traverse a sequence by iterating through each item in the array.
+Traverse a sequence by iterating through each node in the array.
 
 ## Function Node
 
@@ -1398,15 +1372,15 @@ const instance = new S(() => {
 return instance({ result: 'start' }) // 'start'
 ```
 
-This definition is exported by the library as `{ FunctionNode }`
+This definition is exported by the library as `{ FunctionN }`
 
 ```javascript
-import { FunctionNode } from './index.js'
+import { FunctionN } from './index.js'
 	
-return FunctionNode; // success
+return FunctionN; // success
 ```
 
-Use the `NodeTypes.FN` (function) value as the name.
+Use the `NodeTypes.FN` (function) value as the type.
 
 A function is a JS function. A function cannot be an action.
 
@@ -1414,15 +1388,15 @@ Exectute a functon by running it, passing in the state.
 
 ## Undefined Node
 
-This definition is exported by the library as `{ UndefinedNode }`
+This definition is exported by the library as `{ Undefined }`
 
 ```javascript
-import { UndefinedNode } from './index.js'
+import { Undefined } from './index.js'
 	
-return UndefinedNode; // success
+return Undefined; // success
 ```
 
-Use the `NodeTypes.UN` (undefined) value as the name.
+Use the `NodeTypes.UN` (undefined) value as the type.
 
 Undefined is the `undefined` keyword.
 
@@ -1445,15 +1419,15 @@ return instance() // 'second'
 
 ## Empty Node
 
-This definition is exported by the library as `{ EmptyNode }`
+This definition is exported by the library as `{ Empty }`
 
 ```javascript
-import { EmptyNode } from './index.js'
+import { Empty } from './index.js'
 	
-return EmptyNode; // success
+return Empty; // success
 ```
 
-Use the `NodeTypes.EM` (empty) value as the name.
+Use the `NodeTypes.EM` (empty) value as the type.
 
 Empty is the `null` keyword.
 
@@ -1467,15 +1441,15 @@ return instance({ result: 'start' }) // 'second'
 
 ## Condition Node
 
-This definition is exported by the library as `{ ConditionNode }`
+This definition is exported by the library as `{ Condition }`
 
 ```javascript
-import { ConditionNode } from './index.js'
+import { Condition } from './index.js'
 	
-return ConditionNode; // success
+return Condition; // success
 ```
 
-Use the `NodeTypes.CD` (condition) value as the name.
+Use the `NodeTypes.CD` (condition) value as the type.
 
 A condition is an object with the `'if'` property. A condition cannot be an action.
 
@@ -1507,8 +1481,6 @@ return instance({ input: 'NOT the same' }) // 'falsey'
 
 ### Traverse a condition by iterating on the then and else clauses.
 
-Run `post` on the output to allow the interception of the condition method.
-
 Copy over the original properties to preserve any custom symbols.
 
 Iterate on the `'then'` clause if it exists
@@ -1532,15 +1504,15 @@ const output3 = instance({ input: 'other' })
 return { output1, output2, output3 } // { output1: 'first', output2: 'second', output3: 'none' }
 ```
 
-This definition is exported by the library as `{ SwitchNode }`
+This definition is exported by the library as `{ Switch }`
 
 ```javascript
-import { SwitchNode } from './index.js'
+import { Switch } from './index.js'
 	
-return SwitchNode; // success
+return Switch; // success
 ```
 
-Use the `NodeTypes.SW` (switch) value as the name.
+Use the `NodeTypes.SW` (switch) value as the type.
 
 A switch node is an object with the `'switch'` property.
 
@@ -1556,15 +1528,15 @@ Traverse a switch by iterating over the `'case'` clauses
 
 ## While Node
 
-This definition is exported by the library as `{ WhileNode }`
+This definition is exported by the library as `{ While }`
 
 ```javascript
-import { WhileNode } from './index.js'
+import { While } from './index.js'
 	
-return WhileNode; // success
+return While; // success
 ```
 
-Use the `NodeTypes.WH` (switch) value as the name.
+Use the `NodeTypes.WH` (switch) value as the type.
 
 A while node is an object with the `'while'` property.
 
@@ -1593,15 +1565,15 @@ const instance = new S({
 return instance({ result: 'start' }) // 'second'
 ```
 
-This definition is exported by the library as `{ MachineNode }`
+This definition is exported by the library as `{ Machine }`
 
 ```javascript
-import { MachineNode } from './index.js'
+import { Machine } from './index.js'
 	
-return MachineNode; // success
+return Machine; // success
 ```
 
-Use the `NodeTypes.MC` (machine) value as the name.
+Use the `NodeTypes.MC` (machine) value as the type.
 
 A machine is an object with the `'initial'` property. A machine cannot be used as an action.
 
@@ -1637,15 +1609,15 @@ const instance = new S({
 return instance({ result: 'start' }) // 'first'
 ```
 
-This definition is exported by the library as `{ DirectiveNode }`
+This definition is exported by the library as `{ Directive }`
 
 ```javascript
-import { DirectiveNode } from './index.js'
+import { Directive } from './index.js'
 	
-return DirectiveNode; // success
+return Directive; // success
 ```
 
-Use the `NodeTypes.DR` (directive) value as the name.
+Use the `NodeTypes.DR` (directive) value as the type.
 
 A directive is an object with the `S.Path` property.
 
@@ -1679,15 +1651,15 @@ const instance = new S([
 return instance({ input: 'skip' }) // 'second'
 ```
 
-This definition is exported by the library as `{ SequenceDirectiveNode }`
+This definition is exported by the library as `{ SequenceDirective }`
 
 ```javascript
-import { SequenceDirectiveNode } from './index.js'
+import { SequenceDirective } from './index.js'
 	
-return SequenceDirectiveNode; // success
+return SequenceDirective; // success
 ```
 
-Use the `NodeTypes.SD` (sequence-directive) value as the name.
+Use the `NodeTypes.SD` (sequence-directive) value as the type.
 
 A sequence directive is a number.
 
@@ -1730,15 +1702,15 @@ const instance = new S({
 return instance({ result: 'start' }) // 'second'
 ```
 
-This definition is exported by the library as `{ MachineDirectiveNode }`
+This definition is exported by the library as `{ MachineDirective }`
 
 ```javascript
-import { MachineDirectiveNode } from './index.js'
+import { MachineDirective } from './index.js'
 	
-return MachineDirectiveNode; // success
+return MachineDirective; // success
 ```
 
-Use the `NodeTypes.MD` (machine-directive) value as the name.
+Use the `NodeTypes.MD` (machine-directive) value as the type.
 
 A machine directive is a string or a symbol.
 
@@ -1746,7 +1718,7 @@ A machine directive is a string or a symbol.
 
 Get the closest ancestor that is a machine.
 
-If no machine ancestor is foun, throw a `PathReferenceError`
+If no machine ancestor is found, throw a `PathReferenceError`
 
 Update the path to parent>stage
 
@@ -1804,15 +1776,15 @@ const instance = new S({
 return instance({ result: 'start' }) // 'not skipped'
 ```
 
-This definition is exported by the library as `{ AbsoluteDirectiveNode }`
+This definition is exported by the library as `{ AbsoluteDirective }`
 
 ```javascript
-import { AbsoluteDirectiveNode } from './index.js'
+import { AbsoluteDirective } from './index.js'
 	
-return AbsoluteDirectiveNode; // success
+return AbsoluteDirective; // success
 ```
 
-Use the `NodeTypes.AD` (absolute-directive) value as the name.
+Use the `NodeTypes.AD` (absolute-directive) value as the type.
 
 An absolute directive is a list of strings, symbols, and numbers. It can only be used as an action as it would otherwise be interpreted as a sequence.
 
@@ -1849,29 +1821,19 @@ const instance = new S({ [S.Return]: 'custom' })
 return instance.output(state => state)({ result: 'start' }) // { result: 'start', [S.Return]: 'custom' }
 ```
 
-This definition is exported by the library as `{ ReturnNode }`
+This definition is exported by the library as `{ Return }`
 
 ```javascript
-import { ReturnNode } from './index.js'
+import { Return } from './index.js'
 	
-return ReturnNode; // success
+return Return; // success
 ```
 
-Use the `NodeTypes.RT` (return) value as the name.
+Use the `NodeTypes.RT` (return) value as the type.
 
 A return node is the `S.Return` symbol itself, or an object with an `S.Return` property.
 
 Perform a return by setting the `S.Return` property on the state to the return value
-
-## Export all the defaults nodes together in one list.
-
-This list is exported by the library as `{ nodes }`
-
-```javascript
-import { nodes } from './index.js'
-	
-return nodes; // success
-```
 
 # Errors
 
