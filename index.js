@@ -164,9 +164,8 @@ export class While extends N {
 	static type = NodeTypes.WH
 	static typeof(object, objectType, isAction) { return Boolean((!isAction) && object && objectType === 'object' && (KeyWords.WH in object)) }
 	static execute(node, state) {
-		if (KeyWords.DO in node && normalise_function(node[KeyWords.WH])(state))
-			return [ ...state[S.Path], KeyWords.DO ]
-		return null
+		if (!((KeyWords.DO in node) && normalise_function(node[KeyWords.WH])(state))) return null
+		return [ ...state[S.Path], KeyWords.DO ]
 	}
 	static proceed(path) { return path }
 	static traverse(node, path, iterate) { return { ...node, ...(KeyWords.DO in node ? { [KeyWords.DO]: iterate([...path,KeyWords.DO]) } : {}), } }
@@ -217,6 +216,7 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 		static Return      = Symbol('Super Small State Machine Return')
 		static Changes     = Symbol('Super Small State Machine Changes')
 		static Path        = Symbol('Super Small State Machine Path')
+		static Trace       = Symbol('Super Small State Machine Trace')
 		static StrictTypes = Symbol('Super Small State Machine Strict Types')
 	static keyWords    = KeyWords
 	static kw          = KeyWords
@@ -232,6 +232,7 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 		until: state => S.Return in state,
 		pause: () => false,
 		async: false,
+		trace: false,
 		deep: false,
 		override: null,
 		nodes: new NS(...SuperSmallStateMachineCore.nodes),
@@ -280,7 +281,7 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 		if (!nodeType) throw new NodeTypeError(`Unknown node type: ${typeof node}${nodeType ? `, nodeType: ${String(nodeType)}` : ''} at [ ${path.map(key => key.toString()).join(', ')} ]`, { instance, state, path, data: { node } })
 		return instance.config.nodes.get(nodeType).execute.call(instance, node, state)
 	}
-	static _traverse(instance, iterator = a => a) {
+	static _traverse(instance, iterator = ident) {
 		const iterate = (path = []) => {
 			const node = get_path_object(instance.process, path)
 			const nodeType = instance.config.nodes.typeof(node)
@@ -294,37 +295,37 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 		return this._runSync(instance, ...input)
 	}
 	static _runSync (instance, ...input) {
-		const { until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults } = { ...this.config, ...instance.config }
+		const { until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults, trace } = { ...this.config, ...instance.config }
 		const modifiedInput = adaptInput.apply(instance, input) || {}
 		let r = 0, currentState = before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
 			[S.Changes]: {},
 			...defaults,
-			[S.Path]: modifiedInput[S.Path] || [],
+			[S.Path]: modifiedInput[S.Path] || [], [S.Trace]: modifiedInput[S.Trace] || [],
 			...(S.Return in modifiedInput ? {[S.Return]: modifiedInput[S.Return]} : {})
 		}, modifiedInput))
 		while (r < iterations) {
 			if (until(currentState)) break;
-			if (++r >= iterations)
-				throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
+			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
+			if (trace) currentState = { ...currentState, [S.Trace]: [ ...currentState[S.Trace], currentState[S.Path] ] }
 			currentState = this._perform(instance, currentState, this._execute(instance, currentState))
 		}
 		return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
 	}
 	static async _runAsync (instance, ...input) {
-		const { pause, until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults } = { ...this.config, ...instance.config }
+		const { pause, until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults, trace } = { ...this.config, ...instance.config }
 		const modifiedInput = (await adaptInput.apply(instance, input)) || {}
 		let r = 0, currentState = before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
 			[S.Changes]: {},
 			...defaults,
-			[S.Path]: modifiedInput[S.Path] || [],
+			[S.Path]: modifiedInput[S.Path] || [], [S.Trace]: modifiedInput[S.Trace] || [],
 			...(S.Return in modifiedInput ? {[S.Return]: modifiedInput[S.Return]} : {})
 		}, modifiedInput))
 		while (r < iterations) {
 			const pauseExecution = pause.call(instance, currentState, r)
 			if (pauseExecution) await pauseExecution;
 			if (until(currentState)) break;
-			if (++r >= iterations)
-				throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
+			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
+			if (trace) currentState = { ...currentState, [S.Trace]: [ ...currentState[S.Trace], currentState[S.Path] ] }
 			currentState = await this._perform(instance, currentState, await this._execute(instance, currentState))
 		}
 		return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
@@ -344,6 +345,8 @@ export class SuperSmallStateMachineChain extends SuperSmallStateMachineCore {
 	static defaults(defaults = S.config.defaults){ return instance => ({ process: instance.process, config: { ...instance.config, defaults }, }) }
 	static input(input = S.config.input)         { return instance => ({ process: instance.process, config: { ...instance.config, input }, }) }
 	static output(output = S.config.output)      { return instance => ({ process: instance.process, config: { ...instance.config, output }, }) }
+	static untrace                                (instance) { return ({ process: instance.process, config: { ...instance.config, trace: false }, }) }
+	static trace                                  (instance) { return ({ process: instance.process, config: { ...instance.config, trace: true }, }) }
 	static shallow                                (instance) { return ({ process: instance.process, config: { ...instance.config, deep: false }, }) }
 	static deep                                   (instance) { return ({ process: instance.process, config: { ...instance.config, deep: true }, }) }
 	static unstrict                               (instance) { return ({ process: instance.process, config: { ...instance.config, strict: false }, }) }
@@ -390,6 +393,8 @@ export default class S extends SuperSmallStateMachineChain {
 	defaults(defaults)      { return this.with(S.defaults(defaults)) }
 	input(input)            { return this.with(S.input(input)) }
 	output(output)          { return this.with(S.output(output)) }
+	get untrace()           { return this.with(S.untrace) }
+	get trace()             { return this.with(S.trace) }
 	get shallow()           { return this.with(S.shallow) }
 	get deep()              { return this.with(S.deep) }
 	get unstrict()          { return this.with(S.unstrict) }
