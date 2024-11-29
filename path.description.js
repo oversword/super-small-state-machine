@@ -1,4 +1,5 @@
-import D, { E, JS, TS, CS, test } from './d/index.js'
+import D, { E, JS, TS, CS, Q, test, readme } from './d/index.js'
+import fs  from 'node:fs';
 // import S, { clone_object, NodeDefinition, normalise_function, StateReferenceError, StateTypeError, unique_list_strings, wait_time, get_path_object, deep_merge_object, UndefinedNodeError, MaxIterationsError } from './index.js'
 import * as testModule from './path.js'
 import { selectorAST, is, query, queryPaths, createQuery } from './path.js'
@@ -64,29 +65,20 @@ const testStruc2 = [
 		yes: 'yes',
 	}
 ]
-const testValue1 = Symbol('Test Value 1')
-const testValue2 = Symbol('Test Value 2')
-const testValue3 = Symbol('Test Value 3')
-const testValue4 = Symbol('Test Value 4')
-const testValue5 = Symbol('Test Value 5')
-const testValue6 = Symbol('Test Value 6')
-const testValue7 = Symbol('Test Value 7')
-const testValue8 = Symbol('Test Value 8')
-const testValue9 = Symbol('Test Value 9')
 const description = D("Object Path Query Selector",
 	D('Requirements',
 		D('Basics',
 			D('Can select the keys of objects using strings', E.equals(() => {
-				const testObject = { myKey: testValue1 }
+				const testObject = { myKey: 'testValue1' }
 				return query(testObject, 'myKey')
-			}, [testValue1])),
+			}, ['testValue1'])),
 			D('Omits keys that do not match the string', E.equals(() => {
 				const testObject = {
-					myKey: testValue1,
-					notMyKey: testValue2
+					myKey: 'testValue1',
+					notMyKey: 'testValue2'
 				}
 				return query(testObject, 'myKey')
-			}, [testValue1])),
+			}, ['testValue1'])),
 			D('The equals operator can be used to match the values of keys', E.equals(() => {
 				const testObject = { myKey: 'allowed', }
 				return query(testObject, 'myKey=allowed')
@@ -99,70 +91,70 @@ const description = D("Object Path Query Selector",
 		D('Descendents and Ancestors',
 			D('Matches all descendent object keys by default', E.equals(() => {
 				const testObject = {
-					myKey: testValue1,
-					subObject: { myKey: testValue2 }
+					myKey: 'testValue1',
+					subObject: { myKey: 'testValue2' }
 				}
 				return query(testObject, 'myKey')
-			}, [testValue1,testValue2])),
+			}, ['testValue1','testValue2'])),
 			D('The child operator can be used to match direct children', E.equals(() => {
 				const testObject = {
-					myKey: testValue1,
-					subObject: { myKey: testValue2 }
+					myKey: 'testValue1',
+					subObject: { myKey: 'testValue2' }
 				}
 				return query(testObject, 'subObject > myKey')
-			}, [testValue2])),
+			}, ['testValue2'])),
 			D('The root node is used as the default context', E.equals(() => {
 				const testObject = {
-					myKey: testValue1,
-					subObject: { myKey: testValue2 }
+					myKey: 'testValue1',
+					subObject: { myKey: 'testValue2' }
 				}
 				return query(testObject, '> myKey')
-			}, [testValue1])),
+			}, ['testValue1'])),
 			D('The descenedent operator can be also be used to match all descendent object keys', E.equals(() => {
 				const testObject = {
-					myKey: testValue1,
-					subObject: { myKey: testValue2 }
+					myKey: 'testValue1',
+					subObject: { myKey: 'testValue2' }
 				}
 				return query(testObject, '>> myKey')
-			}, [testValue1,testValue2])),
+			}, ['testValue1','testValue2'])),
 			D('The parent operator can be used to access the parent of a node', E.equals(() => {
 				const testObject = {
-					myKey: testValue1,
-					subObject: { myKey: testValue2 }
+					myKey: 'testValue1',
+					subObject: { myKey: 'testValue2' }
 				}
 				return query(testObject, 'myKey < subObject')
-			}, [{ myKey: testValue2 }])),
+			}, [{ myKey: 'testValue2' }])),
 			D('The ancestor operator can be used to match any ancestor', E.equals(() => {
 				const testObject = {
-					myKey: testValue1,
-					subObject: { subObject: { myKey: testValue2 } }
+					myKey: 'testValue1',
+					subObject: { subObject: { myKey: 'testValue2' } }
 				}
 				return query(testObject, 'myKey << subObject')
-			}, [{ subObject: { myKey: testValue2 } }, { myKey: testValue2 }])),
+			}, [{ subObject: { myKey: 'testValue2' } }, { myKey: 'testValue2' }])),
 		),
 		D('Brackets',
 			D('The comma can be used to match two things at once (`or`)', E.equals(() => {
 				const testObject = {
-					myKey: testValue1,
-					myOtherKey: testValue2
+					myKey: 'testValue1',
+					myOtherKey: 'testValue2'
 				}
 				return query(testObject, 'myKey,myOtherKey')
-			}, [testValue1,testValue2])),
+			}, ['testValue1','testValue2'])),
 			D('Brackets can be used to nest `or` statements', E.equals(() => {
 				const testObject = {
-					subObject: { myKey: testValue1, myOtherKey: testValue2 }
+					subObject: { myKey: 'testValue1', myOtherKey: 'testValue2' }
 				}
 				return query(testObject, 'subObject (myKey,myOtherKey)')
-			}, [testValue1,testValue2])),
+			}, ['testValue1','testValue2'])),
 		),
 		D('Wildcards',
 			D('Can use wildcards to match keys in an object', E.equals(() => {
 				const testObject = {
-					myKey: testValue1,
-					alsoMyKey: testValue2
+					myKey: 'testValue1',
+					alsoMyKey: 'testValue2'
 				}
 				return query(testObject, '*Key')
-			}, [testValue1,testValue2])),
+			}, ['testValue1','testValue2'])),
 			D('Wildcards can also be used in values', E.equals(() => {
 				const testObject = {
 					myKey: 'isAllowed',
@@ -174,28 +166,28 @@ const description = D("Object Path Query Selector",
 			D('Wildcards can be used in any position',
 				D('Wildcards can be used at the start of a key', E.equals(() => {
 					const testObject = {
-						endSame: testValue1, asSame: testValue2
+						endSame: 'testValue1', asSame: 'testValue2'
 					}
 					return query(testObject, '*Same')
-				}, [ testValue1, testValue2 ])),
+				}, [ 'testValue1', 'testValue2' ])),
 				D('Wildcards can be used at the end of a key', E.equals(() => {
 					const testObject = {
-						sameStart: testValue1, sameAs: testValue2
+						sameStart: 'testValue1', sameAs: 'testValue2'
 					}
 					return query(testObject, 'same*')
-				}, [ testValue1, testValue2 ])),
+				}, [ 'testValue1', 'testValue2' ])),
 				D('Wildcards can be used in the middle of a key', E.equals(() => {
 					const testObject = {
-						sameStartKey: testValue1, sameAsKey: testValue2
+						sameStartKey: 'testValue1', sameAsKey: 'testValue2'
 					}
 					return query(testObject, 'same*Key')
-				}, [ testValue1, testValue2 ])),
+				}, [ 'testValue1', 'testValue2' ])),
 				D('Wildcards can be used in multiple positions in a key', E.equals(() => {
 					const testObject = {
-						sameMiddleKey: testValue1, asMuddleThis: testValue2
+						sameMiddleKey: 'testValue1', asMuddleThis: 'testValue2'
 					}
 					return query(testObject, '*M*ddle*')
-				}, [ testValue1, testValue2 ])),
+				}, [ 'testValue1', 'testValue2' ])),
 				D('Wildcards can be used at the start of a value', E.equals(() => {
 					const testObject = {
 						myKey1: 'endSame', myKey2: 'asSame'
@@ -204,56 +196,60 @@ const description = D("Object Path Query Selector",
 				}, [ 'endSame', 'asSame' ])),
 				D('Wildcards can be used at the end of a value', E.equals(() => {
 					const testObject = {
-						sameStart: testValue1, sameAs: testValue2
+						myKey1: 'sameStart', myKey2: 'sameAs'
 					}
-					return query(testObject, 'same*')
-				}, [ testValue1, testValue2 ])),
+					return query(testObject, '*=same*')
+				}, [ 'sameStart', 'sameAs' ])),
 				D('Wildcards can be used in the middle of a value', E.equals(() => {
 					const testObject = {
-						sameStartKey: testValue1, sameAsKey: testValue2
+						myKey1: 'sameStartValue', myKey2: 'sameAsValue'
 					}
-					return query(testObject, 'same*Key')
-				}, [ testValue1, testValue2 ])),
+					return query(testObject, '*=same*Value')
+				}, [ 'sameStartValue', 'sameAsValue' ])),
 				D('Wildcards can be used in multiple positions in a value', E.equals(() => {
 					const testObject = {
-						sameMiddleKey: testValue1, asMuddleThis: testValue2
+						myKey1: 'sameMiddleValue', myKey2: 'asMuddleValue'
 					}
-					return query(testObject, '*M*ddle*')
-				}, [ testValue1, testValue2 ])),
+					return query(testObject, '*=*M*ddle*')
+				}, [ 'sameMiddleValue', 'asMuddleValue' ])),
 			),
 			D('Wildcards will match an empty part', E.equals(() => {
 				const testObject = {
-					endSame: testValue1, Same: testValue2
+					endSame: 'testValue1', Same: 'testValue2'
 				}
 				return query(testObject, '*Same')
-			}, [ testValue1, testValue2 ])),
+			}, [ 'testValue1', 'testValue2' ])),
 			D('Carat wildcards will not match an empty part', E.equals(() => {
 				const testObject = {
-					endSame: testValue1, Same: testValue2
+					endSame: 'testValue1', Same: 'testValue2'
 				}
 				return query(testObject, '^Same')
-			}, [ testValue1 ])),
+			}, [ 'testValue1' ])),
 			D('Number Wildcard',
 				D('Number Wildcards match any number', E.equals(() => {
-					const testObject = { 42: testValue1, notANumber: testValue2 }
+					const testObject = { 42: 'testValue1', notANumber: 'testValue2' }
 					return query(testObject, '%')
-				}, [testValue1])),
+				}, ['testValue1'])),
 				D('Number Wildcards with a number before the % symbol match the Ath entry only', E.equals(() => {
-					const testObject = [ testValue1, testValue2, testValue3, testValue4 ]
+					const testObject = [ 'testValue1', 'testValue2', 'testValue3', 'testValue4' ]
 					return query(testObject, '2%')
-				}, [testValue3])),
-				// D('Number Wildcards with a negative number before the % symbol match the Ath entry from the end only', E.equals(() => {
-				// 	const testObject = [ testValue1, testValue2, testValue3, testValue4 ]
-				// 	return query(testObject, '-1%')
-				// }, [testValue2])),
+				}, ['testValue3'])),
+				D('Number Wildcards with a negative number before the % symbol match the Ath entry from the end only', E.equals(() => {
+					const testObject = [ 'testValue1', 'testValue2', 'testValue3', 'testValue4' ]
+					return query(testObject, '-1%')
+				}, ['testValue4'])),
 				D('Number Wildcards with a number after the % symbol match every Bth entry, starting with the first', E.equals(() => {
-					const testObject = [ testValue1, testValue2, testValue3, testValue4 ]
+					const testObject = [ 'testValue1', 'testValue2', 'testValue3', 'testValue4' ]
 					return query(testObject, '%2')
-				}, [testValue1, testValue3])),
+				}, ['testValue1', 'testValue3'])),
 				D('Number Wildcards with a number before and after the % symbol match every A+BNth entry', E.equals(() => {
-					const testObject = [ testValue1, testValue2, testValue3, testValue4, testValue5, testValue6, testValue7 ]
+					const testObject = [ 'testValue1', 'testValue2', 'testValue3', 'testValue4', 'testValue5', 'testValue6', 'testValue7' ]
 					return query(testObject, '1%3')
-				}, [testValue2, testValue5])),
+				}, ['testValue2', 'testValue5'])),
+				D('Number Wildcards with a negative number before the % symbol and a positive number after match the A+Bth entry', E.equals(() => {
+					const testObject = [ 'testValue1', 'testValue2', 'testValue3', 'testValue4', 'testValue5', 'testValue6', 'testValue7', 'testValue8', 'testValue9' ]
+					return query(testObject, '-2%4')
+				}, ['testValue3','testValue7'])),
 			),
 		),
 		D('Square Brackets', 
@@ -269,7 +265,6 @@ const description = D("Object Path Query Selector",
 					subObject: { otherObject: { myKey: 'myValue' }, },
 				}
 				return query(testObject, 'subObject[myKey=myValue]')
-				
 			}, [{ otherObject: { myKey: 'myValue' }, }])),
 			D('The child operator can be used to select only direct children with a given value', E.equals(() => {
 				const testObject = {
@@ -294,42 +289,42 @@ const description = D("Object Path Query Selector",
 		),
 		D('Regex',
 			D('Regex can be used to match keys', E.equals(() => {
-				const testObject = {  someComplexKey: testValue1, someOtherKey: testValue2, notTheSameKey: testValue3 }
+				const testObject = {  someComplexKey: 'testValue1', someOtherKey: 'testValue2', notTheSameKey: 'testValue3' }
 				return query(testObject, '/some[a-zA-Z]+Key/')
-			}, [testValue1, testValue2])),
+			}, ['testValue1', 'testValue2'])),
 			D('Flags can be used in regex', E.equals(() => {
-				const testObject = {  someComplexKey: testValue1, someOtherKey: testValue2, notTheSameKey: testValue3 }
+				const testObject = {  someComplexKey: 'testValue1', someOtherKey: 'testValue2', notTheSameKey: 'testValue3' }
 				return query(testObject, '/some[a-z]+key/i')
-			}, [testValue1, testValue2])),
+			}, ['testValue1', 'testValue2'])),
 		),
 		D('Quotes', 
 			D('Double quotes can be used to allow reserved charachters in a key selector', E.equals(() => {
 				const testObject = {
-					"!£$%^*&~()[]{}": testValue1
+					"!£$%^*&~()[]{}": 'testValue1'
 				}
 				return query(testObject, '"!£$%^*&~()[]{}"')
-			}, [ testValue1 ])),
+			}, [ 'testValue1' ])),
 			D('Single quotes can be used to allow reserved charachters in a key selector', E.equals(() => {
 				const testObject = {
-					"!£$%^*&~()[]{}": testValue1
+					"!£$%^*&~()[]{}": 'testValue1'
 				}
 				return query(testObject, "'!£$%^*&~()[]{}'")
-			}, [ testValue1 ])),
+			}, [ 'testValue1' ])),
 			D('Backtick quotes can be used to allow reserved charachters in a key selector', E.equals(() => {
 				const testObject = {
-					"!£$%^&~()[]{}": testValue1
+					"!£$%^&~()[]{}": 'testValue1'
 				}
 				return query(testObject, '`!£$%^&~()[]{}`')
-			}, [ testValue1 ])),
+			}, [ 'testValue1' ])),
 			D('Wildcards can be used inside backtick quotes', E.equals(() => {
 				const testObject = {
-					"!£$%^&~()[]{}": testValue1
+					"!£$%^&~()[]{}": 'testValue1'
 				}
 				return query(testObject, '`*&~()[]{}`')
-			}, [ testValue1 ])),
+			}, [ 'testValue1' ])),
 			D('Wildcards cannot be used inside other quotes', E.equals(() => {
 				const testObject = {
-					"!£$%^&~()[]{}": testValue1
+					"!£$%^&~()[]{}": 'testValue1'
 				}
 				return query(testObject, '"*&~()[]{}"')
 			}, [ ])),
@@ -886,8 +881,16 @@ const description = D("Object Path Query Selector",
 		),
 	),
 )
-
 await test(description)
+
+const readmeDescription = D("Object Path Query Selector",
+	Q(description, ['Requirements']),
+)
+const output = await readme(readmeDescription)
+fs.writeFile('./object-path.README.md', output, () => {});
+/*
+
+
 
 const printSnapshots = (testPaths, struc) => {
 	const strucName = Object.keys(struc)[0]
@@ -940,3 +943,4 @@ const testPaths2 = [
 ]
 // printSnapshots(testPaths, { testStruc })
 // printSnapshots(testPaths2, { testStruc2 })
+*/

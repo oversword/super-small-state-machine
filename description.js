@@ -407,6 +407,23 @@ D('Library Methods',
 		JS("export const wait_time = delay => (delay ? new Promise(resolve => setTimeout(resolve, delay)) : Promise.resolve())"),
 		TS("export const wait_time = (delay: number): Promise<void> => (delay ? new Promise(resolve => setTimeout(resolve, delay)) : Promise.resolve())")
 	),
+
+// const ifA = () => true
+// const ifB = () => false
+// const cond = {
+// 	if: and(ifA,ifB),
+// 	then: forIn('list', 'index', ({ index, list }) => {
+
+// 	}),
+// }
+// console.log(ifA.name)
+// console.log(ifB.name)
+// console.log(and(ifA,ifB).name)
+// console.log(cond.if.name)
+// console.log(or(ifA, ifB).name)
+// console.log(not(ifA).name)
+// console.log(cond.then.name)
+// console.log(and(ifA,ifB)(), or(ifA,ifB)())
 ),
 D('Errors',
 	D('SuperSmallStateMachineError',

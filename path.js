@@ -1,4 +1,4 @@
-import S, {  get_path_object, set_path_object, update_path_object } from "./index.js"
+import S, {  get_path_object, list_path_object, set_path_object, update_path_object } from "./index.js"
 export class PathSyntaxError extends SyntaxError {
 	constructor({ pointer, pathString, char, mode }) {
 		const dist = 20
@@ -8,8 +8,14 @@ export class PathSyntaxError extends SyntaxError {
 	}
 }
 export class PathOperationError extends ReferenceError {}
-const addCharacherToName = ({ char, name }) => ({ name: name + char })
+// TODO: implement ! for not
+// TODO: implement {} for dynamically getting values (and queries) from struc
+// TODO: implement # and . in a CSS like way (assume id & class, but make configurable)
+// TODO: Left over: £@|&?;: Reserved: _$\
+// TODO: ? to mean optional
 
+// TODO: & | should be used for AND and OR? optional with ][ and ,
+const addCharacherToName = ({ char, name }) => ({ name: name + char })
 const readName = {
 	if: ({ readingValue }) => readingValue,
 	then: ({ mode, name, stack, path, notted }) => {
@@ -49,11 +55,49 @@ const recordName = {
 	then: readName
 }
 const readingText = mode => mode === 'text' || mode === 'regex_flags'
-// TODO: implement ! for not
-// TODO: implement {} for dynamically getting values (and queries) from struc
-// TODO: implement # and . in a CSS like way (assume id & class, but make configurable)
-// TODO: Left over: £@|&?;: Reserved: _$\
-// TODO: & | should be used for AND and OR? optional with ][ and ,
+const toRegex = str => {
+	const endIndex = str.lastIndexOf('/')
+	return  new RegExp(str.slice(1, endIndex), str.slice(endIndex+1))
+}
+const execRegex = regex => str => regex.exec(str)
+const matcher = (name, value, mode, valueMode) => {
+	if (value === undefined)
+		return textMatcher(name, mode)
+	const nameMatcher = textMatcher(name, mode)
+	const valueMatcher = textMatcher(value, valueMode)
+	return (n, v) => nameMatcher(n) && valueMatcher(v)
+}
+const numberMatcher = matcher => {
+	let [ match, mod ] = matcher.split('%')
+	console.log({match, mod,matcher})
+	if (!mod) mod = match ? Infinity : 1
+	else mod = parseInt(mod)
+	if (!match) match = 0
+	else match = parseInt(match)
+	return (index, v, parent) => {
+		const length = mod === Infinity
+			? (Array.isArray(parent) ? parent.length : Math.max(0,...Object.keys(parent).filter(key => regex_number.exec(key)).map(n => Number(n)))+1)
+			: mod
+		const ret = (index % mod) === ((match + length) % length)
+		return ret
+	}
+}
+const regex_number = /^\d+$/
+const textMatcher = (name, mode) => {
+	if (name instanceof RegExp) return execRegex(name)
+	if (mode === 'regex_flags') return execRegex(toRegex(name))
+	if (typeof name === 'symbol') return str => name == str
+	const quoted = mode === 'double_quote' || mode === 'single_quote'
+	if (quoted) return str => name == str
+	else if (name === '*') return () => true
+	else if (name === '^') return v => Boolean(v)
+	else if (name.includes('*') || name.includes('^')) return execRegex(new RegExp('^'+escapeStringRegExp(name).replaceAll('*', '.*').replaceAll('^', '.+')+'$'))
+	else if (name === '%' && mode !== 'magic_quote') return execRegex(regex_number)
+	else if (name.includes('%') && mode !== 'magic_quote') return numberMatcher(name)
+	return str => name == str
+}
+const regex = /[|\\{}()[\]$+?.]/g; // exclude '*' and '^'
+const escapeStringRegExp = str => str.replace(regex, '\\$&')
 const chars = {
 	'(': ({ operator, path, stack }) => {
 		const nextNode = get_path_object(stack, path).length
@@ -157,11 +201,29 @@ const chars = {
 		}
 	},
 	'-': {
-		switch: ({ mode, operator }) => readingText(mode) || operator == 'none' ? 'text' : operator,
-		case: {
-			text: { mode: 'operator', operator: 'prev_sibling', },
-			prev_sibling: { mode: 'operator', operator: 'prev_siblings', }, 
-			default: { [S.Return]: PathSyntaxError }
+		if: ({ pointer, partPointer, pathString }) => {
+			let p = pointer + 1
+			let numberSeen = false
+			while (p < pathString[partPointer].length) {
+				const char = pathString[partPointer][p]
+				if (regex_number.exec(char)) {
+					numberSeen = true
+					p ++
+				}
+				else if (char === '%')
+					return numberSeen
+				else return false
+			}
+			return false
+		},
+		then: [addCharacherToName,{ mode: 'text' }],
+		else: {
+			switch: ({ mode, operator }) => readingText(mode) || operator == 'none' ? 'text' : operator,
+			case: {
+				text: { mode: 'operator', operator: 'prev_sibling', },
+				prev_sibling: { mode: 'operator', operator: 'prev_siblings', }, 
+				default: { [S.Return]: PathSyntaxError }
+			}
 		}
 	},
 	'~': {
@@ -204,7 +266,6 @@ const chars = {
 		}
 	]
 }
-
 export const selectorAST = new S([
 	{
 		while: ({ pathString, partPointer }) => partPointer < pathString.length,
@@ -278,49 +339,6 @@ export const selectorAST = new S([
 
 
 
-const toRegex = str => {
-	const endIndex = str.lastIndexOf('/')
-	return  new RegExp(str.slice(1, endIndex), str.slice(endIndex+1))
-}
-const execRegex = regex => str => regex.exec(str)
-const matcher = (name, value, mode, valueMode) => {
-	if (value === undefined)
-		return textMatcher(name, mode)
-	const nameMatcher = textMatcher(name, mode)
-	const valueMatcher = textMatcher(value, valueMode)
-	return (n, v) => nameMatcher(n) && valueMatcher(v)
-}
-const numberMatcher = matcher => {
-	let [ match, mod ] = matcher.split('%')
-	if (!mod) mod = match ? Infinity : 1
-	else mod = parseInt(mod)
-	if (!match) match = 0
-	else match = parseInt(match)
-	return (index, v, parent) => {
-		const length = (Array.isArray(parent) ? parent.length : Math.max(0,...Object.keys(parent).filter(key => regex_number.exec(key)).map(n => Number(n)))+1)
-		const ret = (index % mod) === ((match + length) % length)
-		// TODO: negatve numbers do not work because of the prev sibling operator
-		// console.log({ length, index, mod, match, ret, matcher })
-		return ret
-	}
-}
-const regex_number = /^\d+$/
-const textMatcher = (name, mode) => {
-	const quoted = mode === 'double_quote' || mode === 'single_quote'
-	if (quoted) return str => name == str
-	if (mode === 'regex_flags') return execRegex(toRegex(name))
-		if (typeof name === 'symbol') return str => name == str
-	// if (name instanceof RegExp) return execRegex(name)
-	else if (name === '*') return () => true
-	else if (name === '^') return v => Boolean(v)
-	else if (name.includes('*') || name.includes('^')) return execRegex(new RegExp('^'+escapeStringRegExp(name).replaceAll('*', '.*').replaceAll('^', '.+')+'$'))
-	else if (name === '%' && mode !== 'magic_quote') return execRegex(regex_number)
-	else if (name.includes('%') && mode !== 'magic_quote') return numberMatcher(name)
-	return str => name == str
-}
-const regex = /[|\\{}()[\]$+?.]/g; // exclude '*' and '^'
-const escapeStringRegExp = str => str.replace(regex, '\\$&')
-const list_path_object = object => typeof object !== 'object' ? [[]] : [[]].concat(...Object.keys(object).map(key => list_path_object(object[key]).map(path => [key,...path])))
 
 const siblingData = ({ path, struc }) => {
 	const parentPath = path.slice(0,-1)
@@ -385,18 +403,19 @@ const bumpOperator = ast => ast.map((a, i, l) => ({
 	operator: i < l.length-1 ? l[i+1].operator : 'none'
 }))
 // Logic is all in reverse by default to work like node.is not document.query
-const matches = (struc, initialAst, direction = -1) => {
+const matches = (struc, ast, direction = -1) => {
+	console.log(ast)
 	const iterate = (path, astPath = []) => {
-		const ast = get_path_object(initialAst, astPath)
-		if ('selectors' in ast) return ast.selectors[0].some((_, i) => iterate(path, [ ...astPath, 'selectors', 0, i ]))
-		if (Array.isArray(ast)) return ast.length === 0 ? false : iterate(path, [ ...astPath, direction === -1 ? ast.length-1 : 0 ],)
+		const currentAst = get_path_object(ast, astPath)
+		if ('selectors' in currentAst) return currentAst.selectors.every((orList, j) => orList.some((_, i) => iterate(path, [ ...astPath, 'selectors', j, i ])))
+		if (Array.isArray(currentAst)) return currentAst.length === 0 ? false : iterate(path, [ ...astPath, direction === -1 ? currentAst.length-1 : 0 ],)
 		const item = get_path_object(struc, path)
 		const parItem = get_path_object(struc, path.slice(0,-1))
 		// TODO: item, index, list?
-		if (!ast.matcher(path[path.length-1], item, parItem)) return false
-		if (ast.children && ast.children.length) {
-			const childMatch = ast.children.every(disconnected => {
-				const { children, ...simpleAST } = ast
+		if (!currentAst.matcher(path[path.length-1], item, parItem)) return false
+		if (currentAst.children && currentAst.children.length) {
+			const childMatch = currentAst.children.every(disconnected => {
+				const { children, ...simpleAST } = currentAst
 				return matches(struc, {
 					operator: 'none',
 					selectors: [disconnected.map(a => 
@@ -408,8 +427,8 @@ const matches = (struc, initialAst, direction = -1) => {
 			})
 			if (!childMatch) return false
 		}
-		const operator = direction === -1 ? inverse[ast.operator] : ast.operator
-		const nextNodebase = [...astPath].reverse().findIndex((n, i, l) => i%4 === 0 && typeof n === 'number' && ((direction === -1 && n !== 0) || (direction === 1 && n !== get_path_object(initialAst, astPath.slice(0,-1-i)).length-1)))
+		const operator = direction === -1 ? inverse[currentAst.operator] : currentAst.operator
+		const nextNodebase = [...astPath].reverse().findIndex((n, i, l) => i%4 === 0 && typeof n === 'number' && ((direction === -1 && n !== 0) || (direction === 1 && n !== get_path_object(ast, astPath.slice(0,-1-i)).length-1)))
 		if (nextNodebase === -1) return operator === 'none' || operator === 'ancestor' || (operator === 'parent' && path.length === 1)
 		const nextNode = [ ...astPath.slice(0,-1-nextNodebase), astPath[astPath.length-1-nextNodebase] + direction ]
 		const operation = operator === 'none' ? (direction === -1 ? operators.ancestor : operators.descendent) : operators[operator]
@@ -419,6 +438,21 @@ const matches = (struc, initialAst, direction = -1) => {
 	}
 	return (a) => iterate(a)
 }
+const matchesMachine = new S({
+
+})
+	.defaults({
+		direction: -1,
+		struc: null,
+		ast: null,
+		path: [],
+
+	})
+	.input((struc, path, ast, direction = -1) => ({
+		struc, ast, direction, path
+	}))
+
+const matches_new = (struc, ast, direction = -1) => path => matchesMachine(struc, path, ast, direction)
 
 export const queryPaths = (struc, selector) => list_path_object(struc).filter(matches(struc, selectorAST(selector)))
 export const query = (struc, selector) => queryPaths(struc, selector).map(found => get_path_object(struc, found))

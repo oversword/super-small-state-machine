@@ -31,6 +31,23 @@ if (path.length === 0) return null
 return get_closest_path(object, path.slice(0,-1), condition)
 }
 export const wait_time = delay => (delay ? new Promise(resolve => setTimeout(resolve, delay)) : Promise.resolve())
+export const name = obj => obj.name
+export const named = (name, obj) => {
+	const type = typeof obj
+	if (type === 'function') return ({ [name]: (...args) => obj(...args) })[name]
+	if (type === 'object' && !Array.isArray(obj)) return { ...obj, name }
+	const ret = type === 'object' ? [...obj] : obj
+	ret.name = name
+	return ret
+}
+export const ident = a => a
+export const inc = (property, by = 1) => named(`${by === 1 ? 'increment ':''}${by === -1 ? 'decrement ':''}${property}${Math.sign(by) === 1 && by !== 1 ? ` plus ${by}`:''}${Math.sign(by) === -1 && by !== -1 ? ` minus ${Math.abs(by)}`:''}`, ({ [property]: i }) => ({ [property]: i + by }))
+export const and = (...methods) => named(methods.map(name).join(' and '), (...args) => methods.every(method => method(...args)))
+export const or = (...methods) => named(methods.map(name).join(' or '), (...args) => methods.some(method => method(...args)))
+export const not = method => named(`not ${method.name}`, (...args) => !method(...args))
+export const forIn = (list, index, ...methods) => named(`for ${index} in ${list}`, [
+	{ [index]: 0 }, { while: ({ [index]: i, [list]: l }) => i < l.length, do: [ methods, inc(index) ] },
+])
 export class SuperSmallStateMachineError extends Error {
 instance; state; data; path;
 constructor(message, { instance, state, data, path } = {}) {
