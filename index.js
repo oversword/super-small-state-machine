@@ -4,7 +4,7 @@ export const clone_object = (obj) => {
 	if (typeof obj !== 'object') return obj
 	return Object.fromEntries(Object.entries(obj).map(([key,value]) => [ key, clone_object(value) ]));
 }
-export const unique_list_strings = (list, getId = item => item) => Object.values(Object.fromEntries(list.map(item=>[getId(item),item])));
+export const unique_list_strings = (list, getId = ident) => Object.values(Object.fromEntries(list.map(item=>[getId(item),item])));
 const reduce_get_path_object = (obj, step) => obj ? obj[step] : undefined
 export const get_path_object = (object, path = []) => (path.reduce(reduce_get_path_object, object))
 export const set_path_object = (object, path = [], value = undefined) => {
@@ -12,7 +12,7 @@ export const set_path_object = (object, path = [], value = undefined) => {
 	if (Array.isArray(object)) return [ ...object.slice(0,path[0]), set_path_object(object[path[0]], path.slice(1), value), ...object.slice(1+path[0]) ]
 	return { ...object, [path[0]]: set_path_object(object[path[0]], path.slice(1), value), }
 }
-export const update_path_object = (object, path = [], transformer = original => original) => set_path_object(object, path, transformer(get_path_object(object, path), path, object))
+export const update_path_object = (object, path = [], transformer = ident) => set_path_object(object, path, transformer(get_path_object(object, path), path, object))
 const map_list_path_object = ([ key, value ]) => list_path_object(value).map(path => [ key, ...path ])
 export const list_path_object = object => typeof object !== 'object' || !object ? [[]] : [[]].concat(...Object.entries(object).map(map_list_path_object))
 export const normalise_function = (functOrReturn) => (typeof functOrReturn === 'function') ? functOrReturn : () => functOrReturn
@@ -40,14 +40,12 @@ export const named = (name, obj) => {
 	ret.name = name
 	return ret
 }
-export const ident = a => a
+export const ident = original => original
 export const inc = (property, by = 1) => named(`${by === 1 ? 'increment ':''}${by === -1 ? 'decrement ':''}${property}${Math.sign(by) === 1 && by !== 1 ? ` plus ${by}`:''}${Math.sign(by) === -1 && by !== -1 ? ` minus ${Math.abs(by)}`:''}`, ({ [property]: i }) => ({ [property]: i + by }))
 export const and = (...methods) => named(methods.map(name).join(' and '), (...args) => methods.every(method => method(...args)))
 export const or = (...methods) => named(methods.map(name).join(' or '), (...args) => methods.some(method => method(...args)))
 export const not = method => named(`not ${method.name}`, (...args) => !method(...args))
-export const forIn = (list, index, ...methods) => named(`for ${index} in ${list}`, [
-	{ [index]: 0 }, { while: ({ [index]: i, [list]: l }) => i < l.length, do: [ methods, inc(index) ] },
-])
+export const forIn = (list, index, ...methods) => named(`for ${index} in ${list}`, [ named(`reset ${index}`, () => ({ [index]: 0 })), { while: named(`${index} is within ${list}`, ({ [index]: i, [list]: l }) => i < l.length), do: [ methods, inc(index) ] } ])
 export class SuperSmallStateMachineError extends Error {
 instance; state; data; path;
 constructor(message, { instance, state, data, path } = {}) {
@@ -100,13 +98,13 @@ export class NS extends Map {
 export class N {
 	static type = Symbol('Unnamed node')
 	static typeof = () => false;
-	static execute = node => node;
+	static execute = ident;
 	static proceed = () => undefined;
 	static perform(action, state) {
 			const path = S._proceed(this, state)
 			return path ? { ...state, [S.Path]: path } : { ...state, [S.Return]: undefined }
 		}
-	static traverse = node => node;
+	static traverse = ident;
 }
 export class Changes extends N {
 	static type = NodeTypes.CH
