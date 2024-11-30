@@ -1,6 +1,15 @@
 import D, { E, JS, TS, CS } from './d/index.js'
 import S, { clone_object, N, normalise_function, StateReferenceError, StateTypeError, unique_list_strings, wait_time, get_path_object, deep_merge_object, UndefinedNodeError, MaxIterationsError } from './index.js'
 import * as testModule from './index.js'
+import { list_path_object } from './index.js'
+import { get_closest_path } from './index.js'
+import { named } from './index.js'
+import { inc } from './index.js'
+import { ident } from './index.js'
+import { name } from './index.js'
+import { shallow_merge_object } from './index.js'
+import { update_path_object } from './index.js'
+import { set_path_object } from './index.js'
 import describedPlugin, { a, c, t } from './plugin/described.js'
 import eventsPlugin, { emit } from './plugin/events.js'
 import parallelPlugin, { parallel } from './plugin/parallel.js'
@@ -11,6 +20,7 @@ const symbols = {
 	'S.Return': S.Return,
 	'S.StrictTypes': S.StrictTypes,
 }
+const testSymbol = Symbol()
 
 const commonGenericDefinitionInner = `
 	State extends InitialState = InitialState,
@@ -22,6 +32,16 @@ const commonGenericDefinitionInner = `
 const commonGenericDefinition = `<${commonGenericDefinitionInner}>`
 const commonGenericArguments = `<State, Output, Input, Action, Process>`
 
+/*
+D('',
+	E.equals(() => {
+		const testObject = {
+			
+		}
+		return
+	}, {})
+),
+*/
 const description = D('Super Small State Machine',
 D('Language',
 	'A process is made of nodes',
@@ -167,17 +187,67 @@ D('Library Methods',
 		D('This method is exported by the library as `{ set_path_object }`',
 			E.exports('set_path_object', testModule, './index.js'),
 		),
+		D('Strings can be used to set object keys',
+			E.equals(() => {
+				const testObject = {
+					myExistingProperty: 'myExistingValue'
+				}
+				return set_path_object(testObject, ['myNewProperty'], 'myNewValue')
+			}, { myExistingProperty: 'myExistingValue', myNewProperty: 'myNewValue' })
+		),
+		D('Numbers can be used to set array keys',
+			E.equals(() => {
+				const testObject = [
+					'firstValue',
+					'secondValue',
+					'thirdValue',
+					'fourthValue'
+				]
+				return set_path_object(testObject, [2], 'myNewValue')
+			}, [ 'firstValue', 'secondValue', 'myNewValue', 'fourthValue' ])
+		),
+		D('Symbols can be used to set object keys',
+			E.equals(() => {
+				const testObject = {
+					[testSymbol]: 'myExistingValue'
+				}
+				return set_path_object(testObject, [testSymbol], 'myNewValue')
+			}, { [testSymbol]: 'myNewValue' }, [testSymbol])
+		),
+		D('Deep paths can be set',
+			E.equals(() => {
+				const testObject = {
+					myObjectKey: {
+						[testSymbol]: [
+							'firstValue',
+							'secondValue',
+							'thirdValue',
+							'fourthValue'
+						]
+					}
+				}
+				return set_path_object(testObject, ['myObjectKey',testSymbol,1], 'myNewValue')
+			}, { myObjectKey: { [testSymbol]: [ 'firstValue', 'myNewValue', 'thirdValue', 'fourthValue' ] } })
+		),
+		D('Returns a copy of the original object',
+			E.equals(() => {
+				const testObject = {
+					myObjectKey: 'myExistingValue'
+				}
+				return set_path_object(testObject, ['myObjectKey',testSymbol,1], 'myNewValue') === testObject
+			}, false)
+		),
 		JS("export const set_path_object = (object, path = [], value = undefined) => {"),
 		TS("export const set_path_object = <T extends unknown = unknown>(object: T, path: Path = [], value: unknown = undefined): T => {"),
-		D('',
+		D("If we have an invalid input, just return the input",
 			JS("if (path.length === 0 || typeof object !== 'object' || !object) return value"),
 			TS("if (path.length === 0 || typeof object !== 'object' || !object) return value as T")
 		),
-		D('',
+		D('If the input is an Array, set the given index and recurse',
 			JS("if (Array.isArray(object)) return [ ...object.slice(0,path[0]), set_path_object(object[path[0]], path.slice(1), value), ...object.slice(1+path[0]) ]"),
 			TS("if (Array.isArray(object)) return [ ...object.slice(0, path[0] as number), set_path_object(object[path[0] as number], path.slice(1), value), ...object.slice(1 + (path[0] as number)) ] as T")
 		),
-		D('',
+		D('If the input is another object, set the given key and recurse',
 			JS("return { ...object, [path[0]]: set_path_object(object[path[0]], path.slice(1), value), }"),
 			TS("return { ...object, [path[0]]: set_path_object((object as Record<string,unknown>)[path[0] as string], path.slice(1), value), }")
 		),
@@ -188,6 +258,33 @@ D('Library Methods',
 		'Does the same thing as set_path_object, but allows you to pass in a transformer instead of a value, which will take the current value as the first argument.',
 		D('This method is exported by the library as `{ update_path_object }`',
 			E.exports('update_path_object', testModule, './index.js'),
+		),
+		D('Has the same functionality as set_path_object',
+			E.equals(() => {
+				const testObject = {
+					myObjectKey: 'myExistingValue'
+				}
+				return update_path_object(testObject, ['myObjectKey',testSymbol,1], () => 'myNewValue')
+			}, { myObjectKey: 'myNewValue' })
+		),
+		D('Passes the current value at the path into the transformer method',
+			E.equals(() => {
+				const testObject = {
+					myObjectKey: {
+						[testSymbol]: [
+							'firstValue',
+							'secondValue',
+							'thirdValue',
+							'fourthValue'
+						]
+					}
+				}
+				let capturedValue;
+				update_path_object(testObject, ['myObjectKey',testSymbol,1], (existingValue) => {
+					capturedValue = existingValue
+				})
+				return capturedValue
+			}, 'secondValue')
 		),
 		JS("export const update_path_object = (object, path = [], transformer = ident) => set_path_object(object, path, transformer(get_path_object(object, path), path, object))"),
 		TS("export const update_path_object = <T extends unknown = unknown, O extends unknown = unknown>(object: O, path: Path = [], transformer: ((original: T, path: Path, object: O) => T) = ident) => set_path_object(object, path, transformer(get_path_object<T>(object, path)!, path, object))"),
@@ -204,6 +301,50 @@ D('Library Methods',
 		'Finds all the paths in an object, always including the root path: `[]`.',
 		D('This method is exported by the library as `{ list_path_object }`',
 			E.exports('list_path_object', testModule, './index.js'),
+		),
+
+		D('Always returns the root path',
+			E.equals(() => {
+				const testObject = null
+				return list_path_object(testObject)
+			}, [[]])
+		),
+		D('Returns all the keys in an object',
+			E.equals(() => {
+				const testObject = {
+					myKey1: 'testValue1',
+					myKey2: 'testValue2',
+					myKey3: 'testValue3',
+					myKey4: 'testValue4',
+				}
+				return list_path_object(testObject)
+			}, [[], ['myKey1'], ['myKey2'], ['myKey3'], ['myKey4']])
+		),
+		D('Returns all the indexes in an array',
+			E.equals(() => {
+				const testObject = [
+					'firstValue',
+					'secondValue',
+					'thirdValue',
+					'fourthValue'
+				]
+				return list_path_object(testObject)
+			}, [[], ['0'], ['1'], ['2'], ['3']])
+		),
+		D('Returns deep paths',
+			E.equals(() => {
+				const testObject = {
+					myObjectKey: [
+						'firstValue',
+						'secondValue',
+						'thirdValue',
+						{
+							myKey2: 'fourthValue'
+						}
+					]
+				}
+				return list_path_object(testObject)
+			}, [[], ['myObjectKey'], ['myObjectKey', '0'], ['myObjectKey', '1'], ['myObjectKey', '2'], ['myObjectKey', '3'], ['myObjectKey', '3', 'myKey2']])
 		),
 		JS("export const list_path_object = object => typeof object !== 'object' || !object ? [[]] : [[]].concat(...Object.entries(object).map(map_list_path_object))"),
 		TS("export const list_path_object = (object: unknown): Array<Path> => typeof object !== 'object' || !object ? [[]] : ([[]] as Array<Path>).concat(...Object.entries(object).map(map_list_path_object))")
@@ -357,6 +498,26 @@ D('Library Methods',
 		D('This method is exported by the library as `{ shallow_merge_object }`',
 			E.exports('shallow_merge_object', testModule, './index.js'),
 		),
+		D('Merges object keys',
+			E.equals(() => {
+				const testObject = {
+					myKey1: 'myTestValue1',
+					myKey2: 'myTestValue2'
+				}
+				return shallow_merge_object(testObject, { myNewKey: 'myTestValue3', myKey2: 'myNewValue' })
+			}, { myKey1: 'myTestValue1', myNewKey: 'myTestValue3', myKey2: 'myNewValue' })
+		),
+		D('Does not deep merge objects',
+			E.equals(() => {
+				const testObject = {
+					myKey1: 'myTestValue1',
+					myKey2: {
+						myOriginalKey: 'myTestValue2'
+					}
+				}
+				return shallow_merge_object(testObject, { myKey2: { myNewKey: 'myNewValue' } })
+			}, { myKey1: 'myTestValue1', myKey2: { myNewKey: 'myNewValue', myOriginalKey: undefined } })
+		),
 		TS('export const shallow_merge_object = <T extends unknown = unknown>(a: T, ...objects: Array<Partial<T>>): T => Object.fromEntries(([] as Array<[string, unknown]>).concat(...[a,...objects].map(object => Object.entries(object)))) as T'),
 		JS('export const shallow_merge_object = (...objects) => Object.fromEntries([].concat(...objects.map(object => Object.entries(object))))')
 	),
@@ -364,6 +525,43 @@ D('Library Methods',
 		'Returns the path of the closest node that matches the given `conditon`. It will check all ancestors including the node at the given `path`.',
 		D('This method is exported by the library as `{ get_closest_path }`',
 			E.exports('get_closest_path', testModule, './index.js'),
+		),
+		D('Returns the current node if it matches the condition',
+			E.equals(() => {
+				const testObject = {
+					mySpecialKey: true,
+					myKey: {
+						mySpecialKey: true,
+					}
+				}
+				return get_closest_path(testObject, ['myKey'], obj => obj.mySpecialKey)
+			}, ['myKey'])
+		),
+		D('Returns the parent node if it matches the condition',
+			E.equals(() => {
+				const testObject = {
+					mySpecialKey: true,
+					myKey: {
+						notMySpecialKey: true,
+					}
+				}
+				return get_closest_path(testObject, ['myKey'], obj => obj.mySpecialKey)
+			}, [])
+		),
+		D('Returns the first ancestor node that matches the condition',
+			E.equals(() => {
+				const testObject = {
+					mySpecialKey: true,
+					myKey2:{
+						mySpecialKey: true,
+						myKey: {
+							notMySpecialKey: true,
+							myKey3: 'something'
+						}
+					}
+				}
+				return get_closest_path(testObject, ['myKey2','myKey','myKey3'], obj => obj.mySpecialKey)
+			}, ['myKey2'])
 		),
 		JS("export const get_closest_path = (object, path = [], condition = () => true) => {"),
 		TS("export const get_closest_path = <T extends unknown = unknown, O extends unknown = unknown>(object: O, path: Path = [], condition: ((item: T, path: Path, object: O) => boolean) = () => true): Path | null => {"),
@@ -409,79 +607,347 @@ D('Library Methods',
 	),
 	D('name(obj)',
 		'Gets the name of a given object',
+		D('This method is exported by the library as `{ name }`',
+			E.exports('name', testModule, './index.js'),
+		),
+		D('Gets the name property of an object',
+			E.equals(() => {
+				const testObject = {
+					name: 'someName'
+				}
+				return name(testObject)
+			}, 'someName')
+		),
+		D('Gets the name property of a function',
+			E.equals(() => {
+				const testFunction = () => {}
+				return name(testFunction)
+			}, 'testFunction')
+		),
 		JS("export const name = obj => obj.name"),
 		TS("export const name = (obj: Function | { name?: string } | (Array<unknown> & { name?: string })): string | undefined => obj.name")
 	),
 	D('named(name, obj)',
 		'Returns a new object, function, or array with the `name` property set to the gven name',
+		D('This method is exported by the library as `{ named }`',
+			E.exports('named', testModule, './index.js'),
+		),
+		D('Returns a function with the given name',
+			E.equals(() => {
+				const testFunction = () => {}
+				const result = named('myNewName', testFunction)
+				return typeof result === 'function' && result.name
+			}, 'myNewName')
+		),
+		D('Returns a new function that takes the same arguments and returns the same value',
+			E.equals(() => {
+				const testFunction = (a, b, c) => `${a} + ${b} - ${c}`
+				const result = named('myNewName', testFunction)
+				return result !== testFunction && result(1, 2, 3)
+			}, '1 + 2 - 3')
+		),
+		D('Returns an object with the name property set to the given name',
+			E.equals(() => {
+				const testObject = {
+					myKey: 'myValue'
+				}
+				return named('myNewName', testObject)
+			}, { name: 'myNewName', myKey: 'myValue' })
+		),
+		D('Returns an array with a name property set to the given name',
+			E.equals(() => {
+				const testObject = [
+					'myValue'
+				]
+				const result = named('myNewName', testObject)
+				return Array.isArray(result) && result.name
+			}, 'myNewName')
+		),
+		D('Returns a new object',
+			E.equals(() => {
+				const testObject = {
+					myKey: 'myValue'
+				}
+				return named('myNewName', testObject) === testObject
+			}, false)
+		),
+		D('Returns a new array',
+			E.equals(() => {
+				const testObject = [
+					'myValue'
+				]
+				return named('myNewName', testObject) === testObject
+			}, false)
+		),
 		JS("export const named = (name, obj) => {"),
 		TS("export const named = <T extends unknown = unknown>(name: string, obj: T): T & { name: string } => {"),
-		D('',
+		D('Get the type of the given object',
 			CS("const type = typeof obj")
 		),
-		D('',
+		D("If the given object is a function, use this trick to rename it",
 			JS("if (type === 'function') return ({ [name]: (...args) => obj(...args) })[name]"),
 			TS("if (typeof obj === 'function') return ({ [name]: (...args: Array<unknown>) => obj(...args) })[name] as T & { name: string }")
 		),
-		D('',
+		D('If the given object is an object that is not an array, add the name property',
 			JS("if (type === 'object' && !Array.isArray(obj)) return { ...obj, name }"),
 			TS("if (typeof obj === 'object' && !Array.isArray(obj)) return { ...obj, name }")
 		),
-		D('',
+		D('If it is an array, copy it',
 			JS("const ret = type === 'object' ? [...obj] : obj"),
 			TS("const ret = Array.isArray(obj) ? [...obj] : obj;")
 		),
-		D('',
+		D('Set the name property',
 			JS("ret.name = name"),
 			TS("(ret as T & { name: string }).name = name")
 		),
-		D('',
+		D('Return it',
 			JS("return ret"),
 			TS("return (ret as T & { name: string })")
 		),
 		CS("}")
 	),
 	D('ident',
+		'The identity function, returns whatever is passed in.',
+		'Used as the default for transformers',
+		D('This method is exported by the library as `{ ident }`',
+			E.exports('ident', testModule, './index.js'),
+		),
+		D('Returns the first argument, unmodified',
+			E.equals(() => {
+				const testObject = { myKey: 'myValue' }
+				return ident(testObject) === testObject
+			}, true)
+		),
 		JS("export const ident = original => original"),
 		TS("export const ident = <T extends unknown = unknown>(original: T): T => original")
 	),
 	D('inc(property, by = 1)',
+		'Returns a state change function that will increment the given property by the given amount',
+		D('This method is exported by the library as `{ inc }`',
+			E.exports('inc', testModule, './index.js'),
+		),
+		D('Returns a function',
+			E.equals(() => {
+				return typeof inc('someProperty')
+			}, 'function')
+		),
+		D('The new function is named after the property',
+			E.equals(() => {
+				return inc('someProperty').name.includes('someProperty')
+			}, true)
+		),
+		D('Increments a value in an object',
+			E.equals(() => {
+				const testObject = {
+					myProperty: 8
+				}
+				return inc('myProperty')(testObject)
+			}, { myProperty: 9 })
+		),
+		D('Returns a new object with only that key',
+			E.equals(() => {
+				const testObject = {
+					myProperty: 8,
+					myOtherProperty: 'something'
+				}
+				return inc('myProperty')(testObject)
+			}, { myProperty: 9, myOtherProperty: undefined })
+		),
+		D('Decrements a value if -1 is passed',
+			E.equals(() => {
+				const testObject = {
+					myProperty: 8
+				}
+				return inc('myProperty', -1)(testObject)
+			}, { myProperty: 7 })
+		),
+		D('Can add any number to a value',
+			E.equals(() => {
+				const testObject = {
+					myProperty: 8
+				}
+				return inc('myProperty', -12.5)(testObject)
+			}, { myProperty: -4.5 })
+		),
 		JS("export const inc = (property, by = 1) => named(`${by === 1 ? 'increment ':''}${by === -1 ? 'decrement ':''}${property}${Math.sign(by) === 1 && by !== 1 ? ` plus ${by}`:''}${Math.sign(by) === -1 && by !== -1 ? ` minus ${Math.abs(by)}`:''}`, ({ [property]: i }) => ({ [property]: i + by }))"),
 		TS("export const inc = <State extends InitialState = InitialState>(property: keyof State, by: number = 1): ((state: SystemState<State>) => ChangesType<State>) => named(`${by === 1 ? 'increment ':''}${by === -1 ? 'decrement ':''}${String(property)}${Math.sign(by) === 1 && by !== 1 ? ` plus ${by}`:''}${Math.sign(by) === -1 && by !== -1 ? ` minus ${Math.abs(by)}`:''}`, ({ [property]: i }) => ({ [property]: (i as number) + by } as ChangesType<State>))")
 	),
 	D('and(...methods)',
+		'Returns a function that returns true if all the given methods return true',
+		D('This method is exported by the library as `{ and }`',
+			E.exports('and', testModule, './index.js'),
+		),
+		D('Returns a function',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
+		D('Passes all arguments into the methods',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
+		D('Evaluates to true if all methods return truthy',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
+		D('Evaluates to false if some methods return falsey',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
+		D('Evaluates to false if no methods are given',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
+		D('Names the returned function after the given methods',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
 		JS("export const and = (...methods) => named(methods.map(name).join(' and '), (...args) => methods.every(method => method(...args)))"),
 		TS("export const and = <Args extends Array<unknown> = Array<unknown>>(...methods: Array<(...args: Args) => boolean>): ((...args: Args) => boolean) => named(methods.map(name).join(' and '), (...args) => methods.every(method => method(...args)))")
 	),
 	D('or(...methods)',
+		'Returns a function that returns true if any of the given methods return truthy',
+		D('This method is exported by the library as `{ or }`',
+			E.exports('or', testModule, './index.js'),
+		),
+		D('Returns a function',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
+		D('Passes all the arguments into the methods',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
+		D('Evaluates to true if some methods return truthy',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
+		D('Evaluates to false if no methods return truthy',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
+		D('Evaluates to false if there are no methods',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
+		D('Names the returned function after the given methods',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
 		JS("export const or = (...methods) => named(methods.map(name).join(' or '), (...args) => methods.some(method => method(...args)))"),
 		TS("export const or = <Args extends Array<unknown> = Array<unknown>>(...methods: Array<(...args: Args) => boolean>): ((...args: Args) => boolean) => named(methods.map(name).join(' or '), (...args) => methods.some(method => method(...args)))")
 	),
 	D('not(method)',
+		'Returns a function that returns true if the given method returns falsey',
+		D('This method is exported by the library as `{ not }`',
+			E.exports('not', testModule, './index.js'),
+		),
+		D('Returns a function',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
+		D('Passes all the arguments into the given method',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
+		D('Returns true if the method returns falsey',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
+		D('Returns false if the given method returns truthy',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
 		JS("export const not = method => named(`not ${method.name}`, (...args) => !method(...args))"),
 		TS("export const not = <Args extends Array<unknown> = Array<unknown>>(method: ((...args: Args) => boolean)): ((...args: Args) => boolean) => named(`not ${method.name}`, (...args) => !method(...args))")
 	),
 	D('forIn(list, index, ...methods)',
+		'Provides an easy way to make a "for index in list" loop using the in-built while loop.',
+		D('This method is exported by the library as `{ forIn }`',
+			E.exports('forIn', testModule, './index.js'),
+		),
+		D('Returns a list with a name',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
+		D('Can be executed in a machine as a for loop',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
 		JS("export const forIn = (list, index, ...methods) => named(`for ${index} in ${list}`, [ named(`reset ${index}`, () => ({ [index]: 0 })), { while: named(`${index} is within ${list}`, ({ [index]: i, [list]: l }) => i < l.length), do: [ methods, inc(index) ] } ])"),
 		TS(`export const forIn = ${commonGenericDefinition}(list: string, index: string, ...methods: Array<Process>): Process => named(\`for \${index} in \${list}\`, [ named(\`reset \${index}\`, () => ({ [index]: 0 })), { while: named(\`\${index} is within \${list}\`, ({ [index]: i, [list]: l }: State) => (i as number) < (l as Array<unknown>).length), do: [ methods, inc(index) ] } ]) as Process`)
 	),
-
-// const ifA = () => true
-// const ifB = () => false
-// const cond = {
-// 	if: and(ifA,ifB),
-// 	then: forIn('list', 'index', ({ index, list }) => {
-
-// 	}),
-// }
-// console.log(ifA.name)
-// console.log(ifB.name)
-// console.log(and(ifA,ifB).name)
-// console.log(cond.if.name)
-// console.log(or(ifA, ifB).name)
-// console.log(not(ifA).name)
-// console.log(cond.then.name)
-// console.log(and(ifA,ifB)(), or(ifA,ifB)())
 ),
 D('Errors',
 	D('SuperSmallStateMachineError',
@@ -489,6 +955,30 @@ D('Errors',
 		'Allows for contextual information to be provided with the error',
 		D('This class is exported by the library as `{ SuperSmallStateMachineError }`',
 			E.exports('SuperSmallStateMachineError', testModule, './index.js'),
+		),
+		D('A message string can be passed into the error',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
+		D('All exproted errors inherit from this class',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
+		D('Passing a state, instance, data, and/or path with make those properties available in the error',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
 		),
 		JS("export class SuperSmallStateMachineError extends Error {"),
 		TS(`export class SuperSmallStateMachineError${commonGenericDefinition} extends Error {`),
@@ -517,6 +1007,14 @@ D('Errors',
 		D('This class is exported by the library as `{ SuperSmallStateMachineReferenceError }`',
 			E.exports('SuperSmallStateMachineReferenceError', testModule, './index.js'),
 		),
+		D('All exported reference errors inherit from this class',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
 		JS("export class SuperSmallStateMachineReferenceError extends SuperSmallStateMachineError {}"),
 		TS(`export class SuperSmallStateMachineReferenceError${commonGenericDefinition} extends SuperSmallStateMachineError${commonGenericArguments} {}`)
 	),
@@ -524,6 +1022,14 @@ D('Errors',
 		'All Super Small State Machine Type Errors will inherit from this class',
 		D('This class is exported by the library as `{ SuperSmallStateMachineTypeError }`',
 			E.exports('SuperSmallStateMachineTypeError', testModule, './index.js'),
+		),
+		D('All exported type errors inherit from this class',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
 		),
 		JS("export class SuperSmallStateMachineTypeError extends SuperSmallStateMachineError {}"),
 		TS(`export class SuperSmallStateMachineTypeError${commonGenericDefinition} extends SuperSmallStateMachineError${commonGenericArguments} {}`)
@@ -534,6 +1040,14 @@ D('Errors',
 		D('This class is exported by the library as `{ StateReferenceError }`',
 			E.exports('StateReferenceError', testModule, './index.js'),
 		),
+		D('A state reference error is thrown when a new property is added to the state of a machine while in strict mode',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
 		JS("export class StateReferenceError extends SuperSmallStateMachineReferenceError {}"),
 		TS(`export class StateReferenceError${commonGenericDefinition} extends SuperSmallStateMachineReferenceError${commonGenericArguments} {}`)
 	),
@@ -543,6 +1057,14 @@ D('Errors',
 		D('This class is exported by the library as `{ StateTypeError }`',
 			E.exports('StateTypeError', testModule, './index.js'),
 		),
+		D('A state type errors is thrown when a property changes type in strict state mode',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
 		JS("export class StateTypeError extends SuperSmallStateMachineTypeError {}"),
 		TS(`export class StateTypeError${commonGenericDefinition} extends SuperSmallStateMachineTypeError${commonGenericArguments} {}`)
 	),
@@ -551,6 +1073,14 @@ D('Errors',
 		'This was probably caused by a custom node definition',
 		D('This class is exported by the library as `{ NodeTypeError }`',
 			E.exports('NodeTypeError', testModule, './index.js'),
+		),
+		D('A node type error is thrown when an unrecognised node is used in a process',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
 		),
 		JS("export class NodeTypeError extends SuperSmallStateMachineTypeError {}"),
 		TS(`export class NodeTypeError${commonGenericDefinition} extends SuperSmallStateMachineTypeError${commonGenericArguments} {}`)
@@ -562,6 +1092,14 @@ D('Errors',
 		D('This class is exported by the library as `{ UndefinedNodeError }`',
 			E.exports('UndefinedNodeError', testModule, './index.js'),
 		),
+		D('An udefined node error is thrown when a node in a process is `undefined`',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
 		JS("export class UndefinedNodeError extends SuperSmallStateMachineReferenceError {}"),
 		TS(`export class UndefinedNodeError${commonGenericDefinition} extends SuperSmallStateMachineReferenceError${commonGenericArguments} {}`)
 	),
@@ -571,6 +1109,14 @@ D('Errors',
 		D('This class is exported by the library as `{ MaxIterationsError }`',
 			E.exports('MaxIterationsError', testModule, './index.js'),
 		),
+		D('A max iterations errors is thrown when an execution exceeds the maximum allowed iterations',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
+		),
 		JS("export class MaxIterationsError extends SuperSmallStateMachineError {}"),
 		TS(`export class MaxIterationsError${commonGenericDefinition} extends SuperSmallStateMachineError${commonGenericArguments} {}`)
 	),
@@ -578,6 +1124,14 @@ D('Errors',
 		'A path was referenced which could not be found in the given process.',
 		D('This class is exported by the library as `{ PathReferenceError }`',
 			E.exports('PathReferenceError', testModule, './index.js'),
+		),
+		D('A path reference error is thrown when the machine is told to target a node that does not exist',
+			E.equals(() => {
+				const testObject = {
+
+				}
+				return
+			}, {})
 		),
 		JS("export class PathReferenceError extends SuperSmallStateMachineReferenceError {}"),
 		TS(`export class PathReferenceError${commonGenericDefinition} extends SuperSmallStateMachineReferenceError${commonGenericArguments} {}`)
@@ -754,33 +1308,8 @@ D('Node Definition',
 		JS("static traverse = ident;"),
 		TS(`static traverse<${commonGenericDefinitionInner}SelfType extends unknown = never,>(this: Instance${commonGenericArguments}, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return node }`)
 	),
-	// D('Typescript requires us to do this through a constructor for some reason. This should probably be fixed.',
-	// 	TS("constructor(type: string | symbol, { execute = null, typeof: typeofMethod = null, proceed = null, perform = null, traverse = null }: Partial<Pick<N<SelfType, SelfActionType, State, Output, Input, Action, Process>, 'execute' | 'proceed' | 'typeof' | 'perform' | 'traverse'>>) {"),
-	// 	D('Assigns the given properties to the new instance',
-	// 		TS("this.type = type"),
-	// 		TS("this.execute = execute"),
-	// 		TS("this.typeof = typeofMethod"),
-	// 		TS("this.proceed = proceed"),
-	// 		TS("this.perform = perform"),
-	// 		TS("this.traverse = traverse"),
-	// 	),
-	// 	TS("}"),
-	// ),
 	CS("}"),
 ),
-
-// D('exitFindNext (action, state)',
-// 	'TODO: merge into S._proceed? or S._perform?',
-// 	JS("const exitFindNext = function (action, state) {"),
-// 	TS("const exitFindNext = function (this: S, _: ActionType, state: SystemState) {"),
-// 	D('Attempts to proceed to the next path',
-// 		CS("const path = S._proceed(this, state)"),
-// 	),
-// 	D('If it fails, we should return',
-// 		CS("return path ? { ...state, [S.Path]: path } : { ...state, [S.Return]: undefined }"),
-// 	),
-// 	CS("}")
-// ),
 D('Extra types',
 	TS(`export interface Instance<
 	State extends InitialState = InitialState,
@@ -1153,13 +1682,6 @@ D('Default Nodes',
 		D("Traverse a switch by iterating over the `'case'` clauses",
 			JS("static traverse(node, path, iterate) { return { ...node, [KeyWords.CS]: Object.fromEntries(Object.keys(node[KeyWords.CS]).map(key => [ key, iterate([...path,KeyWords.CS,key]) ])), } }"),
 			TS(`static traverse<${commonGenericDefinitionInner}SelfType = SwitchType<State, Output, Action>,>(this: Instance${commonGenericArguments}, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return { ...node, [KeyWords.CS]: Object.fromEntries(Object.keys((node as SwitchType<State, Output, Action>)[KeyWords.CS]).map(key => [ key, iterate([...path,KeyWords.CS,key]) ])), } }`),
-			// D('Copy over the original properties to preserve any custom symbols.',
-			// 	CS("...node,"),
-			// ),
-			// D("Iterate over each of the `'case'` clauses.",
-			// 	CS("[KeyWords.CS]: Object.fromEntries(Object.keys(node[KeyWords.CS]).map(key => [ key, iterate([...path,KeyWords.CS,key]) ])),"),
-			// ),
-			// CS("}, path) }"),
 		),
 		CS("}"),
 	),
@@ -1203,15 +1725,6 @@ D('Default Nodes',
 		D("Traverse a while by iterating over the `'do'` clause",
 			JS("static traverse(node, path, iterate) { return { ...node, ...(KeyWords.DO in node ? { [KeyWords.DO]: iterate([...path,KeyWords.DO]) } : {}), } }"),
 			TS(`static traverse<${commonGenericDefinitionInner}SelfType = WhileType<State, Output, Action>,>(this: Instance${commonGenericArguments}, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return { ...node, ...(KeyWords.DO in (node as object) ? { [KeyWords.DO]: iterate([...path,KeyWords.DO]) } : {}), } }`),
-			// JS("static traverse(node, path, iterate, post) { return post({"),
-			// TS("traverse: (node, path, iterate, post) => { return post({"),
-			// D('Copy over the original properties to preserve any custom symbols.',
-			// 	CS("...node,"),
-			// ),
-			// D("Iterate over the `'do'` clause.",
-			// 	CS("...(KeyWords.DO in node ? { [KeyWords.DO]: iterate([...path,KeyWords.DO]) } : {}),"),
-			// ),
-			// CS("}, path) }"),
 		),
 		CS("}"),
 	),
@@ -1252,15 +1765,6 @@ D('Default Nodes',
 		D('Traverse a machine by iterating over all the stages',
 			JS("static traverse(node, path, iterate) { return { ...node, ...Object.fromEntries(Object.keys(node).map(key => [ key, iterate([...path,key]) ])) } }"),
 			TS(`static traverse<${commonGenericDefinitionInner}SelfType = MachineType<State, Output, Action>,>(this: Instance${commonGenericArguments}, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return { ...node, ...Object.fromEntries(Object.keys(node as object).map(key => [ key, iterate([...path,key]) ])) } }`),
-			// JS("static traverse(node, path, iterate, post) { return post({"),
-			// TS("traverse: (node, path, iterate, post) => { return post({"),
-			// D('Copy over the original properties to preserve any custom symbols.',
-			// 	CS("...node,"),
-			// ),
-			// D("Iterate over each of the stages.",
-			// 	CS("...Object.fromEntries(Object.keys(node).map(key => [ key, iterate([...path,key]) ]))"),
-			// ),
-			// CS("}, path) }"),
 		),
 		CS("}"),
 	),
@@ -1524,18 +2028,6 @@ D('Default Nodes',
 		D('Perform a return by setting the `S.Return` property on the state to the return value',
 			JS("static perform(action, state) { return { ...state, [S.Return]: !action || action === S.Return ? undefined : action[S.Return], } }"),
 			TS(`static perform<${commonGenericDefinitionInner}SelfType = ReturnType<Output>,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> { return { ...state, [S.Return]: !action || action === S.Return ? undefined : (action as unknown as ReturnObjectType<Output>)[S.Return] as Output, } }`),
-			// JS("static perform(action, state) { return {"),
-			// TS("perform: (action, state) => ({"),
-			// D('Copy the original properties from the state',
-			// 	CS("...state,"),
-			// ),
-			// D('Set `S.Return` to undefined or the given return value',
-			// 	JS("[S.Return]: !action || action === S.Return ? undefined : action[S.Return],"),
-			// 	TS("[S.Return]: !action || action === S.Return ? undefined : action[S.Return] as undefined,"),
-
-			// ),
-			// JS("} }"),
-			// TS("})")
 		),
 		CS("}"),
 	),
@@ -1636,6 +2128,12 @@ D('Core',
 	D('Config',
 		JS("static config = {"),
 		TS("public static readonly config: Config = {"),
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		D('Initialise an empty state by default',
 			CS("defaults: {},")
 		),
@@ -1779,12 +2277,6 @@ D('Core',
 			CS("}"),
 		),
 		CS("}"),
-
-		// if (instance.config.strict && Object.entries(changes).some(([property]) => !(property in state)))
-		// 	throw new StateReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).map(key => key.toString()).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).map(key => key.toString()).join(', ')} ].\nPath: [ ${state[S.Path].map(key => key.toString()).join(' / ')} ]`, { instance, state, path: state[S.Path], data: { changes } })
-		// if (instance.config.strict === this.StrictTypes && Object.entries(changes).some(([property,value]) => typeof value !== typeof state[property]))
-		// 		throw new StateTypeError(`Properties must have the same type as their initial value. ${Object.entries(changes).filter(([property,value]) => typeof value !== typeof state[property]).map(([property,value]) => `${typeof value} given for '${property}', should be ${typeof state[property]}`).join('. ')}.`, { instance, state, path: state[S.Path], data: { changes } })
-
 	),
 
 	D('S._proceed (instance, state = {}, path = state[S.Path] || [])',
@@ -1933,15 +2425,16 @@ D('Core',
 			TS("return instance.config.nodes.get(nodeType)!.execute.call(instance as any, node, state) as Action")
 		),
 		CS("}")
-
-		// const node = get_path_object(instance.process, path)
-		// const nodeType = instance.config.nodes.typeof(node)
-		// if (!nodeType) throw new NodeTypeError(`Unknown node type: ${typeof node}${nodeType ? `, nodeType: ${String(nodeType)}` : ''} at [ ${path.map(key => key.toString()).join(', ')} ]`, { instance, state, path, data: { node } })
-		// return instance.config.nodes.get(nodeType).execute.call(instance, node, state)
 	),
 	D('S._traverse(instance, iterator)',
 		'Traverses a process, mapping each node to a new value, effectively cloning the process.',
 		'You can customise how each leaf node is mapped by supplying the `iterator` method',
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("static _traverse(instance, iterator = ident) {"),
 		TS(`public static _traverse${commonGenericDefinition} (instance: Instance${commonGenericArguments}, iterator: ((node: Process, path: Path, process: Process, nodeType: string | symbol) => Process) = ident): Process {`),
 		D('Create an interation function to be used recursively',
@@ -1970,6 +2463,12 @@ D('Core',
 	),
 	D('S._run (instance, ...input)',
 		'Execute the entire process either synchronously or asynchronously depending on the config.',
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("static _run (instance, ...input) {"),
 		TS(`public static _run${commonGenericDefinition}(instance: Instance${commonGenericArguments}, ...input: Input): Output {`),
 		D('If the process is asynchronous, execute use `runAsync`',
@@ -2139,6 +2638,12 @@ D('Chain',
 	D('S.proceed (state = {}, path = state[S.Path] || [])',
 		'Proceed to the next execution path.',
 		'Performs fallback logic when a node exits.',
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("static proceed(state, path)        { return instance => this._proceed(instance, state, path) }"),
 		TS(`static proceed${commonGenericDefinition}(state: SystemState<State, Output>, path: Path) { return (instance: Instance${commonGenericArguments}): Path | null => this._proceed(instance, state, path) }`)
 	),
@@ -2146,6 +2651,12 @@ D('Chain',
 		'Perform actions on the state.',
 		'Applies any changes in the given `action` to the given `state`.',
 		'Proceeds to the next node if the action is not itself a directive or return.',
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("static perform(state, action)      { return instance => this._perform(instance, state, action) }"),
 		TS(`static perform${commonGenericDefinition}(state: SystemState<State, Output>, action: Action) { return (instance: Instance${commonGenericArguments}): SystemState<State, Output> => this._perform(instance, state, action) }`)
 	),
@@ -2153,26 +2664,55 @@ D('Chain',
 		'Execute a node in the process, return an action.',
 		"Executes the node in the process at the state's current path and returns it's action.",
 		'If the node is not executable it will be returned as the action.',
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("static execute(state, path)        { return instance => this._execute(instance, state, path) }"),
 		TS(`static execute${commonGenericDefinition}(state: SystemState<State, Output>, path?: Path) { return (instance: Instance${commonGenericArguments}): Action => this._execute(instance, state, path) }`)
 	),
 	D('S.traverse(iterator = a => a)',
-		'TODO: traverse and adapt same thing?',
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("static traverse(iterator)          { return instance => this._traverse(instance, iterator) }"),
 		TS(`static traverse${commonGenericDefinition}(iterator: ((node: Process, path: Path, process: Process, nodeType: string | symbol) => Process)) { return (instance: Instance${commonGenericArguments}) => this._traverse(instance, iterator) }`)
 	),
 	D('S.run (...input)',
 		'Execute the entire process either synchronously or asynchronously depending on the config.',
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("static run(...input)               { return instance => this._run(instance, ...input) }"),
 		TS(`static run${commonGenericDefinition}(...input: Input) { return (instance: Instance${commonGenericArguments}): Output => this._run(instance, ...input) }`)
 	),
 	D('S.runSync (...input)',
 		'Execute the entire process synchronously.',
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("static runSync(...input)           { return instance => this._runSync(instance, ...input) }"),
 		TS(`static runSync${commonGenericDefinition}(...input: Input) { return (instance: Instance${commonGenericArguments}): Output => this._runSync(instance, ...input) }`)
 	),
 	D('S.runAsync (...input)',
 		'Execute the entire process asynchronously. Always returns a promise.',
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("static runAsync(...input)          { return instance => this._runAsync(instance, ...input) }"),
 		TS(`static runAsync${commonGenericDefinition}(...input: Input) { return (instance: Instance${commonGenericArguments}): Promise<Output> => this._runAsync(instance, ...input) }`)
 	),
@@ -2226,44 +2766,48 @@ D('Chain',
 	D('S.untrace <default>',
 		'Shallow merges the state every time a state change in made.',
 		'Returns a function that will modify a given instance.',
-		// E.is(() => {
-		// 	const instance = new S(({ myReturnValue }) => ({ myReturnValue: myReturnValue + ' extra' }))
-		// 		.with(S.output(state => state.myReturnValue))
-		// 	return instance({ myReturnValue: 'start' })
-		// }, 'start extra'),
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("static untrace                                (instance) { return ({ process: instance.process, config: { ...instance.config, trace: false }, }) }"),
 		TS(`static untrace${commonGenericDefinition}(instance: Instance${commonGenericArguments}): Instance${commonGenericArguments} { return ({ process: instance.process, config: { ...instance.config, trace: false }, }) }`)
 	),
 	D('S.trace',
 		'Deep merges the all properties in the state every time a state change in made.',
 		'Returns a function that will modify a given instance.',
-		// E.is(() => {
-		// 	const instance = new S(({ myReturnValue }) => ({ myReturnValue: myReturnValue + ' extra' }))
-		// 		.with(S.output(state => state.myReturnValue))
-		// 	return instance({ myReturnValue: 'start' })
-		// }, 'start extra'),
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("static trace                                  (instance) { return ({ process: instance.process, config: { ...instance.config, trace: true }, }) }"),
 		TS(`static trace${commonGenericDefinition}(instance: Instance${commonGenericArguments}): Instance${commonGenericArguments} { return ({ process: instance.process, config: { ...instance.config, trace: true }, }) }`)
 	),
 	D('S.shallow <default>',
 		'Shallow merges the state every time a state change in made.',
 		'Returns a function that will modify a given instance.',
-		// E.is(() => {
-		// 	const instance = new S(({ myReturnValue }) => ({ myReturnValue: myReturnValue + ' extra' }))
-		// 		.with(S.output(state => state.myReturnValue))
-		// 	return instance({ myReturnValue: 'start' })
-		// }, 'start extra'),
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("static shallow                                (instance) { return ({ process: instance.process, config: { ...instance.config, deep: false }, }) }"),
 		TS(`static shallow${commonGenericDefinition}(instance: Instance${commonGenericArguments}): Instance${commonGenericArguments} { return ({ process: instance.process, config: { ...instance.config, deep: false }, }) }`)
 	),
 	D('S.deep',
 		'Deep merges the all properties in the state every time a state change in made.',
 		'Returns a function that will modify a given instance.',
-		// E.is(() => {
-		// 	const instance = new S(({ myReturnValue }) => ({ myReturnValue: myReturnValue + ' extra' }))
-		// 		.with(S.output(state => state.myReturnValue))
-		// 	return instance({ myReturnValue: 'start' })
-		// }, 'start extra'),
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("static deep                                   (instance) { return ({ process: instance.process, config: { ...instance.config, deep: true }, }) }"),
 		TS(`static deep${commonGenericDefinition}(instance: Instance${commonGenericArguments}): Instance${commonGenericArguments} { return ({ process: instance.process, config: { ...instance.config, deep: true }, }) }`)
 	),
@@ -2633,10 +3177,22 @@ D('Instance',
 		),
 		D('Create the config by merging the passed config with the defaults.',
 			'This is private so it cannot be mutated at runtime',
+			E.todo(() => {
+				const instance = new S(() => ({ unknownVariable: false}))
+					.defaults({ knownVariable: true })
+					.strict
+				return instance()
+			}, {}),
 			JS("this.#config = { ...this.#config, ...config }"),
 			TS(`this.#config = { ...this.#config, ...config } as unknown as Config${commonGenericArguments}`)
 		),
 		D('The process must be public, it cannot be deep merged or cloned as it may contain symbols.',
+			E.todo(() => {
+				const instance = new S(() => ({ unknownVariable: false}))
+					.defaults({ knownVariable: true })
+					.strict
+				return instance()
+			}, {}),
 			CS("this.process = process"),
 		),
 		CS("}"),
@@ -2691,6 +3247,12 @@ D('Instance',
 	D('instance.proceed (state = {}, path = state[S.Path] || [])',
 		'Proceed to the next execution path.',
 		'Performs fallback logic when a node exits.',
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("proceed(state, path)    { return S._proceed(this, state, path) }"),
 		TS("proceed(state: SystemState<State, Output>, path: Path) { return S._proceed(this, state, path) }")
 	),
@@ -2698,6 +3260,12 @@ D('Instance',
 		'Perform actions on the state.',
 		'Applies any changes in the given `action` to the given `state`.',
 		'Proceeds to the next node if the action is not itself a directive or return.',
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("perform(state, action)  { return S._perform(this, state, action) }"),
 		TS("perform(state: SystemState<State, Output>, action: Action) { return S._perform(this, state, action) }")
 	),
@@ -2705,26 +3273,55 @@ D('Instance',
 		'Execute a node in the process, return an action.',
 		"Executes the node in the process at the state's current path and returns it's action.",
 		'If the node is not executable it will be returned as the action.',
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("execute(state, path)    { return S._execute(this, state, path) }"),
 		TS("execute(state: SystemState<State, Output>, path?: Path) { return S._execute(this, state, path) }")
 	),
 	D('instance.traverse(iterator = a => a)',
-		'TODO: traverse and adapt same thing?',
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("traverse(iterator)      { return S._traverse(this, iterator) }"),
 		TS("traverse(iterator: ((node: Process, path: Path, process: Process, nodeType: string | symbol) => Process)){ return S._traverse(this, iterator) }")
 	),
 	D('instance.run (...input)',
 		'Execute the entire process either synchronously or asynchronously depending on the config.',
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("run     (...input)      { return S._run(this, ...input) }"),
 		TS("run (...input: Input): Output { return S._run(this, ...input) }")
 	),
 	D('instance.runSync (...input)',
 		'Execute the entire process synchronously.',
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("runSync (...input)      { return S._runSync(this, ...input) }"),
 		TS("runSync (...input: Input): Output { return S._runSync(this, ...input) }")
 	),
 	D('instance.runAsync (...input)',
 		'Execute the entire process asynchronously. Always returns a promise.',
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("runAsync(...input)      { return S._runAsync(this, ...input) }"),
 		TS("runAsync(...input: Input): Promise<Output> { return S._runAsync(this, ...input) }")
 	),
@@ -2776,76 +3373,48 @@ D('Instance',
 	D('instance.untrace <default>',
 		'Disables the stack trace.',
 		'Creates a new instance.',
-		// E.error(() => {
-		// 	const instance = new S(() => ({ unknownVariable: false}))
-		// 		.defaults({ knownVariable: true })
-		// 		.strict
-		// 	return instance()
-		// }, StateReferenceError),
-		// E.success(() => {
-		// 	const instance = new S(() => ({ unknownVariable: false}))
-		// 		.defaults({ knownVariable: true })
-		// 		.strict
-		// 		.unstrict
-		// 	return instance()
-		// }),
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("get untrace()           { return this.with(S.untrace) }"),
 		TS(`get untrace(): S${commonGenericArguments} { return this.with(S.untrace) }`)
 	),
 	D('instance.trace',
 		'Enables the stack trace.',
 		'Creates a new instance.',
-		// E.error(() => {
-		// 	const instance = new S(() => ({ unknownVariable: false}))
-		// 		.defaults({ knownVariable: true })
-		// 		.strict
-		// 	return instance()
-		// }, StateReferenceError),
-		// E.success(() => {
-		// 	const instance = new S(() => ({ unknownVariable: false}))
-		// 		.defaults({ knownVariable: true })
-		// 		.strict
-		// 		.unstrict
-		// 	return instance()
-		// }),
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("get trace()             { return this.with(S.trace) }"),
 		TS(`get trace(): S${commonGenericArguments} { return this.with(S.trace) }`)
 	),
 	D('instance.shallow <default>',
 		'Shallow merges the state every time a state change in made.',
 		'Creates a new instance.',
-		// E.error(() => {
-		// 	const instance = new S(() => ({ unknownVariable: false}))
-		// 		.defaults({ knownVariable: true })
-		// 		.strict
-		// 	return instance()
-		// }, StateReferenceError),
-		// E.success(() => {
-		// 	const instance = new S(() => ({ unknownVariable: false}))
-		// 		.defaults({ knownVariable: true })
-		// 		.strict
-		// 		.unstrict
-		// 	return instance()
-		// }),
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("get shallow()           { return this.with(S.shallow) }"),
 		TS(`get shallow(): S${commonGenericArguments} { return this.with(S.shallow) }`)
 	),
 	D('instance.deep',
 		'Deep merges the all properties in the state every time a state change in made.',
 		'Creates a new instance.',
-		// E.error(() => {
-		// 	const instance = new S(() => ({ unknownVariable: false}))
-		// 		.defaults({ knownVariable: true })
-		// 		.strict
-		// 	return instance()
-		// }, StateReferenceError),
-		// E.success(() => {
-		// 	const instance = new S(() => ({ unknownVariable: false}))
-		// 		.defaults({ knownVariable: true })
-		// 		.strict
-		// 		.unstrict
-		// 	return instance()
-		// }),
+		E.todo(() => {
+			const instance = new S(() => ({ unknownVariable: false}))
+				.defaults({ knownVariable: true })
+				.strict
+			return instance()
+		}, {}),
 		JS("get deep()              { return this.with(S.deep) }"),
 		TS(`get deep(): S${commonGenericArguments} { return this.with(S.deep) }`)
 	),
@@ -3079,6 +3648,24 @@ D('Instance',
 	CS("export const SuperSmallStateMachine = S"),
 	CS("export const NodeDefinition = N"),
 	CS("export const NodeDefinitions = NS"),
+	D('The main class is exported as `{ StateMachine }`',
+		E.exports('StateMachine', testModule, './index.js'),
+	),
+	D('The main class is exported as `{ SuperSmallStateMachine }`',
+		E.exports('SuperSmallStateMachine', testModule, './index.js'),
+	),
+	D('The node class is exported as `{ NodeDefinition }`',
+		E.exports('NodeDefinitions', testModule, './index.js'),
+	),
+	D('The node collection class is exported as `{ NodeDefinitions }`',
+		E.exports('NodeDefinitions', testModule, './index.js'),
+	),
+	D('The node class is exported as `{ N }`',
+		E.exports('N', testModule, './index.js'),
+	),
+	D('The node collection class is exported as `{ NS }`',
+		E.exports('NS', testModule, './index.js'),
+	),
 ),
 
 D('Requirements',
