@@ -12,7 +12,7 @@ export const set_path_object = <T extends unknown = unknown>(object: T, path: Pa
 	if (Array.isArray(object)) return [ ...object.slice(0, path[0] as number), set_path_object(object[path[0] as number], path.slice(1), value), ...object.slice(1 + (path[0] as number)) ] as T
 	return { ...object, [path[0]]: set_path_object((object as Record<string,unknown>)[path[0] as string], path.slice(1), value), }
 }
-export const update_path_object = <T extends unknown = unknown, O extends unknown = unknown>(object: O, path: Path = [], transformer = (original: T | undefined, path: Path, object: O): T => original as T) => set_path_object(object, path, transformer(get_path_object<T>(object, path), path, object))
+export const update_path_object = <T extends unknown = unknown, O extends unknown = unknown>(object: O, path: Path = [], transformer: ((original: T, path: Path, object: O) => T) = ident) => set_path_object(object, path, transformer(get_path_object<T>(object, path)!, path, object))
 const map_list_path_object = ([ key, value ]: [ string, unknown ]): Array<Path> => list_path_object(value).map(path => [ key, ...path ])
 export const list_path_object = (object: unknown): Array<Path> => typeof object !== 'object' || !object ? [[]] : ([[]] as Array<Path>).concat(...Object.entries(object).map(map_list_path_object))
 export const normalise_function = (functOrResult: Function | unknown): Function => (typeof functOrResult === 'function') ? functOrResult : () => functOrResult
@@ -31,6 +31,27 @@ if (path.length === 0) return null
 return get_closest_path(object, path.slice(0,-1), condition)
 }
 export const wait_time = (delay: number): Promise<void> => (delay ? new Promise(resolve => setTimeout(resolve, delay)) : Promise.resolve())
+export const name = (obj: Function | { name?: string } | (Array<unknown> & { name?: string })): string | undefined => obj.name
+export const named = <T extends unknown = unknown>(name: string, obj: T): T & { name: string } => {
+	const type = typeof obj
+	if (typeof obj === 'function') return ({ [name]: (...args: Array<unknown>) => obj(...args) })[name] as T & { name: string }
+	if (typeof obj === 'object' && !Array.isArray(obj)) return { ...obj, name }
+	const ret = Array.isArray(obj) ? [...obj] : obj;
+	(ret as T & { name: string }).name = name
+	return (ret as T & { name: string })
+}
+export const ident = <T extends unknown = unknown>(original: T): T => original
+export const inc = <State extends InitialState = InitialState>(property: keyof State, by: number = 1): ((state: SystemState<State>) => ChangesType<State>) => named(`${by === 1 ? 'increment ':''}${by === -1 ? 'decrement ':''}${String(property)}${Math.sign(by) === 1 && by !== 1 ? ` plus ${by}`:''}${Math.sign(by) === -1 && by !== -1 ? ` minus ${Math.abs(by)}`:''}`, ({ [property]: i }) => ({ [property]: (i as number) + by } as ChangesType<State>))
+export const and = <Args extends Array<unknown> = Array<unknown>>(...methods: Array<(...args: Args) => boolean>): ((...args: Args) => boolean) => named(methods.map(name).join(' and '), (...args) => methods.every(method => method(...args)))
+export const or = <Args extends Array<unknown> = Array<unknown>>(...methods: Array<(...args: Args) => boolean>): ((...args: Args) => boolean) => named(methods.map(name).join(' or '), (...args) => methods.some(method => method(...args)))
+export const not = <Args extends Array<unknown> = Array<unknown>>(method: ((...args: Args) => boolean)): ((...args: Args) => boolean) => named(`not ${method.name}`, (...args) => !method(...args))
+export const forIn = <
+	State extends InitialState = InitialState,
+	Output extends unknown = undefined,
+	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
+	Action extends unknown = ActionType<State, Output>,
+	Process extends unknown = ProcessType<State, Output, Action>,
+>(list: string, index: string, ...methods: Array<Process>): Process => named(`for ${index} in ${list}`, [ named(`reset ${index}`, () => ({ [index]: 0 })), { while: named(`${index} is within ${list}`, ({ [index]: i, [list]: l }: State) => (i as number) < (l as Array<unknown>).length), do: [ methods, inc(index) ] } ]) as Process
 export class SuperSmallStateMachineError<
 	State extends InitialState = InitialState,
 	Output extends unknown = undefined,
@@ -38,14 +59,14 @@ export class SuperSmallStateMachineError<
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 > extends Error {
-public instance?: Partial<S<State, Output, Input, Action, Process>>
-public state?: SystemState<State, Output>
-public data?: any
-public path?: Path
-constructor(message: string, { instance, state, data, path }: Partial<SuperSmallStateMachineError<State, Output, Input, Action, Process>>) {
-	super(message)
-	Object.assign(this, { instance, state, data, path })
-}
+	public instance?: Partial<S<State, Output, Input, Action, Process>>
+	public state?: SystemState<State, Output>
+	public data?: any
+	public path?: Path
+	constructor(message: string, { instance, state, data, path }: Partial<SuperSmallStateMachineError<State, Output, Input, Action, Process>>) {
+		super(message)
+		Object.assign(this, { instance, state, data, path })
+	}
 }
 export class SuperSmallStateMachineReferenceError<
 	State extends InitialState = InitialState,
@@ -193,10 +214,11 @@ export interface InitialState {
 }
 export type SystemState<State extends InitialState = InitialState, Output extends unknown = undefined> = State & {
 	[S.Path]: Path
+	[S.Trace]: Array<Path>
 	[S.Changes]: Partial<State>
 	[S.Return]?: Output | undefined
 }
-export type InputSystemState<State extends InitialState = InitialState, Output extends unknown = undefined> = State & Partial<Pick<SystemState<State, Output>, typeof S.Path | typeof S.Return>>
+export type InputSystemState<State extends InitialState = InitialState, Output extends unknown = undefined> = State & Partial<Pick<SystemState<State, Output>, typeof S.Path | typeof S.Return | typeof S.Trace>>
 
 export interface Config<
 	State extends InitialState = InitialState,
@@ -216,6 +238,7 @@ export interface Config<
 	input: (...input: Input) => Partial<InputSystemState<State, Output>>,
 	output: (state: SystemState<State, Output>) => Output,
 	nodes: NS<State, Output, Input, Action, Process>,
+	trace: boolean,
 	deep: boolean,
 	async: boolean,
 	pause: (state: SystemState<State, Output>, runs: number) => false | Promise<any>
@@ -372,9 +395,8 @@ SelfType = SwitchType<State, Output, Action>,>(this: Instance<State, Output, Inp
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 SelfType = WhileType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> {
-			if (normalise_function((node as WhileType<State, Output, Action>)[KeyWords.WH])(state))
-				return (KeyWords.DO in (node as WhileType<State, Output, Action>) ? [ ...state[S.Path], KeyWords.DO ] : null) as Action
-			return null as Action
+			if (!((KeyWords.DO in (node as WhileType<State, Output, Action>)) && normalise_function((node as WhileType<State, Output, Action>)[KeyWords.WH])(state))) return null as Action
+			return [ ...state[S.Path], KeyWords.DO ] as Action
 		}
 		static proceed<
 	State extends InitialState = InitialState,
@@ -530,6 +552,7 @@ export abstract class SuperSmallStateMachineCore<
 		public static readonly Return = Symbol('Super Small State Machine Return')
 		public static readonly Changes = Symbol('Super Small State Machine Changes')
 		public static readonly Path = Symbol('Super Small State Machine Path')
+		public static readonly Trace = Symbol('Super Small State Machine Trace')
 		public static readonly StrictTypes = Symbol('Super Small State Machine Strict Types')
 	public static readonly keyWords: typeof KeyWords = KeyWords
 	public static readonly kw:       typeof KeyWords = KeyWords
@@ -545,6 +568,7 @@ export abstract class SuperSmallStateMachineCore<
 		until: state => S.Return in state,
 		pause: () => false,
 		async: false,
+		trace: false,
 		deep: false,
 		override: null,
 		nodes: new NS(...SuperSmallStateMachineCore.nodes as unknown as []),
@@ -629,7 +653,7 @@ export abstract class SuperSmallStateMachineCore<
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-> (instance: Instance<State, Output, Input, Action, Process>, iterator: ((node: Process, path: Path, process: Process, nodeType: string | symbol) => Process)): Process {
+> (instance: Instance<State, Output, Input, Action, Process>, iterator: ((node: Process, path: Path, process: Process, nodeType: string | symbol) => Process) = ident): Process {
 		const iterate = (path: Path = []): Process => {
 			const node = get_path_object<Process>(instance.process, path)!
 			const nodeType = instance.config.nodes.typeof(node)
@@ -655,18 +679,18 @@ export abstract class SuperSmallStateMachineCore<
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 >(instance: Instance<State, Output, Input, Action, Process>, ...input: Input): Output {
-		const { until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults } = { ...this.config, ...instance.config }
+		const { until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults, trace } = { ...this.config, ...instance.config }
 		const modifiedInput = adaptInput.apply(instance, input) || {}
 		let r = 0, currentState = before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
 			[S.Changes]: {},
 			...defaults,
-			[S.Path]: modifiedInput[S.Path] || [],
+			[S.Path]: modifiedInput[S.Path] || [], [S.Trace]: modifiedInput[S.Trace] || [],
 			...(S.Return in modifiedInput ? {[S.Return]: modifiedInput[S.Return]} : {})
 		} as SystemState<State, Output>, modifiedInput))
 		while (r < iterations) {
 			if (until(currentState)) break;
-			if (++r >= iterations)
-				throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
+			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
+			if (trace) currentState = { ...currentState, [S.Trace]: [ ...currentState[S.Trace], currentState[S.Path] ] }
 			currentState = this._perform(instance, currentState, this._execute(instance, currentState))
 		}
 		return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
@@ -678,20 +702,20 @@ export abstract class SuperSmallStateMachineCore<
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 >(instance: Instance<State, Output, Input, Action, Process>, ...input: Input): Promise<Output> {
-		const { pause, until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults } = { ...this.config, ...instance.config }
+		const { pause, until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults, trace } = { ...this.config, ...instance.config }
 		const modifiedInput = (await adaptInput.apply(instance, input)) || {}
 		let r = 0, currentState = before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
 			[S.Changes]: {},
 			...defaults,
-			[S.Path]: modifiedInput[S.Path] || [],
+			[S.Path]: modifiedInput[S.Path] || [], [S.Trace]: modifiedInput[S.Trace] || [],
 			...(S.Return in modifiedInput ? {[S.Return]: modifiedInput[S.Return]} : {})
 		} as SystemState<State, Output>, modifiedInput))
 		while (r < iterations) {
 			const pauseExecution = pause.call(instance, currentState, r)
 			if (pauseExecution) await pauseExecution;
 			if (until(currentState)) break;
-			if (++r >= iterations)
-				throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
+			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
+			if (trace) currentState = { ...currentState, [S.Trace]: [ ...currentState[S.Trace], currentState[S.Path] ] }
 			currentState = await this._perform(instance, currentState, await this._execute(instance, currentState))
 		}
 		return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
@@ -798,6 +822,20 @@ export abstract class SuperSmallStateMachineChain<
 	Process extends unknown = ProcessType<State, Output, Action>,
 	NewResult extends unknown = Output,
 >(output: (state: SystemState<State, Output>) => NewResult) { return (instance: Instance<State, Output, Input, Action, Process>): Pick<S<State, NewResult, Input, ActionType<State, NewResult>, ProcessType<State, NewResult, ActionType<State, NewResult>>>, 'process' | 'config'> => ({ process: instance.process as unknown as ProcessType<State, NewResult, ActionType<State, NewResult>>, config: { ...instance.config, output } as unknown as Config<State, NewResult, Input, ActionType<State, NewResult>, ProcessType<State, NewResult, ActionType<State, NewResult>>>, }) }
+	static untrace<
+	State extends InitialState = InitialState,
+	Output extends unknown = undefined,
+	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
+	Action extends unknown = ActionType<State, Output>,
+	Process extends unknown = ProcessType<State, Output, Action>,
+>(instance: Instance<State, Output, Input, Action, Process>): Instance<State, Output, Input, Action, Process> { return ({ process: instance.process, config: { ...instance.config, trace: false }, }) }
+	static trace<
+	State extends InitialState = InitialState,
+	Output extends unknown = undefined,
+	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
+	Action extends unknown = ActionType<State, Output>,
+	Process extends unknown = ProcessType<State, Output, Action>,
+>(instance: Instance<State, Output, Input, Action, Process>): Instance<State, Output, Input, Action, Process> { return ({ process: instance.process, config: { ...instance.config, trace: true }, }) }
 	static shallow<
 	State extends InitialState = InitialState,
 	Output extends unknown = undefined,
@@ -958,6 +996,8 @@ export default class S<
 	defaults<NewState extends InitialState = State>(defaults: NewState): S<NewState, Output, [Partial<InputSystemState<NewState>>] | [], ActionType<NewState, Output>, ProcessType<NewState, Output, ActionType<NewState, Output>>> { return this.with(S.defaults(defaults)) }
 	input<NewInput extends Array<unknown> = Array<unknown>>(input: (...input: NewInput) => Partial<InputSystemState<State, Output>>): S<State, Output, NewInput, Action, Process> { return this.with(S.input(input)) }
 	output<NewResult extends unknown = Output>(output: (state: SystemState<State, Output>) => NewResult): S<State, NewResult, Input, ActionType<State, NewResult>, ProcessType<State, NewResult, ActionType<State, NewResult>>> { return this.with(S.output(output)) }
+	get untrace(): S<State, Output, Input, Action, Process> { return this.with(S.untrace) }
+	get trace(): S<State, Output, Input, Action, Process> { return this.with(S.trace) }
 	get shallow(): S<State, Output, Input, Action, Process> { return this.with(S.shallow) }
 	get deep(): S<State, Output, Input, Action, Process> { return this.with(S.deep) }
 	get unstrict(): S<State, Output, Input, Action, Process> { return this.with(S.unstrict) }

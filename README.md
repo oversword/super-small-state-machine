@@ -216,6 +216,18 @@ const instance = new S(({ myReturnValue }) => ({ myReturnValue: myReturnValue + 
 return instance({ myReturnValue: 'start' }) // 'start extra'
 ```
 
+## instance.untrace <default>
+
+Disables the stack trace.
+
+Creates a new instance.
+
+## instance.trace
+
+Enables the stack trace.
+
+Creates a new instance.
+
 ## instance.shallow <default>
 
 Shallow merges the state every time a state change in made.
@@ -601,6 +613,18 @@ const instance = new S(({ myReturnValue }) => ({ myReturnValue: myReturnValue + 
 return instance({ myReturnValue: 'start' }) // 'start extra'
 ```
 
+## S.untrace <default>
+
+Shallow merges the state every time a state change in made.
+
+Returns a function that will modify a given instance.
+
+## S.trace
+
+Deep merges the all properties in the state every time a state change in made.
+
+Returns a function that will modify a given instance.
+
 ## S.shallow <default>
 
 Shallow merges the state every time a state change in made.
@@ -932,6 +956,14 @@ Returned in the state to indicate the next action path, or passed in with the st
 return { [S.Path]: [] } // Succeeds
 ```
 
+### Trace
+
+Returned in the state when the trace flag is on, will contain every path that was executed during the run.
+
+```javascript
+return { [S.Trace]: [] } // Succeeds
+```
+
 ### StrictTypes
 
 Possible value of `config.strict`, used to indicate strict types as well as values.
@@ -959,6 +991,8 @@ Run util the return symbol is present by default.
 Do not allow for asynchronous actions by default
 
 Do not allow for asynchronous actions by default
+
+Do not keep the stack trace by default
 
 Shallow merge changes by default
 
@@ -1161,7 +1195,7 @@ If the node is not recognised, throw a NodeTypeError
 
 Execute the node and return an action
 
-## S._traverse(instance, iterator = a => a)
+## S._traverse(instance, iterator)
 
 Traverses a process, mapping each node to a new value, effectively cloning the process.
 
@@ -1213,9 +1247,9 @@ This should be fine for most finite machines, but may be too little for some con
 
 Do it first to catch starting with a `S.Return` in place.
 
-#### If the interations are exceeded, Error
+If the interations are exceeded, Error
 
-Throw new MaxIterationsError
+If stack trace is enabled, push the current path to the stack
 
 Execute the current node on the process and perform any required actions. Updating the currentState
 
@@ -1247,9 +1281,9 @@ Pause execution based on the pause customisation method
 
 Check the configured `until` condition to see if we should exit.
 
-#### If the interaction are exceeded, Error
+If the interaction are exceeded, throw MaxIterationsError
 
-Throw new MaxIterationsError
+If stack trace is enabled, push the current path to the stack
 
 Execute the current node on the process and perform any required actions. Updating the currentState
 
@@ -1544,9 +1578,9 @@ A while node is an object with the `'while'` property.
 
 #### Evaluate the `'while'` property as a function that returns a boolean.
 
-If `true`, execute the `'do'` clause
-
 If the condition is false, exit the while loop.
+
+If `true`, execute the `'do'` clause
 
 Proceed by re-entering the while loop.
 

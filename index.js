@@ -47,11 +47,11 @@ export const or = (...methods) => named(methods.map(name).join(' or '), (...args
 export const not = method => named(`not ${method.name}`, (...args) => !method(...args))
 export const forIn = (list, index, ...methods) => named(`for ${index} in ${list}`, [ named(`reset ${index}`, () => ({ [index]: 0 })), { while: named(`${index} is within ${list}`, ({ [index]: i, [list]: l }) => i < l.length), do: [ methods, inc(index) ] } ])
 export class SuperSmallStateMachineError extends Error {
-instance; state; data; path;
-constructor(message, { instance, state, data, path } = {}) {
-	super(message)
-	Object.assign(this, { instance, state, data, path })
-}
+	instance; state; data; path;
+	constructor(message, { instance, state, data, path } = {}) {
+		super(message)
+		Object.assign(this, { instance, state, data, path })
+	}
 }
 export class SuperSmallStateMachineReferenceError extends SuperSmallStateMachineError {}
 export class SuperSmallStateMachineTypeError extends SuperSmallStateMachineError {}
