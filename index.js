@@ -58,7 +58,7 @@ export class SuperSmallStateMachineTypeError extends SuperSmallStateMachineError
 export class StateReferenceError extends SuperSmallStateMachineReferenceError {}
 export class StateTypeError extends SuperSmallStateMachineTypeError {}
 export class NodeTypeError extends SuperSmallStateMachineTypeError {}
-export class UndefinedNodeError extends SuperSmallStateMachineReferenceError {}
+export class NodeReferenceError extends SuperSmallStateMachineReferenceError {}
 export class MaxIterationsError extends SuperSmallStateMachineError {}
 export class PathReferenceError extends SuperSmallStateMachineReferenceError {}
 export const NodeTypes = {
@@ -130,7 +130,7 @@ export class FunctionN extends N {
 export class Undefined extends N {
 	static type = NodeTypes.UN
 	static typeof(object, objectType) { return objectType === 'undefined' }
-	static execute(node, state) { throw new UndefinedNodeError(`There is nothing to execute at path [ ${state[S.Path].map(key => key.toString()).join(', ')} ]`, { instance: this, state, path: state[S.Path], data: { node } }) }
+	static execute(node, state) { throw new NodeReferenceError(`There is nothing to execute at path [ ${state[S.Path].map(key => key.toString()).join(', ')} ]`, { instance: this, state, path: state[S.Path], data: { node } }) }
 }
 export class Empty extends N {
 	static type = NodeTypes.EM
@@ -304,7 +304,7 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 			...(S.Return in modifiedInput ? {[S.Return]: modifiedInput[S.Return]} : {})
 		}, modifiedInput))
 		while (r < iterations) {
-			if (until(currentState)) break;
+			if (until.call(instance, currentState, r)) break;
 			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
 			if (trace) currentState = { ...currentState, [S.Trace]: [ ...currentState[S.Trace], currentState[S.Path] ] }
 			currentState = this._perform(instance, currentState, this._execute(instance, currentState))
@@ -323,7 +323,7 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 		while (r < iterations) {
 			const pauseExecution = pause.call(instance, currentState, r)
 			if (pauseExecution) await pauseExecution;
-			if (until(currentState)) break;
+			if (until.call(instance, currentState, r)) break;
 			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
 			if (trace) currentState = { ...currentState, [S.Trace]: [ ...currentState[S.Trace], currentState[S.Path] ] }
 			currentState = await this._perform(instance, currentState, await this._execute(instance, currentState))

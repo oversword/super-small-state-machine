@@ -1,10 +1,19 @@
 import D, { E, JS, TS, CS } from './d/index.js'
-import S, { clone_object, N, normalise_function, StateReferenceError, StateTypeError, unique_list_strings, wait_time, get_path_object, deep_merge_object, UndefinedNodeError, MaxIterationsError } from './index.js'
+import S, { clone_object, N, normalise_function, StateReferenceError, StateTypeError, unique_list_strings, wait_time, get_path_object, deep_merge_object, NodeReferenceError, MaxIterationsError } from './index.js'
 import * as testModule from './index.js'
 import { list_path_object } from './index.js'
 import { get_closest_path } from './index.js'
 import { named } from './index.js'
 import { inc } from './index.js'
+import { or } from './index.js'
+import { forIn } from './index.js'
+import { SuperSmallStateMachineReferenceError } from './index.js'
+import { NodeTypeError } from './index.js'
+import { PathReferenceError } from './index.js'
+import { SuperSmallStateMachineTypeError } from './index.js'
+import { SuperSmallStateMachineError } from './index.js'
+import { not } from './index.js'
+import { and } from './index.js'
 import { ident } from './index.js'
 import { name } from './index.js'
 import { shallow_merge_object } from './index.js'
@@ -16,6 +25,7 @@ import parallelPlugin, { parallel } from './plugin/parallel.js'
 
 const symbols = {
 	'S.Path': S.Path,
+	'S.Trace': S.Trace,
 	'S.Changes': S.Changes,
 	'S.Return': S.Return,
 	'S.StrictTypes': S.StrictTypes,
@@ -779,51 +789,51 @@ D('Library Methods',
 		),
 		D('Returns a function',
 			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
-		),
-		D('Passes all arguments into the methods',
-			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
-		),
-		D('Evaluates to true if all methods return truthy',
-			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
-		),
-		D('Evaluates to false if some methods return falsey',
-			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
-		),
-		D('Evaluates to false if no methods are given',
-			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+				const result = and()
+				return typeof result
+			}, 'function')
 		),
 		D('Names the returned function after the given methods',
 			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+				const firstFunction = () => {}
+				const secondFunction = () => {}
+				const result = and(firstFunction, secondFunction)
+				return result.name.includes(firstFunction.name) && result.name.includes(secondFunction.name)
+			}, true)
+		),
+		D('Passes all arguments into the methods',
+			E.equals(() => {
+				let allArgs = []
+				const firstFunction = (...args) => { allArgs.push(args); return true; }
+				const secondFunction = (...args) => { allArgs.push(args); return true; }
+				const result = and(firstFunction, secondFunction)
+				result(1, 'a', 'Something', 5)
+				return allArgs
+			}, [ [1, 'a', 'Something', 5], [1, 'a', 'Something', 5] ])
+		),
+		D('Evaluates to true if all methods return truthy',
+			E.equals(() => {
+				const firstFunction = () => true
+				const secondFunction = () => true
+				const thridFunction = () => true
+				const result = and(firstFunction, secondFunction, thridFunction)
+				return result()
+			}, true)
+		),
+		D('Evaluates to false if some methods return falsey',
+			E.equals(() => {
+				const firstFunction = () => true
+				const secondFunction = () => false
+				const thridFunction = () => true
+				const result = and(firstFunction, secondFunction, thridFunction)
+				return result()
+			}, false)
+		),
+		D('Evaluates to true if no methods are given',
+			E.equals(() => {
+				const result = and()
+				return result()
+			}, true)
 		),
 		JS("export const and = (...methods) => named(methods.map(name).join(' and '), (...args) => methods.every(method => method(...args)))"),
 		TS("export const and = <Args extends Array<unknown> = Array<unknown>>(...methods: Array<(...args: Args) => boolean>): ((...args: Args) => boolean) => named(methods.map(name).join(' and '), (...args) => methods.every(method => method(...args)))")
@@ -835,51 +845,51 @@ D('Library Methods',
 		),
 		D('Returns a function',
 			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
-		),
-		D('Passes all the arguments into the methods',
-			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
-		),
-		D('Evaluates to true if some methods return truthy',
-			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
-		),
-		D('Evaluates to false if no methods return truthy',
-			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
-		),
-		D('Evaluates to false if there are no methods',
-			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+				const result = or()
+				return typeof result
+			}, 'function')
 		),
 		D('Names the returned function after the given methods',
 			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+				const firstFunction = () => {}
+				const secondFunction = () => {}
+				const result = or(firstFunction, secondFunction)
+				return result.name.includes(firstFunction.name) && result.name.includes(secondFunction.name)
+			}, true)
+		),
+		D('Passes all arguments into the methods',
+			E.equals(() => {
+				let allArgs = []
+				const firstFunction = (...args) => { allArgs.push(args); return false; }
+				const secondFunction = (...args) => { allArgs.push(args); return false; }
+				const result = or(firstFunction, secondFunction)
+				result(1, 'a', 'Something', 5)
+				return allArgs
+			}, [ [1, 'a', 'Something', 5], [1, 'a', 'Something', 5] ])
+		),
+		D('Evaluates to true if some methods return truthy',
+			E.equals(() => {
+				const firstFunction = () => false
+				const secondFunction = () => true
+				const thridFunction = () => false
+				const result = or(firstFunction, secondFunction, thridFunction)
+				return result()
+			}, true)
+		),
+		D('Evaluates to false if no methods return truthy',
+			E.equals(() => {
+				const firstFunction = () => false
+				const secondFunction = () => false
+				const thridFunction = () => false
+				const result = or(firstFunction, secondFunction, thridFunction)
+				return result()
+			}, false)
+		),
+		D('Evaluates to false if there are no methods',
+			E.equals(() => {
+				const result = or()
+				return result()
+			}, false)
 		),
 		JS("export const or = (...methods) => named(methods.map(name).join(' or '), (...args) => methods.some(method => method(...args)))"),
 		TS("export const or = <Args extends Array<unknown> = Array<unknown>>(...methods: Array<(...args: Args) => boolean>): ((...args: Args) => boolean) => named(methods.map(name).join(' or '), (...args) => methods.some(method => method(...args)))")
@@ -891,35 +901,40 @@ D('Library Methods',
 		),
 		D('Returns a function',
 			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+				const myFunction = () => {}
+				const result = not(myFunction)
+				return typeof result
+			}, 'function')
 		),
-		D('Passes all the arguments into the given method',
+		D('Names the returned function after the given method',
 			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+				const myFunction = () => {}
+				const result = not(myFunction)
+				return result.name.includes(myFunction.name)
+			}, true)
+		),
+		D('Passes all arguments into the method',
+			E.equals(() => {
+				let allArgs = []
+				const myFunction = (...args) => { allArgs.push(args); return false; }
+				const result = not(myFunction)
+				result(1, 'a', 'Something', 5)
+				return allArgs
+			}, [ [1, 'a', 'Something', 5] ])
 		),
 		D('Returns true if the method returns falsey',
 			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+				const myFunction = () => null
+				const result = not(myFunction)
+				return result()
+			}, true)
 		),
 		D('Returns false if the given method returns truthy',
 			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+				const myFunction = () => 'some string'
+				const result = not(myFunction)
+				return result()
+			}, false)
 		),
 		JS("export const not = method => named(`not ${method.name}`, (...args) => !method(...args))"),
 		TS("export const not = <Args extends Array<unknown> = Array<unknown>>(method: ((...args: Args) => boolean)): ((...args: Args) => boolean) => named(`not ${method.name}`, (...args) => !method(...args))")
@@ -931,19 +946,21 @@ D('Library Methods',
 		),
 		D('Returns a list with a name',
 			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+				const result = forIn('myList', 'myIndex')
+				return Array.isArray(result) && result.name
+			}, 'for myIndex in myList')
 		),
 		D('Can be executed in a machine as a for loop',
 			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+				const machine = new S([
+					forIn('stack', 'pointer',
+						{ if: ({ pointer }) => pointer !== 0, then: ({ result }) => ({ result: result + ' ' }) },
+						({ result, stack, pointer }) => ({ result: result + stack[pointer] })
+					),
+					({ result }) => ({ [S.Return]: result }) 
+				])
+				return machine({ stack: [ 'a', 'b', 'c', 'd' ], result: '', pointer: -1 })
+			}, 'a b c d')
 		),
 		JS("export const forIn = (list, index, ...methods) => named(`for ${index} in ${list}`, [ named(`reset ${index}`, () => ({ [index]: 0 })), { while: named(`${index} is within ${list}`, ({ [index]: i, [list]: l }) => i < l.length), do: [ methods, inc(index) ] } ])"),
 		TS(`export const forIn = ${commonGenericDefinition}(list: string, index: string, ...methods: Array<Process>): Process => named(\`for \${index} in \${list}\`, [ named(\`reset \${index}\`, () => ({ [index]: 0 })), { while: named(\`\${index} is within \${list}\`, ({ [index]: i, [list]: l }: State) => (i as number) < (l as Array<unknown>).length), do: [ methods, inc(index) ] } ]) as Process`)
@@ -956,29 +973,50 @@ D('Errors',
 		D('This class is exported by the library as `{ SuperSmallStateMachineError }`',
 			E.exports('SuperSmallStateMachineError', testModule, './index.js'),
 		),
+		D('Is an error instance',
+			E.equals(() => {
+				return (new SuperSmallStateMachineError()) instanceof Error
+			}, true)
+		),
 		D('A message string can be passed into the error',
 			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+				return new SuperSmallStateMachineError('My String!')
+			}, { message: 'My String!' })
 		),
-		D('All exproted errors inherit from this class',
+		D('All exported errors inherit from this class',
 			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+				const referenceError      = new SuperSmallStateMachineReferenceError()
+				const typeError           = new SuperSmallStateMachineTypeError()
+				const stateReferenceError = new StateReferenceError()
+				const stateTypeError      = new StateTypeError()
+				const nodeTypeError       = new NodeTypeError()
+				const nodeReferenceError  = new NodeReferenceError()
+				const maxIterationsError  = new MaxIterationsError()
+				const pathReferenceError  = new PathReferenceError()
+				return referenceError      instanceof SuperSmallStateMachineError
+				    && typeError           instanceof SuperSmallStateMachineError
+				    && stateReferenceError instanceof SuperSmallStateMachineError
+				    && stateTypeError      instanceof SuperSmallStateMachineError
+				    && nodeTypeError       instanceof SuperSmallStateMachineError
+				    && nodeReferenceError  instanceof SuperSmallStateMachineError
+				    && maxIterationsError  instanceof SuperSmallStateMachineError
+				    && pathReferenceError  instanceof SuperSmallStateMachineError
+			}, true)
 		),
 		D('Passing a state, instance, data, and/or path with make those properties available in the error',
 			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+				return new SuperSmallStateMachineError('', {
+					instance: 'something',
+					path: 'something else',
+					state: 'my state',
+					data: 'special data'
+				})
+			}, {
+				instance: 'something',
+				path: 'something else',
+				state: 'my state',
+				data: 'special data'
+			})
 		),
 		JS("export class SuperSmallStateMachineError extends Error {"),
 		TS(`export class SuperSmallStateMachineError${commonGenericDefinition} extends Error {`),
@@ -1009,11 +1047,13 @@ D('Errors',
 		),
 		D('All exported reference errors inherit from this class',
 			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+				const stateReferenceError = new StateReferenceError()
+				const nodeReferenceError  = new NodeReferenceError()
+				const pathReferenceError  = new PathReferenceError()
+				return stateReferenceError instanceof SuperSmallStateMachineReferenceError
+				    && nodeReferenceError  instanceof SuperSmallStateMachineReferenceError
+				    && pathReferenceError  instanceof SuperSmallStateMachineReferenceError
+			}, true)
 		),
 		JS("export class SuperSmallStateMachineReferenceError extends SuperSmallStateMachineError {}"),
 		TS(`export class SuperSmallStateMachineReferenceError${commonGenericDefinition} extends SuperSmallStateMachineError${commonGenericArguments} {}`)
@@ -1025,11 +1065,11 @@ D('Errors',
 		),
 		D('All exported type errors inherit from this class',
 			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+				const stateTypeError = new StateTypeError()
+				const nodeTypeError  = new NodeTypeError()
+				return stateTypeError instanceof SuperSmallStateMachineTypeError
+				    && nodeTypeError  instanceof SuperSmallStateMachineTypeError
+			}, true)
 		),
 		JS("export class SuperSmallStateMachineTypeError extends SuperSmallStateMachineError {}"),
 		TS(`export class SuperSmallStateMachineTypeError${commonGenericDefinition} extends SuperSmallStateMachineError${commonGenericArguments} {}`)
@@ -1041,12 +1081,10 @@ D('Errors',
 			E.exports('StateReferenceError', testModule, './index.js'),
 		),
 		D('A state reference error is thrown when a new property is added to the state of a machine while in strict mode',
-			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+			E.error(() => {
+				const machine = new S({ myUnknownVar: true }).strict
+				return machine()
+			}, StateReferenceError)
 		),
 		JS("export class StateReferenceError extends SuperSmallStateMachineReferenceError {}"),
 		TS(`export class StateReferenceError${commonGenericDefinition} extends SuperSmallStateMachineReferenceError${commonGenericArguments} {}`)
@@ -1058,12 +1096,11 @@ D('Errors',
 			E.exports('StateTypeError', testModule, './index.js'),
 		),
 		D('A state type errors is thrown when a property changes type in strict state mode',
-			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+			E.error(() => {
+				const machine = new S({ myKnownVar: 'not a boolean' }).strictTypes
+				.defaults({ myKnownVar: true })
+				return machine()
+			}, StateTypeError)
 		),
 		JS("export class StateTypeError extends SuperSmallStateMachineTypeError {}"),
 		TS(`export class StateTypeError${commonGenericDefinition} extends SuperSmallStateMachineTypeError${commonGenericArguments} {}`)
@@ -1075,33 +1112,29 @@ D('Errors',
 			E.exports('NodeTypeError', testModule, './index.js'),
 		),
 		D('A node type error is thrown when an unrecognised node is used in a process',
-			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+			E.error(() => {
+				const machine = new S(true)
+				return machine()
+			}, NodeTypeError)
 		),
 		JS("export class NodeTypeError extends SuperSmallStateMachineTypeError {}"),
 		TS(`export class NodeTypeError${commonGenericDefinition} extends SuperSmallStateMachineTypeError${commonGenericArguments} {}`)
 	),
-	D('UndefinedNodeError',
+	D('NodeReferenceError',
 		'An undefined node was used in a process.',
 		'This is probably caused by a missing variable.',
 		'If you wish to perform an intentional no-op, use `null`',
-		D('This class is exported by the library as `{ UndefinedNodeError }`',
-			E.exports('UndefinedNodeError', testModule, './index.js'),
+		D('This class is exported by the library as `{ NodeReferenceError }`',
+			E.exports('NodeReferenceError', testModule, './index.js'),
 		),
-		D('An udefined node error is thrown when a node in a process is `undefined`',
-			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+		D('An node reference error is thrown when a node in a process is `undefined`',
+			E.error(() => {
+				const machine = new S([undefined])
+				return machine()
+			}, NodeReferenceError)
 		),
-		JS("export class UndefinedNodeError extends SuperSmallStateMachineReferenceError {}"),
-		TS(`export class UndefinedNodeError${commonGenericDefinition} extends SuperSmallStateMachineReferenceError${commonGenericArguments} {}`)
+		JS("export class NodeReferenceError extends SuperSmallStateMachineReferenceError {}"),
+		TS(`export class NodeReferenceError${commonGenericDefinition} extends SuperSmallStateMachineReferenceError${commonGenericArguments} {}`)
 	),
 	D('MaxIterationsError',
 		'The execution of the process took more iterations than was allowed.',
@@ -1110,12 +1143,10 @@ D('Errors',
 			E.exports('MaxIterationsError', testModule, './index.js'),
 		),
 		D('A max iterations errors is thrown when an execution exceeds the maximum allowed iterations',
-			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+			E.error(() => {
+				const machine = new S([ 0 ]).for(10)
+				return machine()
+			}, MaxIterationsError)
 		),
 		JS("export class MaxIterationsError extends SuperSmallStateMachineError {}"),
 		TS(`export class MaxIterationsError${commonGenericDefinition} extends SuperSmallStateMachineError${commonGenericArguments} {}`)
@@ -1126,12 +1157,10 @@ D('Errors',
 			E.exports('PathReferenceError', testModule, './index.js'),
 		),
 		D('A path reference error is thrown when the machine is told to target a node that does not exist',
-			E.equals(() => {
-				const testObject = {
-
-				}
-				return
-			}, {})
+			E.error(() => {
+				const machine = new S('not a stage')
+				return machine()
+			}, PathReferenceError)
 		),
 		JS("export class PathReferenceError extends SuperSmallStateMachineReferenceError {}"),
 		TS(`export class PathReferenceError${commonGenericDefinition} extends SuperSmallStateMachineReferenceError${commonGenericArguments} {}`)
@@ -1341,7 +1370,7 @@ export interface Config<
 > {
 	defaults: State,
 	iterations: number,
-	until: (state: SystemState<State, Output>) => boolean,
+	until: (this: Instance${commonGenericArguments}, state: SystemState<State, Output>, runs: number) => boolean,
 	strict: boolean | typeof S.StrictTypes,
 	override: null | ((...args: Input) => Output),
 	adapt: Array<(process: Process) => Process>,
@@ -1353,7 +1382,7 @@ export interface Config<
 	trace: boolean,
 	deep: boolean,
 	async: boolean,
-	pause: (state: SystemState<State, Output>, runs: number) => false | Promise<any>
+	pause: (this: Instance${commonGenericArguments}, state: SystemState<State, Output>, runs: number) => false | Promise<any>
 }`)
 ),
 
@@ -1516,9 +1545,9 @@ D('Default Nodes',
 			E.error(() => {
 				const instance = new S([undefined])
 				return instance()
-			}, UndefinedNodeError),
-			JS("static execute(node, state) { throw new UndefinedNodeError(`There is nothing to execute at path [ ${state[S.Path].map(key => key.toString()).join(', ')} ]`, { instance: this, state, path: state[S.Path], data: { node } }) }"),
-			TS(`static execute<${commonGenericDefinitionInner}SelfType = undefined>(this: Instance${commonGenericArguments}, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> { throw new UndefinedNodeError(\`There is nothing to execute at path [ \${state[S.Path].map(key => key.toString()).join(', ')} ]\`, { instance: this, state, path: state[S.Path], data: { node } }) }`)
+			}, NodeReferenceError),
+			JS("static execute(node, state) { throw new NodeReferenceError(`There is nothing to execute at path [ ${state[S.Path].map(key => key.toString()).join(', ')} ]`, { instance: this, state, path: state[S.Path], data: { node } }) }"),
+			TS(`static execute<${commonGenericDefinitionInner}SelfType = undefined>(this: Instance${commonGenericArguments}, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> { throw new NodeReferenceError(\`There is nothing to execute at path [ \${state[S.Path].map(key => key.toString()).join(', ')} ]\`, { instance: this, state, path: state[S.Path], data: { node } }) }`)
 		),
 		D('When used as an action, undefined only moves to the next node.',
 			E.equals(() => {
@@ -2128,12 +2157,9 @@ D('Core',
 	D('Config',
 		JS("static config = {"),
 		TS("public static readonly config: Config = {"),
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		E.equals(() => {
+			return S.config
+		}, { async: false, deep: false, strict: false, trace: false, iterations: 10000, override: null, adapt: [], before: [], after: [], defaults: {} }),
 		D('Initialise an empty state by default',
 			CS("defaults: {},")
 		),
@@ -2429,12 +2455,38 @@ D('Core',
 	D('S._traverse(instance, iterator)',
 		'Traverses a process, mapping each node to a new value, effectively cloning the process.',
 		'You can customise how each leaf node is mapped by supplying the `iterator` method',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		E.equals(() => {
+			const inputProcess = {
+				initial: 'swap this',
+				other: [
+					{
+						if: 'swap this too',
+						then: 'also swap this'
+					}
+				]
+			}
+			return S._traverse({
+				process: inputProcess,
+				config: S.config,
+			}, (node, path, process, nodeType) => {
+				if (node === 'swap this') return 'with this'
+				if (node === 'also swap this') return 'with that'
+				if (nodeType === 'condition' && node.if === 'swap this too')
+					return {
+						...node,
+						if: 'with another thing'
+					}
+				return node
+			})
+		}, {
+			initial: 'with this',
+			other: [
+				{
+					if: 'with another thing',
+					then: 'with that'
+				}
+			]
+		}),
 		JS("static _traverse(instance, iterator = ident) {"),
 		TS(`public static _traverse${commonGenericDefinition} (instance: Instance${commonGenericArguments}, iterator: ((node: Process, path: Path, process: Process, nodeType: string | symbol) => Process) = ident): Process {`),
 		D('Create an interation function to be used recursively',
@@ -2463,12 +2515,39 @@ D('Core',
 	),
 	D('S._run (instance, ...input)',
 		'Execute the entire process either synchronously or asynchronously depending on the config.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		D('Will execute the process',
+			E.equals(() => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return S._run(instance)
+			}, 'return value'),
+		),
+		D('Will execute the process in async mode if it is configured',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.async
+				return S._run(instance)
+			}, 'return value'),
+		),
+		D('Will not handle promises in sync mode',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.sync
+				return S._run(instance)
+			}, undefined),
+		),
+		D('Is the same as running the executable instance itself',
+			E.equals(() => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return S._run(instance) === instance()
+			}, true),
+		),
+		D('Takes the same arguments as the executable instance itself',
+			E.equals(() => {
+				const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
+					.input((a, b, c) => ({ a, b, c }))
+				return S._run(instance, 1, 2, 3) === instance(1, 2, 3)
+			}, true),
+		),
 		JS("static _run (instance, ...input) {"),
 		TS(`public static _run${commonGenericDefinition}(instance: Instance${commonGenericArguments}, ...input: Input): Output {`),
 		D('If the process is asynchronous, execute use `runAsync`',
@@ -2482,6 +2561,40 @@ D('Core',
 	),
 	D('S._runSync (instance, ...input)',
 		'Execute the entire process synchronously.',
+
+		D('Will execute the process',
+			E.equals(() => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return S._runSync(instance)
+			}, 'return value'),
+		),
+		D('Will not handle promises even if it is configured',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.async
+				return S._runSync(instance)
+			}, undefined),
+		),
+		D('Will not handle promises in sync mode',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.sync
+				return S._runSync(instance)
+			}, undefined),
+		),
+		D('Is the same as running the executable instance itself',
+			E.equals(() => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return S._runSync(instance) === instance()
+			}, true),
+		),
+		D('Takes the same arguments as the executable instance itself',
+			E.equals(() => {
+				const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
+					.input((a, b, c) => ({ a, b, c }))
+				return S._runSync(instance, 1, 2, 3) === instance(1, 2, 3)
+			}, true),
+		),
 		JS("static _runSync (instance, ...input) {"),
 		TS(`public static _runSync${commonGenericDefinition}(instance: Instance${commonGenericArguments}, ...input: Input): Output {`),
 		D('Extract the useful parts of the config',
@@ -2512,7 +2625,7 @@ D('Core',
 			CS("while (r < iterations) {"),
 			D('Check the configured `until` condition to see if we should exit.',
 				'Do it first to catch starting with a `S.Return` in place.',
-				CS("if (until(currentState)) break;")
+				CS("if (until.call(instance, currentState, r)) break;")
 			),
 			D('If the interations are exceeded, Error',
 				CS("if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })"),
@@ -2532,6 +2645,39 @@ D('Core',
 	),
 	D('S._runAsync (instance, ...input)',
 		'Execute the entire process asynchronously. Always returns a promise.',
+		D('Will execute the process',
+			E.equals(() => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return S._runAsync(instance)
+			}, 'return value'),
+		),
+		D('Will execute the process in async mode',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.async
+				return S._runAsync(instance)
+			}, 'return value'),
+		),
+		D('Will still handle promises even in sync mode',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.sync
+				return S._runAsync(instance)
+			}, 'return value'),
+		),
+		D('Is the same as running the executable instance itself',
+			E.equals(async () => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return await S._runAsync(instance) === instance()
+			}, true),
+		),
+		D('Takes the same arguments as the executable instance itself',
+			E.equals(async () => {
+				const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
+					.input((a, b, c) => ({ a, b, c }))
+				return await S._runAsync(instance, 1, 2, 3) === instance(1, 2, 3)
+			}, true),
+		),
 		JS("static async _runAsync (instance, ...input) {"),
 		TS(`public static async _runAsync${commonGenericDefinition}(instance: Instance${commonGenericArguments}, ...input: Input): Promise<Output> {`),
 		D('Extract the useful parts of the config',
@@ -2565,7 +2711,7 @@ D('Core',
 				CS(`if (pauseExecution) await pauseExecution;`),
 			),
 			D('Check the configured `until` condition to see if we should exit.',
-				CS("if (until(currentState)) break;"),
+				CS("if (until.call(instance, currentState, r)) break;"),
 			),
 			D('If the interaction are exceeded, throw MaxIterationsError',
 				CS("if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })"),
@@ -2638,12 +2784,19 @@ D('Chain',
 	D('S.proceed (state = {}, path = state[S.Path] || [])',
 		'Proceed to the next execution path.',
 		'Performs fallback logic when a node exits.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		E.equals(() => {
+			const instance = new S([
+				null,
+				null,
+			[
+					null,
+					null,
+				],
+				null
+			])
+			const proceeder = S.proceed({ [S.Path]: [ 2, 1 ] })
+			return proceeder(instance)
+		}, { [S.Path]: [ 3 ] }, symbols),
 		JS("static proceed(state, path)        { return instance => this._proceed(instance, state, path) }"),
 		TS(`static proceed${commonGenericDefinition}(state: SystemState<State, Output>, path: Path) { return (instance: Instance${commonGenericArguments}): Path | null => this._proceed(instance, state, path) }`)
 	),
@@ -2651,12 +2804,11 @@ D('Chain',
 		'Perform actions on the state.',
 		'Applies any changes in the given `action` to the given `state`.',
 		'Proceeds to the next node if the action is not itself a directive or return.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		E.equals(() => {
+			const instance = new S()
+			const performer = S.perform({ myProperty: 'start value' }, { myProperty: 'new value' })
+			return performer(instance)
+		}, { myProperty: 'new value' }),
 		JS("static perform(state, action)      { return instance => this._perform(instance, state, action) }"),
 		TS(`static perform${commonGenericDefinition}(state: SystemState<State, Output>, action: Action) { return (instance: Instance${commonGenericArguments}): SystemState<State, Output> => this._perform(instance, state, action) }`)
 	),
@@ -2664,55 +2816,163 @@ D('Chain',
 		'Execute a node in the process, return an action.',
 		"Executes the node in the process at the state's current path and returns it's action.",
 		'If the node is not executable it will be returned as the action.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		E.equals(() => {
+			const instance = new S([
+				{ myProperty: 'this value' },
+				{ myProperty: 'that value' },
+				{ myProperty: 'the other value' },
+			])
+			const executor = S.execute({ [S.Path]: [1], myProperty: 'start value' })
+			return executor(instance)
+		}, { [S.Path]: [2], myProperty: 'that value' }, symbols),
 		JS("static execute(state, path)        { return instance => this._execute(instance, state, path) }"),
 		TS(`static execute${commonGenericDefinition}(state: SystemState<State, Output>, path?: Path) { return (instance: Instance${commonGenericArguments}): Action => this._execute(instance, state, path) }`)
 	),
 	D('S.traverse(iterator = a => a)',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		E.equals(() => {
+			const instance = new S({
+				initial: 'swap this',
+				other: [
+					{
+						if: 'swap this too',
+						then: 'also swap this'
+					}
+				]
+			})
+			const traverser = S.traverse((node, path, process, nodeType) => {
+				if (node === 'swap this') return 'with this'
+				if (node === 'also swap this') return 'with that'
+				if (nodeType === 'condition' && node.if === 'swap this too')
+					return {
+						...node,
+						if: 'with another thing'
+					}
+				return node
+			})
+			return traverser(instance)
+		}, {
+			initial: 'with this',
+			other: [
+				{
+					if: 'with another thing',
+					then: 'with that'
+				}
+			]
+		}),
 		JS("static traverse(iterator)          { return instance => this._traverse(instance, iterator) }"),
 		TS(`static traverse${commonGenericDefinition}(iterator: ((node: Process, path: Path, process: Process, nodeType: string | symbol) => Process)) { return (instance: Instance${commonGenericArguments}) => this._traverse(instance, iterator) }`)
 	),
 	D('S.run (...input)',
 		'Execute the entire process either synchronously or asynchronously depending on the config.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		D('Will execute the process',
+			E.equals(() => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return S.run()(instance)
+			}, 'return value'),
+		),
+		D('Will execute the process in async mode if it is configured',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.async
+				return S.run()(instance)
+			}, 'return value'),
+		),
+		D('Will not handle promises in sync mode',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.sync
+				return S.run()(instance)
+			}, undefined),
+		),
+		D('Is the same as running the executable instance itself',
+			E.equals(() => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return S.run()(instance) === instance()
+			}, true),
+		),
+		D('Takes the same arguments as the executable instance itself',
+			E.equals(() => {
+				const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
+					.input((a, b, c) => ({ a, b, c }))
+				return S.run(1, 2, 3)(instance) === instance(1, 2, 3)
+			}, true),
+		),
 		JS("static run(...input)               { return instance => this._run(instance, ...input) }"),
 		TS(`static run${commonGenericDefinition}(...input: Input) { return (instance: Instance${commonGenericArguments}): Output => this._run(instance, ...input) }`)
 	),
 	D('S.runSync (...input)',
 		'Execute the entire process synchronously.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		D('Will execute the process',
+			E.equals(() => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return S.runSync()(instance)
+			}, 'return value'),
+		),
+		D('Will not handle promises even if it is configured',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.async
+				return S.runSync()(instance)
+			}, undefined),
+		),
+		D('Will not handle promises in sync mode',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.sync
+				return S.runSync()(instance)
+			}, undefined),
+		),
+		D('Is the same as running the executable instance itself',
+			E.equals(() => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return S.runSync()(instance) === instance()
+			}, true),
+		),
+		D('Takes the same arguments as the executable instance itself',
+			E.equals(() => {
+				const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
+					.input((a, b, c) => ({ a, b, c }))
+				return S.runSync(1, 2, 3)(instance) === instance(1, 2, 3)
+			}, true),
+		),
 		JS("static runSync(...input)           { return instance => this._runSync(instance, ...input) }"),
 		TS(`static runSync${commonGenericDefinition}(...input: Input) { return (instance: Instance${commonGenericArguments}): Output => this._runSync(instance, ...input) }`)
 	),
 	D('S.runAsync (...input)',
 		'Execute the entire process asynchronously. Always returns a promise.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		D('Will execute the process',
+			E.equals(() => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return S.runAsync()(instance)
+			}, 'return value'),
+		),
+		D('Will execute the process in async mode',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.async
+				return S.runAsync()(instance)
+			}, 'return value'),
+		),
+		D('Will still handle promises even in sync mode',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.sync
+				return S.runAsync()(instance)
+			}, 'return value'),
+		),
+		D('Is the same as running the executable instance itself',
+			E.equals(async () => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return await S.runAsync()(instance) === instance()
+			}, true),
+		),
+		D('Takes the same arguments as the executable instance itself',
+			E.equals(async () => {
+				const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
+					.input((a, b, c) => ({ a, b, c }))
+				return await S.runAsync(1, 2, 3)(instance) === instance(1, 2, 3)
+			}, true),
+		),
 		JS("static runAsync(...input)          { return instance => this._runAsync(instance, ...input) }"),
 		TS(`static runAsync${commonGenericDefinition}(...input: Input) { return (instance: Instance${commonGenericArguments}): Promise<Output> => this._runAsync(instance, ...input) }`)
 	),
@@ -2766,48 +3026,69 @@ D('Chain',
 	D('S.untrace <default>',
 		'Shallow merges the state every time a state change in made.',
 		'Returns a function that will modify a given instance.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
+		E.equals(() => {
+			const instance = new S({
+				initial: 'other',
+				other: 'oneMore',
+				oneMore: [
+					null,
+					null
+				]
+			})
+			.with(S.untrace)
+			.output(({ [S.Trace]: trace }) => trace)
 			return instance()
-		}, {}),
+		}, []),
 		JS("static untrace                                (instance) { return ({ process: instance.process, config: { ...instance.config, trace: false }, }) }"),
 		TS(`static untrace${commonGenericDefinition}(instance: Instance${commonGenericArguments}): Instance${commonGenericArguments} { return ({ process: instance.process, config: { ...instance.config, trace: false }, }) }`)
 	),
 	D('S.trace',
 		'Deep merges the all properties in the state every time a state change in made.',
 		'Returns a function that will modify a given instance.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
+		E.equals(() => {
+			const instance = new S({
+				initial: 'other',
+				other: 'oneMore',
+				oneMore: [
+					null,
+					null
+				]
+			})
+			.with(S.trace)
+			.output(({ [S.Trace]: trace }) => trace)
 			return instance()
-		}, {}),
+		}, [
+			[],
+			['initial'],
+			['other'],
+			['oneMore'],
+			['oneMore', 0],
+			['oneMore', 1]
+		]),
 		JS("static trace                                  (instance) { return ({ process: instance.process, config: { ...instance.config, trace: true }, }) }"),
 		TS(`static trace${commonGenericDefinition}(instance: Instance${commonGenericArguments}): Instance${commonGenericArguments} { return ({ process: instance.process, config: { ...instance.config, trace: true }, }) }`)
 	),
 	D('S.shallow <default>',
 		'Shallow merges the state every time a state change in made.',
 		'Returns a function that will modify a given instance.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		E.equals(() => {
+			const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
+				.with(S.shallow)
+				.output(ident)
+			return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } })
+		}, { myProperty: { existingKey: 'newValue', anotherKey: undefined, deepKey: { deepVaue: undefined, deepValue2: 7 } } }),
 		JS("static shallow                                (instance) { return ({ process: instance.process, config: { ...instance.config, deep: false }, }) }"),
 		TS(`static shallow${commonGenericDefinition}(instance: Instance${commonGenericArguments}): Instance${commonGenericArguments} { return ({ process: instance.process, config: { ...instance.config, deep: false }, }) }`)
 	),
 	D('S.deep',
 		'Deep merges the all properties in the state every time a state change in made.',
 		'Returns a function that will modify a given instance.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		E.equals(() => {
+			const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
+				.with(S.deep)
+				.output(ident)
+			return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } })
+		}, { myProperty: { existingKey: 'newValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6, deepValue2: 7 } } }),
 		JS("static deep                                   (instance) { return ({ process: instance.process, config: { ...instance.config, deep: true }, }) }"),
 		TS(`static deep${commonGenericDefinition}(instance: Instance${commonGenericArguments}): Instance${commonGenericArguments} { return ({ process: instance.process, config: { ...instance.config, deep: true }, }) }`)
 	),
@@ -2962,7 +3243,7 @@ D('Chain',
 		'Allows an async execution to be paused between steps.',
 		'Returns a function that will modify a given instance.',
 		JS("static pause(pause = S.config.pause)         { return instance => ({ process: instance.process, config: { ...instance.config, pause }, }) }"),
-		TS(`static pause${commonGenericDefinition}(pause: Config${commonGenericArguments}['pause'] = (S.config.pause as Config${commonGenericArguments}['pause'])) { return (instance: Instance${commonGenericArguments}): Instance${commonGenericArguments} => ({ process: instance.process, config: { ...instance.config, pause }, }) }`)
+		TS(`static pause${commonGenericDefinition}(pause: Config${commonGenericArguments}['pause']) { return (instance: Instance${commonGenericArguments}): Instance${commonGenericArguments} => ({ process: instance.process, config: { ...instance.config, pause }, }) }`)
 	),
 	D('S.override(override) <default: instance.run>',
 		'Overrides the method that will be used when the executable is called.',
@@ -3177,22 +3458,27 @@ D('Instance',
 		),
 		D('Create the config by merging the passed config with the defaults.',
 			'This is private so it cannot be mutated at runtime',
-			E.todo(() => {
-				const instance = new S(() => ({ unknownVariable: false}))
-					.defaults({ knownVariable: true })
-					.strict
-				return instance()
-			}, {}),
+			E.equals(() => {
+				const myConfig = { async: false }
+				const instance = new S(null, myConfig)
+				const retrievedConfig = instance.config
+				return retrievedConfig !== myConfig && retrievedConfig !== instance.config
+			}, true),
+			E.equals(() => {
+				const myConfig = { async: 'original' }
+				const instance = new S(null, myConfig)
+				instance.config.async = 'new value'
+				return instance.config.async
+			}, 'original'),
 			JS("this.#config = { ...this.#config, ...config }"),
 			TS(`this.#config = { ...this.#config, ...config } as unknown as Config${commonGenericArguments}`)
 		),
 		D('The process must be public, it cannot be deep merged or cloned as it may contain symbols.',
-			E.todo(() => {
-				const instance = new S(() => ({ unknownVariable: false}))
-					.defaults({ knownVariable: true })
-					.strict
-				return instance()
-			}, {}),
+			E.equals(() => {
+				const myProcess = { mySpecialKey: 23864 }
+				const instance = new S(myProcess)
+				return instance.process === myProcess
+			}, true),
 			CS("this.process = process"),
 		),
 		CS("}"),
@@ -3247,12 +3533,18 @@ D('Instance',
 	D('instance.proceed (state = {}, path = state[S.Path] || [])',
 		'Proceed to the next execution path.',
 		'Performs fallback logic when a node exits.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		E.equals(() => {
+			const instance = new S([
+				null,
+				null,
+				[
+					null,
+					null,
+				],
+				null
+			])
+			return instance.proceed({ [S.Path]: [ 2, 1 ] })
+		}, { [S.Path]: [ 3 ] }, symbols),
 		JS("proceed(state, path)    { return S._proceed(this, state, path) }"),
 		TS("proceed(state: SystemState<State, Output>, path: Path) { return S._proceed(this, state, path) }")
 	),
@@ -3260,12 +3552,10 @@ D('Instance',
 		'Perform actions on the state.',
 		'Applies any changes in the given `action` to the given `state`.',
 		'Proceeds to the next node if the action is not itself a directive or return.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		E.equals(() => {
+			const instance = new S()
+			return instance.perform({ myProperty: 'start value' }, { myProperty: 'new value' })
+		}, { myProperty: 'new value' }),
 		JS("perform(state, action)  { return S._perform(this, state, action) }"),
 		TS("perform(state: SystemState<State, Output>, action: Action) { return S._perform(this, state, action) }")
 	),
@@ -3273,55 +3563,161 @@ D('Instance',
 		'Execute a node in the process, return an action.',
 		"Executes the node in the process at the state's current path and returns it's action.",
 		'If the node is not executable it will be returned as the action.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		E.equals(() => {
+			const instance = new S([
+				{ myProperty: 'this value' },
+				{ myProperty: 'that value' },
+				{ myProperty: 'the other value' },
+			])
+			return instance.execute({ [S.Path]: [1], myProperty: 'start value' })
+		}, { [S.Path]: [2], myProperty: 'that value' }, symbols),
 		JS("execute(state, path)    { return S._execute(this, state, path) }"),
 		TS("execute(state: SystemState<State, Output>, path?: Path) { return S._execute(this, state, path) }")
 	),
 	D('instance.traverse(iterator = a => a)',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		E.equals(() => {
+			const instance = new S({
+				initial: 'swap this',
+				other: [
+					{
+						if: 'swap this too',
+						then: 'also swap this'
+					}
+				]
+			})
+			return instance.traverse((node, path, process, nodeType) => {
+				if (node === 'swap this') return 'with this'
+				if (node === 'also swap this') return 'with that'
+				if (nodeType === 'condition' && node.if === 'swap this too')
+					return {
+						...node,
+						if: 'with another thing'
+					}
+				return node
+			})
+		}, {
+			initial: 'with this',
+			other: [
+				{
+					if: 'with another thing',
+					then: 'with that'
+				}
+			]
+		}),
 		JS("traverse(iterator)      { return S._traverse(this, iterator) }"),
 		TS("traverse(iterator: ((node: Process, path: Path, process: Process, nodeType: string | symbol) => Process)){ return S._traverse(this, iterator) }")
 	),
 	D('instance.run (...input)',
 		'Execute the entire process either synchronously or asynchronously depending on the config.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		D('Will execute the process',
+			E.equals(() => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return instance.run()
+			}, 'return value'),
+		),
+		D('Will execute the process in async mode if it is configured',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.async
+				return instance.run()
+			}, 'return value'),
+		),
+		D('Will not handle promises in sync mode',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.sync
+				return instance.run()
+			}, undefined),
+		),
+		D('Is the same as running the executable instance itself',
+			E.equals(() => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return instance.run() === instance()
+			}, true),
+		),
+		D('Takes the same arguments as the executable instance itself',
+			E.equals(() => {
+				const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
+					.input((a, b, c) => ({ a, b, c }))
+				return instance.run(1, 2, 3) === instance(1, 2, 3)
+			}, true),
+		),
 		JS("run     (...input)      { return S._run(this, ...input) }"),
 		TS("run (...input: Input): Output { return S._run(this, ...input) }")
 	),
 	D('instance.runSync (...input)',
 		'Execute the entire process synchronously.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		D('Will execute the process',
+			E.equals(() => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return instance.runSync()
+			}, 'return value'),
+		),
+		D('Will not handle promises even if it is configured',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.async
+				return instance.runSync()
+			}, undefined),
+		),
+		D('Will not handle promises in sync mode',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.sync
+				return instance.runSync()
+			}, undefined),
+		),
+		D('Is the same as running the executable instance itself',
+			E.equals(() => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return instance.runSync() === instance()
+			}, true),
+		),
+		D('Takes the same arguments as the executable instance itself',
+			E.equals(() => {
+				const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
+					.input((a, b, c) => ({ a, b, c }))
+				return instance.runSync(1, 2, 3) === instance(1, 2, 3)
+			}, true),
+		),
 		JS("runSync (...input)      { return S._runSync(this, ...input) }"),
 		TS("runSync (...input: Input): Output { return S._runSync(this, ...input) }")
 	),
 	D('instance.runAsync (...input)',
 		'Execute the entire process asynchronously. Always returns a promise.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		D('Will execute the process',
+			E.equals(() => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return instance.runAsync()
+			}, 'return value'),
+		),
+		D('Will execute the process in async mode',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.async
+				return instance.runAsync()
+			}, 'return value'),
+		),
+		D('Will still handle promises even in sync mode',
+			E.equals(() => {
+				const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
+					.sync
+				return instance.runAsync()
+			}, 'return value'),
+		),
+		D('Is the same as running the executable instance itself',
+			E.equals(async () => {
+				const instance = new S({ [S.Return]: 'return value' })
+				return await instance.runAsync() === instance()
+			}, true),
+		),
+		D('Takes the same arguments as the executable instance itself',
+			E.equals(async () => {
+				const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
+					.input((a, b, c) => ({ a, b, c }))
+				return await instance.runAsync(1, 2, 3) === instance(1, 2, 3)
+			}, true),
+		),
 		JS("runAsync(...input)      { return S._runAsync(this, ...input) }"),
 		TS("runAsync(...input: Input): Promise<Output> { return S._runAsync(this, ...input) }")
 	),
@@ -3373,48 +3769,67 @@ D('Instance',
 	D('instance.untrace <default>',
 		'Disables the stack trace.',
 		'Creates a new instance.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
+		E.equals(() => {
+			const instance = new S({
+				initial: 'other',
+				other: 'oneMore',
+				oneMore: [
+					null,
+					null
+				]
+			}).untrace
+			.output(({ [S.Trace]: trace }) => trace)
 			return instance()
-		}, {}),
+		}, []),
 		JS("get untrace()           { return this.with(S.untrace) }"),
 		TS(`get untrace(): S${commonGenericArguments} { return this.with(S.untrace) }`)
 	),
 	D('instance.trace',
 		'Enables the stack trace.',
 		'Creates a new instance.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
+		E.equals(() => {
+			const instance = new S({
+				initial: 'other',
+				other: 'oneMore',
+				oneMore: [
+					null,
+					null
+				]
+			}).trace
+			.output(({ [S.Trace]: trace }) => trace)
 			return instance()
-		}, {}),
+		}, [
+			[],
+			['initial'],
+			['other'],
+			['oneMore'],
+			['oneMore', 0],
+			['oneMore', 1]
+		]),
 		JS("get trace()             { return this.with(S.trace) }"),
 		TS(`get trace(): S${commonGenericArguments} { return this.with(S.trace) }`)
 	),
 	D('instance.shallow <default>',
 		'Shallow merges the state every time a state change in made.',
 		'Creates a new instance.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		E.equals(() => {
+			const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
+				.shallow
+				.output(ident)
+			return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } })
+		}, { myProperty: { existingKey: 'newValue', anotherKey: undefined, deepKey: { deepVaue: undefined, deepValue2: 7 } } }),
 		JS("get shallow()           { return this.with(S.shallow) }"),
 		TS(`get shallow(): S${commonGenericArguments} { return this.with(S.shallow) }`)
 	),
 	D('instance.deep',
 		'Deep merges the all properties in the state every time a state change in made.',
 		'Creates a new instance.',
-		E.todo(() => {
-			const instance = new S(() => ({ unknownVariable: false}))
-				.defaults({ knownVariable: true })
-				.strict
-			return instance()
-		}, {}),
+		E.equals(() => {
+			const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
+				.deep
+				.output(ident)
+			return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } })
+		}, { myProperty: { existingKey: 'newValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6, deepValue2: 7 } } }),
 		JS("get deep()              { return this.with(S.deep) }"),
 		TS(`get deep(): S${commonGenericArguments} { return this.with(S.deep) }`)
 	),

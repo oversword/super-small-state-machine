@@ -163,6 +163,7 @@ export const E = {
 					throw new DescriptionError(`Method should have failed with message: "${errorType}", failed with message "${error.message}" instead.`)
 				if (!errorType) return;
 				if (error instanceof errorType) return;
+				console.log(error.stack)
 				throw new DescriptionError(`Method should have failed with an ${errorType.name} error, failed with a ${error.constructor.name} instead.`)
 			}
 		}, string => {
@@ -468,6 +469,38 @@ export const code = async (description, codeType = 'javascript') => {
 			count = 0
 		}
 		const indent = repeat_string('\t', currentIndent - lastIndent)
+		lines.push(indent+node.description)
+		if (toReset) {
+			lastIndent = Infinity
+			count = 0
+		}
+		return node
+	})(description)
+	const ret = lines.join('\n')+'\n'
+	return ret
+}
+
+export const commentedCode = async (description, codeType = 'javascript') => {
+	const lines = []
+	let lastIndent = Infinity
+	let count = 0
+	traverse((node, path, description) => {
+		if (!(node[D_processed] && node.code
+		&& (node.code === true || node.code === codeType))) return node;
+		const currentIndent = Math.ceil(path.length / 2)
+		let toReset = false
+		count += 1
+		if (lastIndent === currentIndent && count > 1)
+			toReset = true
+		if (lastIndent > currentIndent) {
+			lastIndent = currentIndent
+			count = 0
+		}
+
+		const indent = repeat_string('\t', currentIndent - lastIndent)
+		const lastNode = path.length > 4 && get_path_object(description, path.slice(0,-2))
+		if (lastNode && lastNode.description)
+			lines.push(indent+'// '+lastNode.description)
 		lines.push(indent+node.description)
 		if (toReset) {
 			lastIndent = Infinity

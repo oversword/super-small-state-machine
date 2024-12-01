@@ -103,7 +103,7 @@ export class NodeTypeError<
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 > extends SuperSmallStateMachineTypeError<State, Output, Input, Action, Process> {}
-export class UndefinedNodeError<
+export class NodeReferenceError<
 	State extends InitialState = InitialState,
 	Output extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
@@ -229,7 +229,7 @@ export interface Config<
 > {
 	defaults: State,
 	iterations: number,
-	until: (state: SystemState<State, Output>) => boolean,
+	until: (this: Instance<State, Output, Input, Action, Process>, state: SystemState<State, Output>, runs: number) => boolean,
 	strict: boolean | typeof S.StrictTypes,
 	override: null | ((...args: Input) => Output),
 	adapt: Array<(process: Process) => Process>,
@@ -241,7 +241,7 @@ export interface Config<
 	trace: boolean,
 	deep: boolean,
 	async: boolean,
-	pause: (state: SystemState<State, Output>, runs: number) => false | Promise<any>
+	pause: (this: Instance<State, Output, Input, Action, Process>, state: SystemState<State, Output>, runs: number) => false | Promise<any>
 }
 	export type ChangesType<State extends InitialState = InitialState> = Partial<State>
 	export class Changes extends N {
@@ -306,7 +306,7 @@ SelfType = FunctionType<State, Output, Action>,>(this: Instance<State, Output, I
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-SelfType = undefined>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> { throw new UndefinedNodeError(`There is nothing to execute at path [ ${state[S.Path].map(key => key.toString()).join(', ')} ]`, { instance: this, state, path: state[S.Path], data: { node } }) }
+SelfType = undefined>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> { throw new NodeReferenceError(`There is nothing to execute at path [ ${state[S.Path].map(key => key.toString()).join(', ')} ]`, { instance: this, state, path: state[S.Path], data: { node } }) }
 	}
 	export class Empty extends N {
 		static type = NodeTypes.EM
@@ -688,7 +688,7 @@ export abstract class SuperSmallStateMachineCore<
 			...(S.Return in modifiedInput ? {[S.Return]: modifiedInput[S.Return]} : {})
 		} as SystemState<State, Output>, modifiedInput))
 		while (r < iterations) {
-			if (until(currentState)) break;
+			if (until.call(instance, currentState, r)) break;
 			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
 			if (trace) currentState = { ...currentState, [S.Trace]: [ ...currentState[S.Trace], currentState[S.Path] ] }
 			currentState = this._perform(instance, currentState, this._execute(instance, currentState))
@@ -713,7 +713,7 @@ export abstract class SuperSmallStateMachineCore<
 		while (r < iterations) {
 			const pauseExecution = pause.call(instance, currentState, r)
 			if (pauseExecution) await pauseExecution;
-			if (until(currentState)) break;
+			if (until.call(instance, currentState, r)) break;
 			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
 			if (trace) currentState = { ...currentState, [S.Trace]: [ ...currentState[S.Trace], currentState[S.Path] ] }
 			currentState = await this._perform(instance, currentState, await this._execute(instance, currentState))
@@ -912,7 +912,7 @@ export abstract class SuperSmallStateMachineChain<
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
->(pause: Config<State, Output, Input, Action, Process>['pause'] = (S.config.pause as Config<State, Output, Input, Action, Process>['pause'])) { return (instance: Instance<State, Output, Input, Action, Process>): Instance<State, Output, Input, Action, Process> => ({ process: instance.process, config: { ...instance.config, pause }, }) }
+>(pause: Config<State, Output, Input, Action, Process>['pause']) { return (instance: Instance<State, Output, Input, Action, Process>): Instance<State, Output, Input, Action, Process> => ({ process: instance.process, config: { ...instance.config, pause }, }) }
 	static override<
 	State extends InitialState = InitialState,
 	Output extends unknown = undefined,

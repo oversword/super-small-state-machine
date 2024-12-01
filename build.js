@@ -1,5 +1,5 @@
 import description from "./description.js";
-import D, {  test, code, readme, Q } from "./d/index.js";
+import D, {  test, code, readme, Q, commentedCode } from "./d/index.js";
 import fs  from 'node:fs';
 
 const handleFileError = err => {
@@ -14,6 +14,10 @@ try {
 
   fs.writeFile('./index.ts', TSoutput, handleFileError);
   fs.writeFile('./index.js', JSoutput, handleFileError);
+
+  const JSoutputCommented = await commentedCode(description, 'javascript')
+
+  fs.writeFile('./index.readme.js', JSoutputCommented, handleFileError);
 
   await test(description)
 
