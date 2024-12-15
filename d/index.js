@@ -177,7 +177,7 @@ export const E = {
 		return new TransformedFunction(method, async () => {
 			const result = await method()
 			if (matches(result, value, symbols)) return;
-			throw new DescriptionError(`Expected ${toString(value, symbols)}, got ${toString(result, symbols)}.`)
+			throw new DescriptionError(`\nExpected ${toString(value, symbols)},\n     got ${toString(result, symbols)}.`)
 		}, string => {
 			const lines = string.split('\n')
 			const returnLine = lines.length-2
