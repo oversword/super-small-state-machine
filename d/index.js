@@ -22,6 +22,7 @@ const rebase_string = (str, add = '') => {
 const matches = (object, match, symbols = []) => {
 	if (object === null || match === null || typeof object !== 'object' || typeof match !== 'object')
 		return object === match
+	if (Array.isArray(match) && match.length !== object.length) return false;
 	return Object.keys(match).concat(symbols)
 		.every(key => (!(key in match)) || matches(object[key], match[key], symbols))
 }
@@ -162,6 +163,7 @@ export const E = {
 					throw new DescriptionError(`Method should have failed with message: "${errorType}", failed with message "${error.message}" instead.`)
 				if (!errorType) return;
 				if (error instanceof errorType) return;
+				console.log(error.stack)
 				throw new DescriptionError(`Method should have failed with an ${errorType.name} error, failed with a ${error.constructor.name} instead.`)
 			}
 		}, string => {
@@ -175,7 +177,7 @@ export const E = {
 		return new TransformedFunction(method, async () => {
 			const result = await method()
 			if (matches(result, value, symbols)) return;
-			throw new DescriptionError(`Expected ${toString(value, symbols)}, got ${toString(result, symbols)}.`)
+			throw new DescriptionError(`\nExpected ${toString(value, symbols)},\n     got ${toString(result, symbols)}.`)
 		}, string => {
 			const lines = string.split('\n')
 			const returnLine = lines.length-2
@@ -267,6 +269,51 @@ export default function D(description, ...children) {
 }
 
 
+
+const capture = () => {
+	const orig_console_log = console.log
+	const orig_console_error = console.error
+	const orig_console_warn = console.warn
+	const orig_console_info= console.info
+	const orig_console_group = console.group
+	const orig_console_groupCollapsed = console.groupCollapsed
+	const orig_console_groupEnd = console.groupEnd
+	const capture_console = []
+	const _capture = method => (...args) => {
+		capture_console.push([method, args])
+	}
+	console.log = _capture('log')
+	console.error = _capture('error')
+	console.info = _capture('info')
+	console.warn = _capture('warn')
+	console.group = _capture('group')
+	console.groupCollapsed = _capture('groupCollapsed')
+	console.groupEnd = _capture('groupEnd')
+	let captured = true
+	return {
+		restore: () => {
+			if (!captured) return false
+			console.log = orig_console_log
+			console.error = orig_console_error
+			console.info = orig_console_info
+			console.warn = orig_console_warn
+			console.group = orig_console_group
+			console.groupCollapsed = orig_console_groupCollapsed
+			console.groupEnd = orig_console_groupEnd
+			captured = false
+			return true
+		},
+		repeat: () => {
+			if (captured) throw new Error()
+			capture_console.forEach(([cmd,args]) => {
+				console[cmd](...args.map(arg => typeof arg === 'string' ? arg : toString(arg)))
+			})
+		},
+		empty: () => capture_console.length === 0
+	}
+}
+
+
 // TODO: return string instead of relying on console.log
 export const test = async description => {
 	const tests = []
@@ -278,24 +325,20 @@ export const test = async description => {
 
 
 	const runTest = async ({ code, path }) => {
-		let log = []
-		let existing_log = console.log
-		console.log = (...args) => {
-			log.push(args)
-		}
+		const captured = capture()
 		try {
 			const result = await code()
-			console.log = existing_log
+			captured.restore()
 			return {
 				success: true,
 				result,
 				path,
 			}
 		} catch (error) {
-			console.log = existing_log
+			captured.restore()
 			return {
 				success: false,
-				log,
+				log: captured,
 				error,
 				path,
 			}
@@ -360,9 +403,9 @@ export const test = async description => {
 				console.error(`\x1b[31m${printedPath}\tCrash: ${result.error.constructor.name}\x1b[0m`)
 				console.error(result.error)
 			}
-			if (result.log && result.log.length) {
+			if (result.log && !result.log.empty()) {
 				console.error('LOGS:')
-				result.log.forEach(args => console.log(...args.map(arg => typeof arg === 'string' ? arg : toString(arg))))
+				result.log.repeat()
 			}
 		})
 		throw new Error('Tests Failed')
@@ -426,6 +469,38 @@ export const code = async (description, codeType = 'javascript') => {
 			count = 0
 		}
 		const indent = repeat_string('\t', currentIndent - lastIndent)
+		lines.push(indent+node.description)
+		if (toReset) {
+			lastIndent = Infinity
+			count = 0
+		}
+		return node
+	})(description)
+	const ret = lines.join('\n')+'\n'
+	return ret
+}
+
+export const commentedCode = async (description, codeType = 'javascript') => {
+	const lines = []
+	let lastIndent = Infinity
+	let count = 0
+	traverse((node, path, description) => {
+		if (!(node[D_processed] && node.code
+		&& (node.code === true || node.code === codeType))) return node;
+		const currentIndent = Math.ceil(path.length / 2)
+		let toReset = false
+		count += 1
+		if (lastIndent === currentIndent && count > 1)
+			toReset = true
+		if (lastIndent > currentIndent) {
+			lastIndent = currentIndent
+			count = 0
+		}
+
+		const indent = repeat_string('\t', currentIndent - lastIndent)
+		const lastNode = path.length > 4 && get_path_object(description, path.slice(0,-2))
+		if (lastNode && lastNode.description)
+			lines.push(indent+'// '+lastNode.description)
 		lines.push(indent+node.description)
 		if (toReset) {
 			lastIndent = Infinity

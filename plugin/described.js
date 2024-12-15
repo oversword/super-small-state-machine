@@ -28,50 +28,48 @@ export const transition = (name) => {
 export const t = transition
 
 const transformProcess = ({ actions, conditions, transitions }) => {
-	const recur = S.traverse(function (item, path) {
-		if (item && typeof item === 'object'){
-			let action;
-			const name = item.name;
-			if (item[actionMarker]) {
-				action = actions[name]
-			}
-			else if (item[transitionMarker]) {
-				action = transitions[name]
-			}
-			if (name && action) {
-				const actionType = typeof action
-				if (actionType === 'function')
-					return action
-				const processed = recur({
-					config: this.config,
-					process: action
-				})
-				if (typeof processed === 'object')
-					processed.name = name
-				return processed
-			}
+	const recur = S.traverse(function (item, _path, _process, type) {
+		if (!(item && typeof item === 'object')) return item
+		
+		if (type === S.types.CD) {
+			const conditionString = item[S.kw.IF]
+			if (conditionString && typeof conditionString === 'object' && conditionString[conditionMarker])
+				return {
+					...item,
+					[S.kw.IF]: conditions[conditionString.name]
+				}
+		} else
+
+		if (type === S.types.SW) {
+			const conditionString = item[S.kw.SW]
+			if (conditionString && typeof conditionString === 'object' && conditionString[conditionMarker])
+				return {
+					...item,
+					[S.kw.SW]: conditions[conditionString.name]
+				}
+		}
+		
+		let action;
+		const name = item.name;
+		if (item[actionMarker]) {
+			action = actions[name]
+		}
+		else if (item[transitionMarker]) {
+			action = transitions[name]
+		}
+		if (name && action) {
+			const actionType = typeof action
+			if (actionType === 'function')
+				return action
+			const processed = recur({
+				config: this.config,
+				process: action
+			})
+			if (typeof processed === 'object')
+				processed.name = name
+			return processed
 		}
 		return item
-	}, (conditional) => {
-		if (conditional && typeof conditional === 'object') {
-			if (S.kw.IF in conditional) {
-				const conditionString = conditional[S.kw.IF]
-				if (conditionString && typeof conditionString === 'object' && conditionString[conditionMarker])
-					return {
-						...conditional,
-						[S.kw.IF]: conditions[conditionString.name]
-					}
-			} else
-			if (S.kw.SW in conditional) {
-				const conditionString = conditional[S.kw.SW]
-				if (conditionString && typeof conditionString === 'object' && conditionString[conditionMarker])
-					return {
-						...conditional,
-						[S.kw.SW]: conditions[conditionString.name]
-					}
-			}
-		}
-		return conditional
 	})
 	return recur
 }

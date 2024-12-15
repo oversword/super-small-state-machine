@@ -4,26 +4,48 @@ export const clone_object = (obj) => {
 	if (typeof obj !== 'object') return obj
 	return Object.fromEntries(Object.entries(obj).map(([key,value]) => [ key, clone_object(value) ]));
 }
-export const unique_list_strings = (list, getId = item => item) => Object.values(Object.fromEntries(list.map(item=>[getId(item),item])));
+export const unique_list_strings = (list, getId = ident) => Object.values(Object.fromEntries(list.map(item=>[getId(item),item])));
 const reduce_get_path_object = (obj, step) => obj ? obj[step] : undefined
-export const get_path_object = (object, path) => (path.reduce(reduce_get_path_object, object))
+export const get_path_object = (object, path = []) => (path.reduce(reduce_get_path_object, object))
+export const set_path_object = (object, path = [], value = undefined) => {
+	if (path.length === 0 || typeof object !== 'object' || !object) return value
+	if (Array.isArray(object)) return [ ...object.slice(0,path[0]), set_path_object(object[path[0]], path.slice(1), value), ...object.slice(1+path[0]) ]
+	return { ...object, [path[0]]: set_path_object(object[path[0]], path.slice(1), value), }
+}
+export const update_path_object = (object, path = [], transformer = ident) => set_path_object(object, path, transformer(get_path_object(object, path), path, object))
+const map_list_path_object = ([ key, value ]) => list_path_object(value).map(path => [ key, ...path ])
+export const list_path_object = object => typeof object !== 'object' || !object ? [[]] : [[]].concat(...Object.entries(object).map(map_list_path_object))
 export const normalise_function = (functOrReturn) => (typeof functOrReturn === 'function') ? functOrReturn : () => functOrReturn
 const reduce_deep_merge_object = (base, override) => {
 	if (!((base && typeof base === 'object') && !Array.isArray(base) && (override && typeof override === 'object') && !Array.isArray(override)))
 		return override;
 	const allKeys = unique_list_strings(Object.keys(base).concat(Object.keys(override)));
-	return Object.fromEntries(allKeys.map(key => [
-		key, key in override ? deep_merge_object(base[key], override[key]) : base[key]
-	]));
+	return Object.fromEntries(allKeys.map(key => [ key, key in override ? deep_merge_object(base[key], override[key]) : base[key] ]));
 }
 export const deep_merge_object = (base, ...overrides) => overrides.reduce(reduce_deep_merge_object, base)
+export const shallow_merge_object = (...objects) => Object.fromEntries([].concat(...objects.map(object => Object.entries(object))))
 export const get_closest_path = (object, path = [], condition = () => true) => {
-	const item = get_path_object(object, path)
-	if (condition(item, path, object)) return path
-	if (path.length === 0) return null
-	return get_closest_path(object, path.slice(0,-1), condition)
+const item = get_path_object(object, path)
+if (condition(item, path, object)) return path
+if (path.length === 0) return null
+return get_closest_path(object, path.slice(0,-1), condition)
 }
 export const wait_time = delay => (delay ? new Promise(resolve => setTimeout(resolve, delay)) : Promise.resolve())
+export const name = obj => obj.name
+export const named = (name, obj) => {
+	const type = typeof obj
+	if (type === 'function') return ({ [name]: (...args) => obj(...args) })[name]
+	if (type === 'object' && !Array.isArray(obj)) return { ...obj, name }
+	const ret = type === 'object' ? [...obj] : obj
+	ret.name = name
+	return ret
+}
+export const ident = original => original
+export const inc = (property, by = 1) => named(`${by === 1 ? 'increment ':''}${by === -1 ? 'decrement ':''}${property}${Math.sign(by) === 1 && by !== 1 ? ` plus ${by}`:''}${Math.sign(by) === -1 && by !== -1 ? ` minus ${Math.abs(by)}`:''}`, ({ [property]: i }) => ({ [property]: i + by }))
+export const and = (...methods) => named(methods.map(name).join(' and '), (...args) => methods.every(method => method(...args)))
+export const or = (...methods) => named(methods.map(name).join(' or '), (...args) => methods.some(method => method(...args)))
+export const not = method => named(`not ${method.name}`, (...args) => !method(...args))
+export const forIn = (list, index, ...methods) => named(`for ${index} in ${list}`, [ named(`reset ${index}`, () => ({ [index]: 0 })), { while: named(`${index} is within ${list}`, ({ [index]: i, [list]: l }) => i < l.length), do: [ methods, inc(index) ] } ])
 export class SuperSmallStateMachineError extends Error {
 	instance; state; data; path;
 	constructor(message, { instance, state, data, path } = {}) {
@@ -36,7 +58,7 @@ export class SuperSmallStateMachineTypeError extends SuperSmallStateMachineError
 export class StateReferenceError extends SuperSmallStateMachineReferenceError {}
 export class StateTypeError extends SuperSmallStateMachineTypeError {}
 export class NodeTypeError extends SuperSmallStateMachineTypeError {}
-export class UndefinedNodeError extends SuperSmallStateMachineReferenceError {}
+export class NodeReferenceError extends SuperSmallStateMachineReferenceError {}
 export class MaxIterationsError extends SuperSmallStateMachineError {}
 export class PathReferenceError extends SuperSmallStateMachineReferenceError {}
 export const NodeTypes = {
@@ -47,6 +69,7 @@ export const NodeTypes = {
 	SQ: 'sequence',
 	CD: 'condition',
 	SW: 'switch',
+	WH: 'while',
 	MC: 'machine',
 	CH: 'changes',
 	DR: 'directive',
@@ -62,105 +85,104 @@ export const KeyWords = {
 	CS: 'case',
 	DF: 'default',
 	IT: 'initial',
-	RS: 'result',
+	WH: 'while',
+	DO: 'do',
 }
-export class NodeDefinitions extends Map {
-	constructor(...nodes) { super(nodes.flat(Infinity).map(node => [node.name,node])) }
+export class NS extends Map {
+	constructor(...nodes) { super(nodes.flat(Infinity).map(node => [node.type,node])) }
 	typeof(object, objectType = typeof object, isAction = false) {
-		const foundType = [...this.values()].findLast(current => current.typeof && current.typeof(object, objectType, isAction))
-		return foundType ? foundType.name : false
+		const foundType = [...this.values()].findLast(current => current.typeof(object, objectType, isAction))
+		return foundType ? foundType.type : false
 	}
 }
-export class NodeDefinition {
-	static name = Symbol('Unnamed node')
-	static typeof = null;
-	static execute = null;
-	static proceed = null;
-	static perform = null;
-	static traverse = null;
+export class N {
+	static type = Symbol('Unnamed node')
+	static typeof = () => false;
+	static execute = ident;
+	static proceed = () => undefined;
+	static perform(action, state) {
+			const path = S._proceed(this, state)
+			return path ? { ...state, [S.Path]: path } : { ...state, [S.Return]: undefined }
+		}
+	static traverse = ident;
 }
-export const N = NodeDefinition
-const exitFindNext = function (action, state) {
-	const path = S._proceed(this, state)
-	return path ? { ...state, [S.Path]: path } : { ...state, [S.Return]: true }
-}
-export class ChangesNode extends NodeDefinition {
-	static name = NodeTypes.CH
+export class Changes extends N {
+	static type = NodeTypes.CH
 	static typeof(object, objectType) { return Boolean(object && objectType === 'object') }
-	static perform(action, state) { return exitFindNext.call(this, action, S._changes(this, state, action)) }
+	static perform(action, state) { return N.perform.call(this, action, S._changes(this, state, action)) }
 }
-export class SequenceNode extends NodeDefinition {
-	static name = NodeTypes.SQ
-	static proceed(parPath, state, path) {
-		const parActs = get_path_object(this.process, parPath)
-		const childItem = path[parPath.length]
-		if (parActs && childItem+1 < parActs.length) return [ ...parPath, childItem+1 ]
+export class Sequence extends N {
+	static type = NodeTypes.SQ
+	static proceed(path, state, originalPath) {
+		const parNode = get_path_object(this.process, path)
+		const childItem = originalPath[path.length]
+		if (parNode && childItem+1 < parNode.length) return [ ...path, childItem+1 ]
 	}
 	static typeof(object, objectType, isAction) { return ((!isAction) && objectType === 'object' && Array.isArray(object)) }
 	static execute(node, state) { return node.length ? [ ...state[S.Path], 0 ] : null }
-	static traverse(item, path, iterate, post) { return item.map((_,i) => iterate([...path,i])) }
+	static traverse(node, path, iterate) { return node.map((_,i) => iterate([...path,i])) }
 }
-export class FunctionNode extends NodeDefinition {
-	static name = NodeTypes.FN
+export class FunctionN extends N {
+	static type = NodeTypes.FN
 	static typeof(object, objectType, isAction) { return (!isAction) && objectType === 'function' }
 	static execute(node, state) { return node(state) }
 }
-export class UndefinedNode extends NodeDefinition {
-	static name = NodeTypes.UN
+export class Undefined extends N {
+	static type = NodeTypes.UN
 	static typeof(object, objectType) { return objectType === 'undefined' }
-	static execute(node, state) { throw new UndefinedNodeError(`There is nothing to execute at path [ ${state[S.Path].map(key => key.toString()).join(', ')} ]`, { instance: this, state, path: state[S.Path], data: { node } }) }
-	static perform = exitFindNext
+	static execute(node, state) { throw new NodeReferenceError(`There is nothing to execute at path [ ${state[S.Path].map(key => key.toString()).join(', ')} ]`, { instance: this, state, path: state[S.Path], data: { node } }) }
 }
-export class EmptyNode extends NodeDefinition {
-	static name = NodeTypes.EM
+export class Empty extends N {
+	static type = NodeTypes.EM
 	static typeof(object, objectType) { return object === null }
-	static perform = exitFindNext
 }
-export class ConditionNode extends NodeDefinition {
-	static name = NodeTypes.CD
+export class Condition extends N {
+	static type = NodeTypes.CD
 	static typeof(object, objectType, isAction) { return Boolean((!isAction) && object && objectType === 'object' && (KeyWords.IF in object)) }
 	static execute(node, state) {
 		if (normalise_function(node[KeyWords.IF])(state))
 		return KeyWords.TN in node ? [ ...state[S.Path], KeyWords.TN ] : null
 		return KeyWords.EL in node ? [ ...state[S.Path], KeyWords.EL ] : null
 	}
-	static traverse(item, path, iterate, post) { return post({
-		...item,
-		[KeyWords.IF]: item[KeyWords.IF],
-		...(KeyWords.TN in item ? { [KeyWords.TN]: iterate([...path,KeyWords.TN]) } : {}),
-		...(KeyWords.EL in item ? { [KeyWords.EL]: iterate([...path,KeyWords.EL]) } : {})
-	}, path) }
+	static traverse(node, path, iterate) { return {
+		...node,
+		...(KeyWords.TN in node ? { [KeyWords.TN]: iterate([...path,KeyWords.TN]) } : {}),
+		...(KeyWords.EL in node ? { [KeyWords.EL]: iterate([...path,KeyWords.EL]) } : {})
+	} }
 }
-export class SwitchNode extends NodeDefinition {
-	static name = NodeTypes.SW
+export class Switch extends N {
+	static type = NodeTypes.SW
 	static typeof(object, objectType, isAction) { return Boolean((!isAction) && object && objectType === 'object' && (KeyWords.SW in object)) }
 	static execute(node, state) {
 		const key = normalise_function(node[KeyWords.SW])(state)
 		const fallbackKey = (key in node[KeyWords.CS]) ? key : KeyWords.DF
 		return (fallbackKey in node[KeyWords.CS]) ? [ ...state[S.Path], KeyWords.CS, fallbackKey ] : null
 	}
-	static traverse(item, path, iterate, post) { return post({
-		...item,
-		[KeyWords.SW]: item[KeyWords.SW],
-		[KeyWords.CS]: Object.fromEntries(Object.keys(item[KeyWords.CS]).map(key => [ key, iterate([...path,KeyWords.CS,key]) ])),
-	}, path) }
+	static traverse(node, path, iterate) { return { ...node, [KeyWords.CS]: Object.fromEntries(Object.keys(node[KeyWords.CS]).map(key => [ key, iterate([...path,KeyWords.CS,key]) ])), } }
 }
-export class MachineNode extends NodeDefinition {
-	static name = NodeTypes.MC
+export class While extends N {
+	static type = NodeTypes.WH
+	static typeof(object, objectType, isAction) { return Boolean((!isAction) && object && objectType === 'object' && (KeyWords.WH in object)) }
+	static execute(node, state) {
+		if (!((KeyWords.DO in node) && normalise_function(node[KeyWords.WH])(state))) return null
+		return [ ...state[S.Path], KeyWords.DO ]
+	}
+	static proceed(path) { return path }
+	static traverse(node, path, iterate) { return { ...node, ...(KeyWords.DO in node ? { [KeyWords.DO]: iterate([...path,KeyWords.DO]) } : {}), } }
+}
+export class Machine extends N {
+	static type = NodeTypes.MC
 	static typeof(object, objectType, isAction) { return Boolean((!isAction) && object && objectType === 'object' && (KeyWords.IT in object)) }
 	static execute(node, state) { return [ ...state[S.Path], KeyWords.IT ] }
-	static traverse(item, path, iterate, post) { return post({
-		...item,
-		...Object.fromEntries(Object.keys(item).map(key => [ key, iterate([...path,key]) ]))
-	}, path) }
+	static traverse(node, path, iterate) { return { ...node, ...Object.fromEntries(Object.keys(node).map(key => [ key, iterate([...path,key]) ])) } }
 }
-export class DirectiveNode extends NodeDefinition {
-	static name = NodeTypes.DR
+export class Directive extends N {
+	static type = NodeTypes.DR
 	static typeof(object, objectType, isAction) { return Boolean(object && objectType === 'object' && (S.Path in object)) }
 	static perform(action, state) { return S._perform(this, state, action[S.Path]) }
 }
-export class SequenceDirectiveNode extends DirectiveNode {
-	static name = NodeTypes.SD
+export class SequenceDirective extends Directive {
+	static type = NodeTypes.SD
 	static typeof(object, objectType, isAction) { return objectType === 'number' }
 	static perform(action, state) {
 		const lastOf = S._closest(this, state[S.Path].slice(0,-1), NodeTypes.SQ)
@@ -168,8 +190,8 @@ export class SequenceDirectiveNode extends DirectiveNode {
 		return { ...state, [S.Path]: [...lastOf, action] }
 	}
 }
-export class MachineDirectiveNode extends DirectiveNode {
-	static name = NodeTypes.MD
+export class MachineDirective extends Directive {
+	static type = NodeTypes.MD
 	static typeof(object, objectType, isAction) { return objectType === 'string' || objectType === 'symbol' }
 	static perform(action, state) {
 		const lastOf = S._closest(this, state[S.Path].slice(0,-1), NodeTypes.MC)
@@ -177,109 +199,94 @@ export class MachineDirectiveNode extends DirectiveNode {
 		return { ...state, [S.Path]: [...lastOf, action] }
 	}
 }
-export class AbsoluteDirectiveNode extends DirectiveNode {
-	static name = NodeTypes.AD
+export class AbsoluteDirective extends Directive {
+	static type = NodeTypes.AD
 	static typeof(object, objectType, isAction) { return isAction && Array.isArray(object) }
 	static perform(action, state) { return { ...state, [S.Path]: action } }
 }
-export class ReturnNode extends NodeDefinition {
-	static name = NodeTypes.RT
+export class Return extends N {
+	static type = NodeTypes.RT
 	static typeof(object, objectType) { return object === S.Return || Boolean(object && objectType === 'object' && (S.Return in object)) }
-	static perform(action, state) { return {
-		...state,
-		[S.Return]: true,
-		[S.Path]: state[S.Path],
-		...(!action || action === S.Return ? {} : { [KeyWords.RS]: action[S.Return] })
-	} }
+	static perform(action, state) { return { ...state, [S.Return]: !action || action === S.Return ? undefined : action[S.Return], } }
 }
-export const nodes = [ ChangesNode, SequenceNode, FunctionNode, UndefinedNode, EmptyNode, ConditionNode, SwitchNode, MachineNode, DirectiveNode, AbsoluteDirectiveNode, MachineDirectiveNode, SequenceDirectiveNode, ReturnNode, ]
-export class ExtensibleFunction extends Function { constructor(f) { super(); return Object.setPrototypeOf(f, new.target.prototype); }; }
+export class ExtensibleFunction extends Function {
+	constructor(f) { super(); return Object.setPrototypeOf(f, new.target.prototype); };
+}
 export class SuperSmallStateMachineCore extends ExtensibleFunction {
 		static Return      = Symbol('Super Small State Machine Return')
 		static Changes     = Symbol('Super Small State Machine Changes')
 		static Path        = Symbol('Super Small State Machine Path')
+		static Trace       = Symbol('Super Small State Machine Trace')
 		static StrictTypes = Symbol('Super Small State Machine Strict Types')
 	static keyWords    = KeyWords
 	static kw          = KeyWords
 	static nodeTypes   = NodeTypes
 	static types       = NodeTypes
+	static nodes = [ Changes, Sequence, FunctionN, Undefined, Empty, Condition, Switch, While, Machine, Directive, AbsoluteDirective, MachineDirective, SequenceDirective, Return, ]
 	static config = {
-		defaults: { [KeyWords.RS]: null },
-		input: (a = {}) => a,
-		result: a => a[KeyWords.RS],
+		defaults: {},
+		input: (state = {}) => state,
+		output:  state => state[S.Return],
 		strict: false,
 		iterations: 10000,
 		until: state => S.Return in state,
 		pause: () => false,
 		async: false,
+		trace: false,
+		deep: false,
 		override: null,
-		nodes: new NodeDefinitions(...nodes),
+		nodes: new NS(...SuperSmallStateMachineCore.nodes),
 		adapt: [],
-		adaptStart: [],
-		adaptEnd: [],
+		before: [],
+		after: [],
 	}
 	static _closest (instance, path = [], ...nodeTypes) {
-		const flatNodeTypes = nodeTypes.flat(Infinity)
+		const flatTypes = nodeTypes.flat(Infinity)
 		return get_closest_path(instance.process, path, i => {
 			const nodeType = instance.config.nodes.typeof(i)
-			return Boolean(nodeType && flatNodeTypes.includes(nodeType))
+			return Boolean(nodeType && flatTypes.includes(nodeType))
 		})
 	}
 	static _changes (instance, state = {}, changes = {}) {
-		if (instance.config.strict) {
-			if (Object.entries(changes).some(([name]) => !(name in state)))
-				throw new StateReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).map(key => key.toString()).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).map(key => key.toString()).join(', ')} ].\nPath: [ ${state[S.Path].map(key => key.toString()).join(' / ')} ]`, { instance, state, path: state[S.Path], data: { changes } })
-			if (instance.config.strict === this.StrictTypes) {
-				if (Object.entries(changes).some(([name,value]) => typeof value !== typeof state[name])) {
-					const errs = Object.entries(changes).filter(([name,value]) => typeof value !== typeof state[name])
-					throw new StateTypeError(`Properties must have the same type as their initial value. ${errs.map(([name,value]) => `${typeof value} given for '${name}', should be ${typeof state[name]}`).join('. ')}.`, { instance, state, path: state[S.Path], data: { changes } })
-				}
-			}
-		}
-		const allChanges = deep_merge_object(state[S.Changes] || {}, changes)
+		if (instance.config.strict && Object.entries(changes).some(([property]) => !(property in state)))
+			throw new StateReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).map(key => key.toString()).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).map(key => key.toString()).join(', ')} ].\nPath: [ ${state[S.Path].map(key => key.toString()).join(' / ')} ]`, { instance, state, path: state[S.Path], data: { changes } })
+		if (instance.config.strict === this.StrictTypes && Object.entries(changes).some(([property,value]) => typeof value !== typeof state[property]))
+			throw new StateTypeError(`Properties must have the same type as their initial value. ${Object.entries(changes).filter(([property,value]) => typeof value !== typeof state[property]).map(([property,value]) => `${typeof value} given for '${property}', should be ${typeof state[property]}`).join('. ')}.`, { instance, state, path: state[S.Path], data: { changes } })
+		const merge = instance.config.deep ? deep_merge_object : shallow_merge_object
+		const allChanges = merge(state[S.Changes] || {}, changes)
 		return {
-			...deep_merge_object(state, allChanges),
+			...state,
+			...merge(state, allChanges),
 			[S.Path]: state[S.Path],
 			[S.Changes]: allChanges
 		}
 	}
 	static _proceed (instance, state = {}, path = state[S.Path] || []) {
 		if (path.length === 0) return null
-		const parPath = this._closest(instance, path.slice(0,-1), [...instance.config.nodes.values()].filter(({ proceed }) => proceed).map(({ name }) => name))
-		if (!parPath) return null
-		const parActs = get_path_object(instance.process, parPath)
-		const parType = instance.config.nodes.typeof(parActs)
-		const nodeDefinition = parType && instance.config.nodes.get(parType)
-		if (!(nodeDefinition && nodeDefinition.proceed)) return null
-		const result = nodeDefinition.proceed.call(instance, parPath, state, path)
-		if (result !== undefined) return result
+		const parPath = path.slice(0,-1)
+		const parType = instance.config.nodes.typeof(get_path_object(instance.process, parPath))
+		if (!parType) throw new NodeTypeError(`Unknown node type: ${typeof get_path_object(instance.process, parPath)}${parType ? `, nodeType: ${String(parType)}` : ''} at [ ${parPath.map(key => key.toString()).join(', ')} ]`, { instance, state, path: parPath, data: { node: get_path_object(instance.process, parPath) } })
+		const proceedResult = instance.config.nodes.get(parType).proceed.call(instance, parPath, state, path)
+		if (proceedResult !== undefined) return proceedResult
 		return this._proceed(instance, state, parPath)
 	}
 	static _perform (instance, state = {}, action = null) {
-		const path = state[S.Path] || []
 		const nodeType = instance.config.nodes.typeof(action, typeof action, true)
-		const nodeDefinition = nodeType && instance.config.nodes.get(nodeType)
-		if (nodeDefinition && nodeDefinition.perform)
-			return nodeDefinition.perform.call(instance, action, state)
-		throw new NodeTypeError(`Unknown action or action type: ${typeof action}${nodeType ? `, nodeType: ${String(nodeType)}` : ''} at [ ${path.map(key => key.toString()).join(', ')} ]`, { instance, state, path, data: { action } })
+		if (!nodeType) throw new NodeTypeError(`Unknown action type: ${typeof action}${nodeType ? `, nodeType: ${String(nodeType)}` : ''} at [ ${(state[S.Path] || []).map(key => key.toString()).join(', ')} ]`, { instance, state, path: state[S.Path] || [], data: { action } })
+		return instance.config.nodes.get(nodeType).perform.call(instance, action, state)
 	}
 	static _execute (instance, state = {}, path = state[S.Path] || []) {
 		const node = get_path_object(instance.process, path)
 		const nodeType = instance.config.nodes.typeof(node)
-		const nodeDefinition = nodeType && instance.config.nodes.get(nodeType)
-		if (nodeDefinition && nodeDefinition.execute)
-			return nodeDefinition.execute.call(instance, node, state)
-		return node
+		if (!nodeType) throw new NodeTypeError(`Unknown node type: ${typeof node}${nodeType ? `, nodeType: ${String(nodeType)}` : ''} at [ ${path.map(key => key.toString()).join(', ')} ]`, { instance, state, path, data: { node } })
+		return instance.config.nodes.get(nodeType).execute.call(instance, node, state)
 	}
-	static _traverse(instance, iterator = a => a, post = b => b) {
-		const boundPost = post.bind(instance)
+	static _traverse(instance, iterator = ident) {
 		const iterate = (path = []) => {
-			const item = get_path_object(instance.process, path)
-			const nodeType = instance.config.nodes.typeof(item)
-			const nodeDefinition = nodeType && instance.config.nodes.get(nodeType)
-			if (nodeDefinition && nodeDefinition.traverse)
-				return nodeDefinition.traverse.call(instance, item, path, iterate, boundPost)
-			return iterator.call(instance, item, path)
+			const node = get_path_object(instance.process, path)
+			const nodeType = instance.config.nodes.typeof(node)
+			if (!nodeType) throw new NodeTypeError(`Unknown node type: ${typeof node}${nodeType ? `, nodeType: ${String(nodeType)}` : ''} at [ ${path.map(key => key.toString()).join(', ')} ]`, { instance, path, data: { node } })
+			return iterator.call(instance, instance.config.nodes.get(nodeType).traverse.call(instance, node, path, iterate), path, instance.process, nodeType)
 		}
 		return iterate()
 	}
@@ -288,38 +295,40 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 		return this._runSync(instance, ...input)
 	}
 	static _runSync (instance, ...input) {
-		const { until, iterations, input: inputModifier, result: adaptResult, adaptStart, adaptEnd, defaults } = { ...this.config, ...instance.config }
-		const modifiedInput = inputModifier.apply(instance, input) || {}
-		let r = 0, currentState = adaptStart.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
+		const { until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults, trace } = { ...this.config, ...instance.config }
+		const modifiedInput = adaptInput.apply(instance, input) || {}
+		let r = 0, currentState = before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
 			[S.Changes]: {},
 			...defaults,
-			[S.Path]: modifiedInput[S.Path] || [],
+			[S.Path]: modifiedInput[S.Path] || [], [S.Trace]: modifiedInput[S.Trace] || [],
+			...(S.Return in modifiedInput ? {[S.Return]: modifiedInput[S.Return]} : {})
 		}, modifiedInput))
 		while (r < iterations) {
-			if (until(currentState)) break;
-			if (++r >= iterations)
-				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
+			if (until.call(instance, currentState, r)) break;
+			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
+			if (trace) currentState = { ...currentState, [S.Trace]: [ ...currentState[S.Trace], currentState[S.Path] ] }
 			currentState = this._perform(instance, currentState, this._execute(instance, currentState))
 		}
-		return adaptResult.call(instance, adaptEnd.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
+		return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
 	}
 	static async _runAsync (instance, ...input) {
-		const { pause, until, iterations, input: inputModifier, result: adaptResult, adaptStart, adaptEnd, defaults } = { ...this.config, ...instance.config }
-		const modifiedInput = (await inputModifier.apply(instance, input)) || {}
-		let r = 0, currentState = adaptStart.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
+		const { pause, until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults, trace } = { ...this.config, ...instance.config }
+		const modifiedInput = (await adaptInput.apply(instance, input)) || {}
+		let r = 0, currentState = before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
 			[S.Changes]: {},
 			...defaults,
-			[S.Path]: modifiedInput[S.Path] || [],
+			[S.Path]: modifiedInput[S.Path] || [], [S.Trace]: modifiedInput[S.Trace] || [],
+			...(S.Return in modifiedInput ? {[S.Return]: modifiedInput[S.Return]} : {})
 		}, modifiedInput))
 		while (r < iterations) {
 			const pauseExecution = pause.call(instance, currentState, r)
 			if (pauseExecution) await pauseExecution;
-			if (until(currentState)) break;
-			if (++r >= iterations)
-				throw new MaxIterationsError(`Maximim iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
-			currentState = this._perform(instance, currentState, await this._execute(instance, currentState))
+			if (until.call(instance, currentState, r)) break;
+			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
+			if (trace) currentState = { ...currentState, [S.Trace]: [ ...currentState[S.Trace], currentState[S.Path] ] }
+			currentState = await this._perform(instance, currentState, await this._execute(instance, currentState))
 		}
-		return adaptResult.call(instance, adaptEnd.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
+		return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
 	}
 }
 export class SuperSmallStateMachineChain extends SuperSmallStateMachineCore {
@@ -328,14 +337,18 @@ export class SuperSmallStateMachineChain extends SuperSmallStateMachineCore {
 	static proceed(state, path)        { return instance => this._proceed(instance, state, path) }
 	static perform(state, action)      { return instance => this._perform(instance, state, action) }
 	static execute(state, path)        { return instance => this._execute(instance, state, path) }
-	static traverse(iterator, post)    { return instance => this._traverse(instance, iterator, post) }
+	static traverse(iterator)          { return instance => this._traverse(instance, iterator) }
 	static run(...input)               { return instance => this._run(instance, ...input) }
 	static runSync(...input)           { return instance => this._runSync(instance, ...input) }
 	static runAsync(...input)          { return instance => this._runAsync(instance, ...input) }
 	static do(process = null)                    { return instance => ({ process: instance.config.adapt.reduce((prev, modifier) => modifier.call(instance, prev), process), config: instance.config }) }
 	static defaults(defaults = S.config.defaults){ return instance => ({ process: instance.process, config: { ...instance.config, defaults }, }) }
 	static input(input = S.config.input)         { return instance => ({ process: instance.process, config: { ...instance.config, input }, }) }
-	static result(result = S.config.result)      { return instance => ({ process: instance.process, config: { ...instance.config, result }, }) }
+	static output(output = S.config.output)      { return instance => ({ process: instance.process, config: { ...instance.config, output }, }) }
+	static untrace                                (instance) { return ({ process: instance.process, config: { ...instance.config, trace: false }, }) }
+	static trace                                  (instance) { return ({ process: instance.process, config: { ...instance.config, trace: true }, }) }
+	static shallow                                (instance) { return ({ process: instance.process, config: { ...instance.config, deep: false }, }) }
+	static deep                                   (instance) { return ({ process: instance.process, config: { ...instance.config, deep: true }, }) }
 	static unstrict                               (instance) { return ({ process: instance.process, config: { ...instance.config, strict: false }, }) }
 	static strict                                 (instance) { return ({ process: instance.process, config: { ...instance.config, strict: true }, }) }
 	static strictTypes                            (instance) { return ({ process: instance.process, config: { ...instance.config, strict: S.StrictTypes }, }) }
@@ -346,15 +359,15 @@ export class SuperSmallStateMachineChain extends SuperSmallStateMachineCore {
 	static async                                  (instance) { return ({ process: instance.process, config: { ...instance.config, async: true }, }) }
 	static pause(pause = S.config.pause)         { return instance => ({ process: instance.process, config: { ...instance.config, pause }, }) }
 	static override(override = S.config.override){ return instance => ({ process: instance.process, config: { ...instance.config, override } }) }
-	static addNode(...nodes)                     { return instance => ({ process: instance.process, config: { ...instance.config, nodes: new NodeDefinitions(...instance.config.nodes.values(),...nodes) }, }) }
+	static addNode(...nodes)                     { return instance => ({ process: instance.process, config: { ...instance.config, nodes: new NS(...instance.config.nodes.values(),...nodes) }, }) }
 	static adapt(...adapters)                    { return instance => ({ process: adapters.reduce((prev, adapter) => adapter.call(instance, prev), instance.process), config: { ...instance.config, adapt: [ ...instance.config.adapt, ...adapters ] }, }) }
-	static adaptStart(...adapters)               { return instance => ({ process: instance.process, config: { ...instance.config, adaptStart: [ ...instance.config.adaptStart, ...adapters ] }, }) }
-	static adaptEnd(...adapters)                 { return instance => ({ process: instance.process, config: { ...instance.config, adaptEnd: [ ...instance.config.adaptEnd, ...adapters ] }, }) }
+	static before(...adapters)                   { return instance => ({ process: instance.process, config: { ...instance.config, before: [ ...instance.config.before, ...adapters ] }, }) }
+	static after(...adapters)                    { return instance => ({ process: instance.process, config: { ...instance.config, after: [ ...instance.config.after, ...adapters ] }, }) }
 	static with(...adapters) {
 		const flatAdapters = adapters.flat(Infinity)
 		return instance => {
-			const result = flatAdapters.reduce((prev, adapter) => adapter.call(instance, prev), instance)
-			return result instanceof S ? result : new S(result.process, result.config)
+			const adapted = flatAdapters.reduce((prev, adapter) => adapter.call(instance, prev), instance)
+			return adapted instanceof S ? adapted : new S(adapted.process, adapted.config)
 		}
 	}
 }
@@ -372,14 +385,18 @@ export default class S extends SuperSmallStateMachineChain {
 	proceed(state, path)    { return S._proceed(this, state, path) }
 	perform(state, action)  { return S._perform(this, state, action) }
 	execute(state, path)    { return S._execute(this, state, path) }
-	traverse(iterator, post){ return S._traverse(this, iterator, post) }
+	traverse(iterator)      { return S._traverse(this, iterator) }
 	run     (...input)      { return S._run(this, ...input) }
 	runSync (...input)      { return S._runSync(this, ...input) }
 	runAsync(...input)      { return S._runAsync(this, ...input) }
 	do(process)             { return this.with(S.do(process)) }
 	defaults(defaults)      { return this.with(S.defaults(defaults)) }
 	input(input)            { return this.with(S.input(input)) }
-	result(result)          { return this.with(S.result(result)) }
+	output(output)          { return this.with(S.output(output)) }
+	get untrace()           { return this.with(S.untrace) }
+	get trace()             { return this.with(S.trace) }
+	get shallow()           { return this.with(S.shallow) }
+	get deep()              { return this.with(S.deep) }
 	get unstrict()          { return this.with(S.unstrict) }
 	get strict()            { return this.with(S.strict) }
 	get strictTypes()       { return this.with(S.strictTypes) }
@@ -392,9 +409,11 @@ export default class S extends SuperSmallStateMachineChain {
 	override(override)      { return this.with(S.override(override)) }
 	addNode(...nodes)       { return this.with(S.addNode(...nodes)) }
 	adapt(...adapters)      { return this.with(S.adapt(...adapters)) }
-	adaptStart(...adapters) { return this.with(S.adaptStart(...adapters)) }
-	adaptEnd(...adapters)   { return this.with(S.adaptEnd(...adapters)) }
+	before(...adapters)     { return this.with(S.before(...adapters)) }
+	after(...adapters)      { return this.with(S.after(...adapters)) }
 	with(...transformers)   { return S.with(...transformers)(this) }
 }
 export const StateMachine = S
 export const SuperSmallStateMachine = S
+export const NodeDefinition = N
+export const NodeDefinitions = NS
