@@ -2604,7 +2604,7 @@ D('Core',
 			CS("const modifiedInput = adaptInput.apply(instance, input) || {}")
 		),
 		D('Merge the initial condition with the default initial state',
-			CS("let r = 0, currentState = before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {"),
+			CS("let r = 0, currentState = { ...before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {"),
 			D('Default to an empty change object',
 				CS("[S.Changes]: {},")
 			),
@@ -2617,8 +2617,8 @@ D('Core',
 			D('Use the path from the initial state - allows for starting at arbitrary positions',
 				CS("...(S.Return in modifiedInput ? {[S.Return]: modifiedInput[S.Return]} : {})"),
 			),
-			JS("}, modifiedInput))"),
-			TS("} as SystemState<State, Output>, modifiedInput))")
+			JS("}, modifiedInput)), [S.Changes]: {} }"),
+			TS("} as SystemState<State, Output>, modifiedInput)), [S.Changes]: {} }")
 		),
 		D('Repeat for a limited number of iterations.',
 			'This should be fine for most finite machines, but may be too little for some constantly running machines.',

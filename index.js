@@ -297,12 +297,12 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 	static _runSync (instance, ...input) {
 		const { until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults, trace } = { ...this.config, ...instance.config }
 		const modifiedInput = adaptInput.apply(instance, input) || {}
-		let r = 0, currentState = before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
+		let r = 0, currentState = { ...before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
 			[S.Changes]: {},
 			...defaults,
 			[S.Path]: modifiedInput[S.Path] || [], [S.Trace]: modifiedInput[S.Trace] || [],
 			...(S.Return in modifiedInput ? {[S.Return]: modifiedInput[S.Return]} : {})
-		}, modifiedInput))
+		}, modifiedInput)), [S.Changes]: {} }
 		while (r < iterations) {
 			if (until.call(instance, currentState, r)) break;
 			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Path].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, path: currentState[S.Path], data: { iterations } })
