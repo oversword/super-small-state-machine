@@ -32,18 +32,28 @@ return instance.process // { result: 'value' }
 Config
 
 ```javascript
-const instance = new S()
-return instance.config // { defaults: { result: undefined }, iterations: 10000, strict: false, async: false }
+	const instance = new S()
+	return instance.config // {
+ defaults: { result: undefined },
+ iterations: 10000,
+ strict: false,
+ async: false,
+}
 ```
 
 ```javascript
-const instance = new S()
-const modifiedInstance = instance
-	.async
-	.for(10)
-	.defaults({ result: 'other' })
-	.strict
-return modifiedInstance.config // { defaults: { result: 'other' }, iterations: 10, strict: true, async: true }
+	const instance = new S()
+	const modifiedInstance = instance
+		.async
+		.for(10)
+		.defaults({ result: 'other' })
+		.strict
+	return modifiedInstance.config // {
+ defaults: { result: 'other' },
+ iterations: 10,
+ strict: true,
+ async: true,
+}
 ```
 
 ## Instance Constructor
@@ -135,21 +145,26 @@ Merges the `changes` with the given `state` and returns it.
 This will ignore any symbols in `changes`, and forward the important symbols of the given `state`.
 
 ```javascript
-const instance = new S()
-const result = instance.changes({
-	[S.Path]: ['preserved'],
-	[S.Changes]: {},
-	preserved: 'value',
-	common: 'initial',
-}, {
-	[S.Path]: ['ignored'],
-	[S.Changes]: { ignored: true },
-	common: 'changed',
-})
-return result // { common: 'changed', preserved: 'value', [S.Path]: [ 'preserved' ], [S.Changes]: { ignored: undefined, common: 'changed' } }
+	const instance = new S()
+	const result = instance.changes({
+		[S.Stack]: [['preserved']],
+		[S.Changes]: {},
+		preserved: 'value',
+		common: 'initial',
+	}, {
+		[S.Stack]: [['ignored']],
+		[S.Changes]: { ignored: true },
+		common: 'changed',
+	})
+	return result // {
+ common: 'changed',
+ preserved: 'value',
+ [S.Stack]: [ 'preserved' ],
+ [S.Changes]: { ignored: undefined, common: 'changed' },
+}
 ```
 
-## instance.proceed (state = {}, path = state[S.Path] || [])
+## instance.proceed (state = {}, node = undefined)
 
 Proceed to the next execution path.
 
@@ -165,7 +180,7 @@ const instance = new S([
 	],
 	null
 ])
-return instance.proceed({ [S.Path]: [ 2, 1 ] }) // { [S.Path]: [ 3 ] }
+return instance.proceed({ [S.Stack]: [[ 2, 1 ]] }) // { [S.Stack]: [ [ 3 ] ] }
 ```
 
 ## instance.perform (state = {}, action = null)
@@ -181,7 +196,7 @@ const instance = new S()
 return instance.perform({ myProperty: 'start value' }, { myProperty: 'new value' }) // { myProperty: 'new value' }
 ```
 
-## instance.execute (state = {}, path = state[S.Path] || [])
+## instance.execute (state = {}, node = undefined)
 
 Execute a node in the process, return an action.
 
@@ -190,36 +205,44 @@ Executes the node in the process at the state's current path and returns it's ac
 If the node is not executable it will be returned as the action.
 
 ```javascript
-const instance = new S([
-	{ myProperty: 'this value' },
-	{ myProperty: 'that value' },
-	{ myProperty: 'the other value' },
-])
-return instance.execute({ [S.Path]: [1], myProperty: 'start value' }) // { myProperty: 'that value', [S.Path]: [ 2 ] }
+	const instance = new S([
+		{ myProperty: 'this value' },
+		{ myProperty: 'that value' },
+		{ myProperty: 'the other value' },
+	])
+	return instance.execute({ [S.Stack]: [[1]], myProperty: 'start value' }, get_path_object(instance.process, [1])) // {
+ myProperty: 'that value',
+ [S.Stack]: [ [ 2 ] ],
+}
 ```
 
 instance.traverse(iterator = a => a)
 
 ```javascript
-const instance = new S({
-	initial: 'swap this',
-	other: [
-		{
-			if: 'swap this too',
-			then: 'also swap this'
-		}
-	]
-})
-return instance.traverse((node, path, process, nodeType) => {
-	if (node === 'swap this') return 'with this'
-	if (node === 'also swap this') return 'with that'
-	if (nodeType === 'condition' && node.if === 'swap this too')
-		return {
-			...node,
-			if: 'with another thing'
-		}
-	return node
-}) // { initial: 'with this', other: [ { if: 'with another thing', then: 'with that' } ] }
+	const instance = new S({
+		initial: 'swap this',
+		other: [
+			{
+				if: 'swap this too',
+				then: 'also swap this'
+			}
+		]
+	})
+	return instance.traverse((node, path, process, nodeType) => {
+		if (node === 'swap this') return 'with this'
+		if (node === 'also swap this') return 'with that'
+		if (nodeType === 'condition' && node.if === 'swap this too')
+			return {
+				...node,
+				if: 'with another thing'
+			}
+		return node
+	}) // {
+ initial: 'with this',
+ other: [
+  { if: 'with another thing', then: 'with that' },
+ ],
+}
 ```
 
 ## instance.run (...input)
@@ -423,16 +446,23 @@ Enables the stack trace.
 Creates a new instance.
 
 ```javascript
-const instance = new S({
-	initial: 'other',
-	other: 'oneMore',
-	oneMore: [
-		null,
-		null
-	]
-}).trace
-.output(({ [S.Trace]: trace }) => trace)
-return instance() // [ [  ], [ 'initial' ], [ 'other' ], [ 'oneMore' ], [ 'oneMore', 0 ], [ 'oneMore', 1 ] ]
+	const instance = new S({
+		initial: 'other',
+		other: 'oneMore',
+		oneMore: [
+			null,
+			null
+		]
+	}).trace
+	.output(({ [S.Trace]: trace }) => trace)
+	return instance() // [
+ [ [  ] ],
+ [ [ 'initial' ] ],
+ [ [ 'other' ] ],
+ [ [ 'oneMore' ] ],
+ [ [ 'oneMore', 0 ] ],
+ [ [ 'oneMore', 1 ] ],
+]
 ```
 
 ## instance.shallow <default>
@@ -442,10 +472,16 @@ Shallow merges the state every time a state change in made.
 Creates a new instance.
 
 ```javascript
-const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
-	.shallow
-	.output(ident)
-return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } }) // { myProperty: { existingKey: 'newValue', anotherKey: undefined, deepKey: { deepVaue: undefined, deepValue2: 7 } } }
+	const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
+		.shallow
+		.output(ident)
+	return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } }) // {
+ myProperty: {
+  existingKey: 'newValue',
+  anotherKey: undefined,
+  deepKey: { deepVaue: undefined, deepValue2: 7 },
+ },
+}
 ```
 
 ## instance.deep
@@ -455,10 +491,16 @@ Deep merges the all properties in the state every time a state change in made.
 Creates a new instance.
 
 ```javascript
-const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
-	.deep
-	.output(ident)
-return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } }) // { myProperty: { existingKey: 'newValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6, deepValue2: 7 } } }
+	const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
+		.deep
+		.output(ident)
+	return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } }) // {
+ myProperty: {
+  existingKey: 'newValue',
+  anotherKey: 'anotherValue',
+  deepKey: { deepVaue: 6, deepValue2: 7 },
+ },
+}
 ```
 
 ## instance.unstrict <default>
@@ -779,21 +821,26 @@ Merges the `changes` with the given `state` and returns it.
 This will ignore any symbols in `changes`, and forward the important symbols of the given `state`.
 
 ```javascript
-const instance = new S()
-const result = S.changes({
-	[S.Path]: ['preserved'],
-	[S.Changes]: {},
-	preserved: 'value',
-	common: 'initial',
-}, {
-	[S.Path]: ['ignored'],
-	[S.Changes]: { ignored: true },
-	common: 'changed',
-})(instance)
-return result // { common: 'changed', preserved: 'value', [S.Path]: [ 'preserved' ], [S.Changes]: { ignored: undefined, common: 'changed' } }
+	const instance = new S()
+	const result = S.changes({
+		[S.Stack]: ['preserved'],
+		[S.Changes]: {},
+		preserved: 'value',
+		common: 'initial',
+	}, {
+		[S.Stack]: ['ignored'],
+		[S.Changes]: { ignored: true },
+		common: 'changed',
+	})(instance)
+	return result // {
+ common: 'changed',
+ preserved: 'value',
+ [S.Stack]: [ 'preserved' ],
+ [S.Changes]: { ignored: undefined, common: 'changed' },
+}
 ```
 
-## S.proceed (state = {}, path = state[S.Path] || [])
+## S.proceed (state = {}, action = undefined)
 
 Proceed to the next execution path.
 
@@ -809,8 +856,8 @@ const instance = new S([
 	],
 	null
 ])
-const proceeder = S.proceed({ [S.Path]: [ 2, 1 ] })
-return proceeder(instance) // { [S.Path]: [ 3 ] }
+const proceeder = S.proceed({ [S.Stack]: [[ 2, 1 ]] })
+return proceeder(instance) // { [S.Stack]: [ [ 3 ] ] }
 ```
 
 ## S.perform (state = {}, action = null)
@@ -827,7 +874,7 @@ const performer = S.perform({ myProperty: 'start value' }, { myProperty: 'new va
 return performer(instance) // { myProperty: 'new value' }
 ```
 
-## S.execute (state = {}, path = state[S.Path] || [])
+## S.execute (state = {}, node = undefined)
 
 Execute a node in the process, return an action.
 
@@ -836,38 +883,46 @@ Executes the node in the process at the state's current path and returns it's ac
 If the node is not executable it will be returned as the action.
 
 ```javascript
-const instance = new S([
-	{ myProperty: 'this value' },
-	{ myProperty: 'that value' },
-	{ myProperty: 'the other value' },
-])
-const executor = S.execute({ [S.Path]: [1], myProperty: 'start value' })
-return executor(instance) // { myProperty: 'that value', [S.Path]: [ 2 ] }
+	const instance = new S([
+		{ myProperty: 'this value' },
+		{ myProperty: 'that value' },
+		{ myProperty: 'the other value' },
+	])
+	const executor = S.execute({ [S.Stack]: [[1]], myProperty: 'start value' })
+	return executor(instance) // {
+ myProperty: 'that value',
+ [S.Stack]: [ [ 2 ] ],
+}
 ```
 
 S.traverse(iterator = a => a)
 
 ```javascript
-const instance = new S({
-	initial: 'swap this',
-	other: [
-		{
-			if: 'swap this too',
-			then: 'also swap this'
-		}
-	]
-})
-const traverser = S.traverse((node, path, process, nodeType) => {
-	if (node === 'swap this') return 'with this'
-	if (node === 'also swap this') return 'with that'
-	if (nodeType === 'condition' && node.if === 'swap this too')
-		return {
-			...node,
-			if: 'with another thing'
-		}
-	return node
-})
-return traverser(instance) // { initial: 'with this', other: [ { if: 'with another thing', then: 'with that' } ] }
+	const instance = new S({
+		initial: 'swap this',
+		other: [
+			{
+				if: 'swap this too',
+				then: 'also swap this'
+			}
+		]
+	})
+	const traverser = S.traverse((node, path, process, nodeType) => {
+		if (node === 'swap this') return 'with this'
+		if (node === 'also swap this') return 'with that'
+		if (nodeType === 'condition' && node.if === 'swap this too')
+			return {
+				...node,
+				if: 'with another thing'
+			}
+		return node
+	})
+	return traverser(instance) // {
+ initial: 'with this',
+ other: [
+  { if: 'with another thing', then: 'with that' },
+ ],
+}
 ```
 
 ## S.run (...input)
@@ -1074,17 +1129,24 @@ Deep merges the all properties in the state every time a state change in made.
 Returns a function that will modify a given instance.
 
 ```javascript
-const instance = new S({
-	initial: 'other',
-	other: 'oneMore',
-	oneMore: [
-		null,
-		null
-	]
-})
-.with(S.trace)
-.output(({ [S.Trace]: trace }) => trace)
-return instance() // [ [  ], [ 'initial' ], [ 'other' ], [ 'oneMore' ], [ 'oneMore', 0 ], [ 'oneMore', 1 ] ]
+	const instance = new S({
+		initial: 'other',
+		other: 'oneMore',
+		oneMore: [
+			null,
+			null
+		]
+	})
+	.with(S.trace)
+	.output(({ [S.Trace]: trace }) => trace)
+	return instance() // [
+ [ [  ] ],
+ [ [ 'initial' ] ],
+ [ [ 'other' ] ],
+ [ [ 'oneMore' ] ],
+ [ [ 'oneMore', 0 ] ],
+ [ [ 'oneMore', 1 ] ],
+]
 ```
 
 ## S.shallow <default>
@@ -1094,10 +1156,16 @@ Shallow merges the state every time a state change in made.
 Returns a function that will modify a given instance.
 
 ```javascript
-const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
-	.with(S.shallow)
-	.output(ident)
-return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } }) // { myProperty: { existingKey: 'newValue', anotherKey: undefined, deepKey: { deepVaue: undefined, deepValue2: 7 } } }
+	const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
+		.with(S.shallow)
+		.output(ident)
+	return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } }) // {
+ myProperty: {
+  existingKey: 'newValue',
+  anotherKey: undefined,
+  deepKey: { deepVaue: undefined, deepValue2: 7 },
+ },
+}
 ```
 
 ## S.deep
@@ -1107,10 +1175,16 @@ Deep merges the all properties in the state every time a state change in made.
 Returns a function that will modify a given instance.
 
 ```javascript
-const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
-	.with(S.deep)
-	.output(ident)
-return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } }) // { myProperty: { existingKey: 'newValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6, deepValue2: 7 } } }
+	const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
+		.with(S.deep)
+		.output(ident)
+	return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } }) // {
+ myProperty: {
+  existingKey: 'newValue',
+  anotherKey: 'anotherValue',
+  deepKey: { deepVaue: 6, deepValue2: 7 },
+ },
+}
 ```
 
 ## S.unstrict <default>
@@ -1424,12 +1498,20 @@ Returned in the state. Should not be passed in.
 return { [S.Changes]: {} } // Succeeds
 ```
 
-### Path
+### Goto
 
-Returned in the state to indicate the next action path, or passed in with the state to direct the machine. This can also be used as a node on its own to change the executing path.
+Used to change the executing path.
 
 ```javascript
-return { [S.Path]: [] } // Succeeds
+return { [S.Goto]: [] } // Succeeds
+```
+
+### Stack
+
+Returned in the state to indicate the next action path, or passed in with the state to direct the machine.
+
+```javascript
+return { [S.Goto]: [] } // Succeeds
 ```
 
 ### Trace
@@ -1453,7 +1535,18 @@ All the defaults nodes together in one list.
 ## Config
 
 ```javascript
-return S.config // { async: false, deep: false, strict: false, trace: false, iterations: 10000, override: null, adapt: [  ], before: [  ], after: [  ], defaults: {  } }
+	return S.config // {
+ async: false,
+ deep: false,
+ strict: false,
+ trace: false,
+ iterations: 10000,
+ override: null,
+ adapt: [  ],
+ before: [  ],
+ after: [  ],
+ defaults: {  },
+}
 ```
 
 Initialise an empty state by default
@@ -1522,18 +1615,23 @@ Merges the `changes` with the given `state` and returns it.
 This will ignore any symbols in `changes`, and forward the important symbols of the given `state`.
 
 ```javascript
-const instance = new S()
-const result = S._changes(instance, {
-	[S.Path]: ['preserved'],
-	[S.Changes]: {},
-	preserved: 'value',
-	common: 'initial',
-}, {
-	[S.Path]: ['ignored'],
-	[S.Changes]: { ignored: true },
-	common: 'changed',
-})
-return result // { common: 'changed', preserved: 'value', [S.Path]: [ 'preserved' ], [S.Changes]: { ignored: undefined, common: 'changed' } }
+	const instance = new S()
+	const result = S._changes(instance, {
+		[S.Stack]: ['preserved'],
+		[S.Changes]: {},
+		preserved: 'value',
+		common: 'initial',
+	}, {
+		[S.Stack]: ['ignored'],
+		[S.Changes]: { ignored: true },
+		common: 'changed',
+	})
+	return result // {
+ common: 'changed',
+ preserved: 'value',
+ [S.Stack]: [ 'preserved' ],
+ [S.Changes]: { ignored: undefined, common: 'changed' },
+}
 ```
 
 ### If the strict state flag is truthy, perform state checking logic
@@ -1560,7 +1658,7 @@ Carry over the original path.
 
 Update the changes to the new changes
 
-## S._proceed (instance, state = {}, path = state[S.Path] || [])
+## S._proceed (instance, state = {}, path = state[S.Stack] || [])
 
 Proceed to the next execution path.
 
@@ -1570,8 +1668,8 @@ const instance = new S([
 	'secondAction'
 ])
 return S._proceed(instance, {
-	[S.Path]: [0]
-}) // { [S.Path]: [ 1 ] }
+	[S.Stack]: [[0]]
+}) // { [S.Stack]: [ [ 1 ] ] }
 ```
 
 Performs fallback logic when a node exits.
@@ -1585,23 +1683,15 @@ const instance = new S([
 	'thirdAction'
 ])
 return S._proceed(instance, {
-	[S.Path]: [0,1]
-}) // { [S.Path]: [ 1 ] }
+	[S.Stack]: [[0,1]]
+}) // { [S.Stack]: [ [ 1 ] ] }
 ```
 
-Return `null` (unsuccessful) if the root node is reached
-
-Get the next closest ancestor that can be proceeded
-
-Determine what type of node the ancestor is
+Determine what type of node is proceeding
 
 If the node is unrecognised, throw a TypeEror
 
-Call the `proceed` method of the ancestor node to get the next path.
-
-If there a next path, return it
-
-Proceed updwards through the tree and try again.
+Call the `proceed` method of the node to get the next path.
 
 ## S._perform (instance, state = {}, action = null)
 
@@ -1613,7 +1703,7 @@ const instance = new S([
 	'secondAction',
 	'thirdAction'
 ])
-return S._perform(instance, { [S.Path]: [0], prop: 'value' }, { prop: 'newValue' }) // { prop: 'newValue', [S.Path]: [ 1 ] }
+return S._perform(instance, { [S.Stack]: [[0]], prop: 'value' }, { prop: 'newValue' }) // { prop: 'newValue', [S.Stack]: [ [ 1 ] ] }
 ```
 
 Applies any changes in the given `action` to the given `state`.
@@ -1624,7 +1714,7 @@ const instance = new S([
 	'secondAction',
 	'thirdAction'
 ])
-return S._perform(instance, { [S.Path]: [0], prop: 'value' }, { [S.Path]: [2] }) // { prop: 'value', [S.Path]: [ 2 ] }
+return S._perform(instance, { [S.Stack]: [[0]], prop: 'value' }, { [S.Goto]: [2] }) // { prop: 'value', [S.Stack]: [ [ 2 ] ] }
 ```
 
 Proceeds to the next node if the action is not itself a directive or return.
@@ -1634,7 +1724,7 @@ const instance = new S([
 	'firstAction',
 	'secondAction'
 ])
-return S._perform(instance, { [S.Path]: [0] }, null) // { [S.Path]: [ 1 ] }
+return S._perform(instance, { [S.Stack]: [[0]] }, null) // { [S.Stack]: [ [ 1 ] ] }
 ```
 
 Get the node type of the given `action`
@@ -1643,7 +1733,7 @@ Gets the node definition for the action
 
 Perform the action on the state
 
-## S._execute (instance, state = {}, path = state[S.Path] || [])
+## S._execute (instance, state = {}, node = get_path_object(instance.process, state[S.Stack][0])))
 
 Executes the node in the process at the state's current path and returns it's action.
 
@@ -1653,7 +1743,7 @@ const instance = new S([
 	() => ({ result: 'second' }),
 	() => ({ result: 'third' }),
 ])
-return S._execute(instance, { [S.Path]: [1] }) // { result: 'second' }
+return S._execute(instance, { [S.Stack]: [[1]] }) // { result: 'second' }
 ```
 
 If the node is not executable it will be returned as the action.
@@ -1664,10 +1754,8 @@ const instance = new S([
 	({ result: 'second' }),
 	({ result: 'third' }),
 ])
-return S._execute(instance, { [S.Path]: [1] }) // { result: 'second' }
+return S._execute(instance, { [S.Stack]: [[1]] }) // { result: 'second' }
 ```
-
-Get the node at the given `path`
 
 Get the type of that node
 
@@ -1682,28 +1770,33 @@ Traverses a process, mapping each node to a new value, effectively cloning the p
 You can customise how each leaf node is mapped by supplying the `iterator` method
 
 ```javascript
-const inputProcess = {
-	initial: 'swap this',
-	other: [
-		{
-			if: 'swap this too',
-			then: 'also swap this'
-		}
-	]
+	const inputProcess = {
+		initial: 'swap this',
+		other: [
+			{
+				if: 'swap this too',
+				then: 'also swap this'
+			}
+		]
+	}
+	return S._traverse({
+		process: inputProcess,
+		config: S.config,
+	}, (node, path, process, nodeType) => {
+		if (node === 'swap this') return 'with this'
+		if (node === 'also swap this') return 'with that'
+		if (nodeType === 'condition' && node.if === 'swap this too')
+			return {
+				...node,
+				if: 'with another thing'
+			}
+		return node
+	}) // {
+ initial: 'with this',
+ other: [
+  { if: 'with another thing', then: 'with that' },
+ ],
 }
-return S._traverse({
-	process: inputProcess,
-	config: S.config,
-}, (node, path, process, nodeType) => {
-	if (node === 'swap this') return 'with this'
-	if (node === 'also swap this') return 'with that'
-	if (nodeType === 'condition' && node.if === 'swap this too')
-		return {
-			...node,
-			if: 'with another thing'
-		}
-	return node
-}) // { initial: 'with this', other: [ { if: 'with another thing', then: 'with that' } ] }
 ```
 
 ### Create an interation function to be used recursively
@@ -1832,7 +1925,11 @@ If the interations are exceeded, Error
 
 If stack trace is enabled, push the current path to the stack
 
-Execute the current node on the process and perform any required actions. Updating the currentState
+Execute the current node on the process, returning the action to perform
+
+Perform any required actions. Updating the currentState
+
+Proceed to the next action
 
 When returning, run the ends state adapters, then the output adapter to complete execution.
 
@@ -1904,7 +2001,15 @@ If the interaction are exceeded, throw MaxIterationsError
 
 If stack trace is enabled, push the current path to the stack
 
-Execute the current node on the process and perform any required actions. Updating the currentState
+If there are interruptions, perform them one by one
+
+#### If there are no interruptions, execute the process as normal
+
+Execute the current node on the process, returning the action to perform
+
+Perform any required actions. Updating the currentState
+
+Proceed to the next action
 
 When returning, run the ends state adapters, then the output adapter to complete execution.
 
@@ -1969,8 +2074,6 @@ return Sequence; // success
 Use the `NodeTypes.SQ` (sequence) value as the type.
 
 ### Proceed by running the next node in the sequence
-
-Get the sequence at the path
 
 Get the current index in this sequence from the path
 
@@ -2143,18 +2246,22 @@ Iterate on the `'else'` clause if it exists
 ## Switch Node
 
 ```javascript
-const instance = new S({
-	switch: ({ input }) => input,
-	case: {
-		start: { [S.Return]: 'first' },
-		two: { [S.Return]: 'second' },
-		default: { [S.Return]: 'none' },
-	}
-})
-const output1 = instance({ input: 'start' })
-const output2 = instance({ input: 'two' })
-const output3 = instance({ input: 'other' })
-return { output1, output2, output3 } // { output1: 'first', output2: 'second', output3: 'none' }
+	const instance = new S({
+		switch: ({ input }) => input,
+		case: {
+			start: { [S.Return]: 'first' },
+			two: { [S.Return]: 'second' },
+			default: { [S.Return]: 'none' },
+		}
+	})
+	const output1 = instance({ input: 'start' })
+	const output2 = instance({ input: 'two' })
+	const output3 = instance({ input: 'other' })
+	return { output1, output2, output3 } // {
+ output1: 'first',
+ output2: 'second',
+ output3: 'none',
+}
 ```
 
 This definition is exported by the library as `{ Switch }`
@@ -2236,13 +2343,13 @@ Traverse a machine by iterating over all the stages
 
 ## Directive Node
 
-Transitioning is also possible by using and object with the `S.Path` key set to a relative or absolute path. This is not recommended as it is almost never required, it should be considered system-only.
+Transitioning is also possible by using and object with the `S.Stack` key set to a relative or absolute path. This is not recommended as it is almost never required, it should be considered system-only.
 
 ```javascript
 const instance = new S({
 	initial: [
 		{ result: 'first' },
-		{ [S.Path]: 'next' }
+		{ [S.Goto]: 'next' }
 	],
 	next: { result: 'second' }
 }).output(({ result }) => result)
@@ -2255,7 +2362,7 @@ It is not possible to send any other information in this object, such as a state
 const instance = new S({
 	initial: [
 		{ result: 'first' },
-		{ [S.Path]: 'next', result: 'ignored' }
+		{ [S.Goto]: 'next', result: 'ignored' }
 	],
 	next: S.Return
 }).output(({ result }) => result)
@@ -2272,9 +2379,11 @@ return Directive; // success
 
 Use the `NodeTypes.DR` (directive) value as the type.
 
-A directive is an object with the `S.Path` property.
+A directive is an object with the `S.Stack` property.
 
-A directive is performed by performing the value of the `S.Path` property to allow for using absolute or relative directives
+A directive is performed by performing the value of the `S.Stack` property to allow for using absolute or relative directives
+
+A directive does not require proceeding, simply return the current state unmodified
 
 ## Sequence Directive Node
 
@@ -2341,20 +2450,6 @@ const instance = new S({
 return instance({ result: 'start' }) // 'second'
 ```
 
-You can also use symbols as state names.
-
-```javascript
-const myState = Symbol('MyState')
-const instance = new S({
-	initial: [
-		{ result: 'first' },
-		myState
-	],
-	[myState]: { result: 'second' }
-}).output(({ result }) => result)
-return instance({ result: 'start' }) // 'second'
-```
-
 This definition is exported by the library as `{ MachineDirective }`
 
 ```javascript
@@ -2365,7 +2460,7 @@ return MachineDirective; // success
 
 Use the `NodeTypes.MD` (machine-directive) value as the type.
 
-A machine directive is a string or a symbol.
+A machine directive is a string.
 
 ### A machine directive is performed by directing to the given stage.
 
@@ -2375,11 +2470,33 @@ If no machine ancestor is found, throw a `PathReferenceError`
 
 Update the path to parent>stage
 
+## Interupt Directive Node
+
+Interupts are like directives, except they will return to the previous execution path once complete.
+
+Use the `NodeTypes.ID` (interupt-directive) value as the type.
+
+An interupt directive is a symbol.
+
+### An interupt directive is performed by directing to the given stage.
+
+Get the closest ancestor that is a machine.
+
+If no machine ancestor is found, throw a `PathReferenceError`
+
+Update the path to parent>stage
+
+### 
+
+
+
+
+
 ## Absolute Directive Node
 
 Arrays can be used to perform absolute redirects. This is not recommended as it may make your transition logic unclear.
 
-Arrays cannot be used on their own, because they would be interpreted as sequences. For this reason they must be contained in an object with the `S.Path` symbol as a ky, with the array as the value, or returned by an action.
+Arrays cannot be used on their own, because they would be interpreted as sequences. For this reason they must be contained in an object with the `S.Stack` symbol as a ky, with the array as the value, or returned by an action.
 
 Using an absolute directive in a directive object works
 
@@ -2387,7 +2504,7 @@ Using an absolute directive in a directive object works
 const instance = new S({
 	initial: [
 		{ result: 'first' },
-		{ [S.Path]: ['next',1] }
+		{ [S.Goto]: ['next',1] }
 	],
 	next: [
 		{ result: 'skipped' },
@@ -2441,7 +2558,7 @@ Use the `NodeTypes.AD` (absolute-directive) value as the type.
 
 An absolute directive is a list of strings, symbols, and numbers. It can only be used as an action as it would otherwise be interpreted as a sequence.
 
-An absolute directive is performed by setting `S.Path` to the path
+An absolute directive is performed by setting `S.Stack` to the path
 
 ## Return Node
 
@@ -2537,15 +2654,18 @@ return referenceError      instanceof SuperSmallStateMachineError
     && pathReferenceError  instanceof SuperSmallStateMachineError // true
 ```
 
-Passing a state, instance, data, and/or path with make those properties available in the error
+Passing a state, instance, data, and/or stack with make those properties available in the error
 
 ```javascript
-return new SuperSmallStateMachineError('', {
-	instance: 'something',
-	path: 'something else',
-	state: 'my state',
-	data: 'special data'
-}) // { instance: 'something', path: 'something else', state: 'my state', data: 'special data' }
+	return new SuperSmallStateMachineError('', {
+		instance: 'something',
+		state: 'my state',
+		data: 'special data'
+	}) // {
+ instance: 'something',
+ state: 'my state',
+ data: 'special data',
+}
 ```
 
 Declare contextual properties on the class

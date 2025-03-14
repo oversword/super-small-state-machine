@@ -27,7 +27,7 @@ const matches = (object, match, symbols = []) => {
 		.every(key => (!(key in match)) || matches(object[key], match[key], symbols))
 }
 
-// TODO: better object printing with spaces and symbols
+
 export const keyToString = (obj, symbols = []) => {
 	switch (typeof obj) {
 		case 'symbol': {
@@ -44,7 +44,49 @@ export const keyToString = (obj, symbols = []) => {
 			return String(obj)
 	}
 }
-export const toString = (obj, symbols = []) => {
+export const toStringFlat = (obj, symbols = []) => {
+	switch (typeof obj) {
+		case 'boolean':
+			return obj ? 'true' : 'false'
+		case 'symbol': {
+			// const foundSymbol = Object.entries(symbols).find(([_, value]) => value === obj)
+			// if (foundSymbol) return foundSymbol[0]
+			return obj.toString()
+		}
+		case 'number':
+			return `${obj}`
+		case 'string':
+			return `'${obj}'`
+		case 'undefined':
+			return 'undefined'
+		case 'object':
+			if (obj === null)
+				return 'null'
+			if (Array.isArray(obj))
+				return `[ ${obj.map(item => toStringFlat(item, symbols)).join(', ')} ]`
+			return '{ ' + Object.entries(obj)
+				.concat(Object.values(symbols)
+					.filter(symbol => symbol in obj)
+					.map(symbol => [symbol, obj[symbol]])
+				)
+				.map(([ key, value ]) => `${keyToString(key, symbols)}: ${toStringFlat(value, symbols)}`)
+				.join(', ') + ' }'
+		case 'function':
+			return String(obj)
+		default:
+			console.error(`Unknown type cannot be converted to string: ${typeof obj}`)
+			return String(obj)
+	}
+}
+
+export const toString = (obj, symbols = [], level = 0) => {
+	const flat = toStringFlat(obj, symbols)
+	if (flat.length < (50 - level)) return flat
+
+	const c = ' '
+	const indent = Array(level).fill(c).join('')
+	const indent2 = indent + c
+	
 	switch (typeof obj) {
 		case 'boolean':
 			return obj ? 'true' : 'false'
@@ -63,14 +105,13 @@ export const toString = (obj, symbols = []) => {
 			if (obj === null)
 				return 'null'
 			if (Array.isArray(obj))
-				return `[ ${obj.map(item => toString(item, symbols)).join(', ')} ]`
-			return '{ ' + Object.entries(obj)
+				return `[${obj.map(item => `\n${indent2}${toString(item, symbols, level + 1)},`).join('')}\n${indent}]`
+			return '{' + Object.entries(obj)
 				.concat(Object.values(symbols)
 					.filter(symbol => symbol in obj)
 					.map(symbol => [symbol, obj[symbol]])
 				)
-				.map(([ key, value ]) => `${keyToString(key, symbols)}: ${toString(value, symbols)}`)
-				.join(', ') + ' }'
+				.map(([ key, value ]) => `\n${indent2}${keyToString(key, symbols)}: ${toString(value, symbols, level + 1)},`).join('') + `\n${indent}}`
 		case 'function':
 			return String(obj)
 		default:
@@ -359,7 +400,7 @@ export const test = async description => {
 			const indent = '  '
 			const parent = get_path_object(description, result.path.slice(0,-1))
 			// console.log({ parent })
-			const isAlone = parent.filter(o => !o[D_processed]).length <= 1
+			const isAlone = !Array.isArray(parent) || parent.filter(o => !o[D_processed]).length <= 1
 			const { offset, path } = nextPath(printingPath, isAlone ? result.path.slice(0,-1) : result.path)
 			const basePath = result.path.slice(0, offset)
 			let offsetStr = ''
@@ -375,7 +416,7 @@ export const test = async description => {
 				if (!item[D_processed]) return `${curr}${gap}${step}`
 				return `${curr}${gap}${item.description}`
 			}, '')
-			const printOffset = Array(result.path.length-1).fill(indent).join('')
+			const printOffset = Array(Math.max(0,result.path.length-1)).fill(indent).join('')
 			print({ printOffset, printedPath, result })
 			return result.path
 		}, [])
