@@ -2470,15 +2470,15 @@ If no machine ancestor is found, throw a `PathReferenceError`
 
 Update the path to parent>stage
 
-## Interupt Directive Node
+## Interrupt Directive Node
 
-Interupts are like directives, except they will return to the previous execution path once complete.
+Interrupts are like directives, except they will return to the previous execution path once complete.
 
-Use the `NodeTypes.ID` (interupt-directive) value as the type.
+Use the `NodeTypes.ID` (interrupt-directive) value as the type.
 
-An interupt directive is a symbol.
+An interrupt directive is a symbol.
 
-### An interupt directive is performed by directing to the given stage.
+### An interrupt directive is performed by directing to the given stage.
 
 Get the closest ancestor that is a machine.
 

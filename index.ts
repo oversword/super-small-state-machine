@@ -127,7 +127,7 @@ export enum NodeTypes {
 	CD = 'condition', SW = 'switch', WH = 'while',
 	MC = 'machine', SQ = 'sequence', FN = 'function',
 	CH = 'changes', UN = 'undefined', EM = 'empty',
-	DR = 'directive', RT = 'return', ID = 'interupt-directive', AD = 'absolute-directive', MD = 'machine-directive', SD = 'sequence-directive',
+	DR = 'directive', RT = 'return', ID = 'interrupt-directive', AD = 'absolute-directive', MD = 'machine-directive', SD = 'sequence-directive',
 }
 export enum KeyWords {
 	IT = 'initial',
@@ -473,20 +473,20 @@ SelfType = MachineDirectiveType,>(this: Instance<State, Output, Input, Action, P
 			return { ...state, [S.Stack]: [ [...lastOf, action as MachineDirectiveType], ...state[S.Stack].slice(1) ] }
 		}
 	}
-	export type InteruptDirectiveType = symbol
-	export class InteruptDirective extends Directive {
+	export type InterruptDirectiveType = symbol
+	export class InterruptDirective extends Directive {
 		static type = NodeTypes.ID
-		static typeof<SelfType = InteruptDirectiveType>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType { return objectType === 'symbol' }
+		static typeof<SelfType = InterruptDirectiveType>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType { return objectType === 'symbol' }
 		static perform<
 	State extends InitialState = InitialState,
 	Output extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-SelfType = InteruptDirectiveType,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {
-			const lastOf = get_closest_path(this.process, state[S.Stack][0].slice(0,-1), i => this.config.nodes.typeof(i) === NodeTypes.MC && ((action as InteruptDirectiveType) in (i as object)))
+SelfType = InterruptDirectiveType,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {
+			const lastOf = get_closest_path(this.process, state[S.Stack][0].slice(0,-1), i => this.config.nodes.typeof(i) === NodeTypes.MC && ((action as InterruptDirectiveType) in (i as object)))
 			if (!lastOf) return { ...state, [S.Return]: action } as SystemState<State, Output>
-			return { ...state, [S.Stack]: [ [...lastOf, action as InteruptDirectiveType], ...state[S.Stack] ] }
+			return { ...state, [S.Stack]: [ [...lastOf, action as InterruptDirectiveType], ...state[S.Stack] ] }
 		}
 		static proceed<
 	State extends InitialState = InitialState,
@@ -494,7 +494,7 @@ SelfType = InteruptDirectiveType,>(this: Instance<State, Output, Input, Action, 
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-SelfType = InteruptDirectiveType,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {
+SelfType = InterruptDirectiveType,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {
 			const { [S.Stack]: stack, [S.Return]: interceptReturn, ...proceedPrevious } = S._proceed(this, { ...state, [S.Stack]: state[S.Stack].slice(1) }, undefined, true)
 			return { ...proceedPrevious, [S.Stack]: [ state[S.Stack][0], ...stack ] } as SystemState<State, Output>
 		}
@@ -524,7 +524,7 @@ SelfType = AbsoluteDirectiveType,>(this: Instance<State, Output, Input, Action, 
 	Process extends unknown = ProcessType<State, Output, Action>,
 SelfType = ReturnType<Output>,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> { return { ...state, [S.Return]: !action || action === S.Return ? undefined : (action as unknown as ReturnObjectType<Output>)[S.Return] as Output, } }
 	}
-export type PathUnit = SequenceDirectiveType | MachineDirectiveType | InteruptDirectiveType
+export type PathUnit = SequenceDirectiveType | MachineDirectiveType | InterruptDirectiveType
 export type Path = Array<PathUnit>
 export type Stack = Array<Path>
 
@@ -549,21 +549,21 @@ export type ActionType<
 	Output extends unknown = undefined,
 > = DirectiveType | AbsoluteDirectiveType | SequenceDirectiveType | MachineDirectiveType | ReturnType<Output>| ChangesType<State> | null | undefined | void
 
-export class Interuptable<Result, Interrupt> extends Promise<Result> {
-	private interuptor: (...interuptions: Array<Interrupt>) => void = () => {}
+export class Interruptable<Result, Interrupt> extends Promise<Result> {
+	private interruptor: (...interruptions: Array<Interrupt>) => void = () => {}
 	private settled: boolean = false
-	constructor(executorOrPromise: Promise<Result> | ((resolve: ((arg: Result) => void), reject: ((arg: Error) => void)) => void), interuptor: (...interuptions: Array<Interrupt>) => void) {
+	constructor(executorOrPromise: Promise<Result> | ((resolve: ((arg: Result) => void), reject: ((arg: Error) => void)) => void), interruptor: (...interruptions: Array<Interrupt>) => void) {
 		const settle = <A extends Array<unknown> = Array<unknown>>(f: ((...args: A) => void)) => (...args: A): void => {
 			this.settled = true
 			f(...args)
 		}
 		if (typeof executorOrPromise === 'function') super((resolve, reject) => executorOrPromise(settle(resolve), settle(reject)))
 		else super((resolve, reject) => { Promise.resolve(executorOrPromise).then(settle(resolve)).catch(settle(reject)) })
-		this.interuptor = interuptor
+		this.interruptor = interruptor
 	}
-	interupt(...interuptions: Array<Interrupt>): void {
-		if (this.settled) throw new Error('A settled Interuptable cannot be interupted.')
-		return this.interuptor(...interuptions)
+	interrupt(...interruptions: Array<Interrupt>): void {
+		if (this.settled) throw new Error('A settled Interruptable cannot be interrupted.')
+		return this.interruptor(...interruptions)
 	}
 }
 export class ExtensibleFunction extends Function {
@@ -593,7 +593,7 @@ export abstract class SuperSmallStateMachineCore<
 	public static readonly kw:       typeof KeyWords = KeyWords
 	public static readonly nodeTypes:typeof NodeTypes = NodeTypes
 	public static readonly types:    typeof NodeTypes = NodeTypes
-	static nodes = [ Changes, Sequence, FunctionN, Undefined, Empty, Condition, Switch, While, Machine, Directive, InteruptDirective, AbsoluteDirective, MachineDirective, SequenceDirective, Return, ]
+	static nodes = [ Changes, Sequence, FunctionN, Undefined, Empty, Condition, Switch, While, Machine, Directive, InterruptDirective, AbsoluteDirective, MachineDirective, SequenceDirective, Return, ]
 	public static readonly config: Config = {
 		defaults: {},
 		input: (state = {}) => state,
@@ -734,8 +734,8 @@ export abstract class SuperSmallStateMachineCore<
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 >(instance: Instance<State, Output, Input, Action, Process>, ...input: Input): Promise<Output> {
-	let interuptionStack: Array<Symbol> = []
-	return new Interuptable<Output, Symbol>((async () => {
+	let interruptionStack: Array<Symbol> = []
+	return new Interruptable<Output, Symbol>((async () => {
 		const { pause, until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults, trace } = { ...this.config, ...instance.config }
 		const modifiedInput = (await adaptInput.apply(instance, input)) || {}
 		let r = 0, currentState = { ...before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
@@ -750,7 +750,7 @@ export abstract class SuperSmallStateMachineCore<
 			if (until.call(instance, currentState, r)) break;
 			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Stack][0].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, data: { iterations } })
 			if (trace) currentState = { ...currentState, [S.Trace]: [ ...currentState[S.Trace], currentState[S.Stack] ] }
-			if (interuptionStack.length) currentState = await this._perform(instance, currentState, interuptionStack.shift() as Action)
+			if (interruptionStack.length) currentState = await this._perform(instance, currentState, interruptionStack.shift() as Action)
 			else {
 				const action = await this._execute(instance, currentState)
 				currentState = await this._perform(instance, currentState, action)
@@ -758,13 +758,13 @@ export abstract class SuperSmallStateMachineCore<
 			}
 		}
 		return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
-	})(), (...interuptions) => {
-			if (interuptions.length === 1 && instance.config.nodes.typeof(interuptions[0]) === NodeTypes.ID)
-				interuptionStack.push(interuptions[0])
+	})(), (...interruptions) => {
+			if (interruptions.length === 1 && instance.config.nodes.typeof(interruptions[0]) === NodeTypes.ID)
+				interruptionStack.push(interruptions[0])
 			else {
-				const interuption = Symbol("System Interuption")
-				instance.process[interuption] = interuptions
-				interuptionStack.push(interuption)
+				const interruption = Symbol("System Interruption")
+				instance.process[interruption] = interruptions
+				interruptionStack.push(interruption)
 			}
 		})
 	}

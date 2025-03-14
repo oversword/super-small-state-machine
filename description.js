@@ -1180,8 +1180,8 @@ D('Node NodeTypes',
 	D('Action Nodes',
 		JS("CH: 'changes', UN: 'undefined', EM: 'empty',"),
 		TS("CH = 'changes', UN = 'undefined', EM = 'empty',"),
-		JS("DR: 'directive', RT: 'return', ID: 'interupt-directive', AD: 'absolute-directive', MD: 'machine-directive', SD: 'sequence-directive',"),
-		TS("DR = 'directive', RT = 'return', ID = 'interupt-directive', AD = 'absolute-directive', MD = 'machine-directive', SD = 'sequence-directive',")
+		JS("DR: 'directive', RT: 'return', ID: 'interrupt-directive', AD: 'absolute-directive', MD: 'machine-directive', SD: 'sequence-directive',"),
+		TS("DR = 'directive', RT = 'return', ID = 'interrupt-directive', AD = 'absolute-directive', MD = 'machine-directive', SD = 'sequence-directive',")
 	),
 	CS("}"),
 ),
@@ -1899,8 +1899,8 @@ D('Default Nodes',
 		),
 		CS("}"),
 	),
-	D('Interupt Directive Node',
-		'Interupts are like directives, except they will return to the previous execution path once complete.',
+	D('Interrupt Directive Node',
+		'Interrupts are like directives, except they will return to the previous execution path once complete.',
 		// D('Directives are the natural way of proceeding in state machines, using the name of a neighboring state as a string you can direct flow through a state machine.',
 		// 	E.is(() => {
 		// 		const instance = new S({
@@ -1916,21 +1916,21 @@ D('Default Nodes',
 		// D('This definition is exported by the library as `{ MachineDirective }`',
 		// 	E.exports('MachineDirective', testModule, './index.js'),
 		// ),
-		TS("export type InteruptDirectiveType = symbol"),
-		CS("export class InteruptDirective extends Directive {"),
-		D('Use the `NodeTypes.ID` (interupt-directive) value as the type.',
+		TS("export type InterruptDirectiveType = symbol"),
+		CS("export class InterruptDirective extends Directive {"),
+		D('Use the `NodeTypes.ID` (interrupt-directive) value as the type.',
 			CS("static type = NodeTypes.ID")
 		),
-		D('An interupt directive is a symbol.',
+		D('An interrupt directive is a symbol.',
 			JS("static typeof(object, objectType, isAction) { return objectType === 'symbol' }"),
-			TS("static typeof<SelfType = InteruptDirectiveType>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType { return objectType === 'symbol' }")
+			TS("static typeof<SelfType = InterruptDirectiveType>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType { return objectType === 'symbol' }")
 		),
-		D('An interupt directive is performed by directing to the given stage.',
+		D('An interrupt directive is performed by directing to the given stage.',
 			JS("static perform(action, state) {"),
-			TS(`static perform<${commonGenericDefinitionInner}SelfType = InteruptDirectiveType,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {`),
+			TS(`static perform<${commonGenericDefinitionInner}SelfType = InterruptDirectiveType,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {`),
 			D('Get the closest ancestor that is a machine.',
 				JS("const lastOf = get_closest_path(this.process, state[S.Stack][0].slice(0,-1), i => this.config.nodes.typeof(i) === NodeTypes.MC && (action in i))"),
-				TS("const lastOf = get_closest_path(this.process, state[S.Stack][0].slice(0,-1), i => this.config.nodes.typeof(i) === NodeTypes.MC && ((action as InteruptDirectiveType) in (i as object)))"),
+				TS("const lastOf = get_closest_path(this.process, state[S.Stack][0].slice(0,-1), i => this.config.nodes.typeof(i) === NodeTypes.MC && ((action as InterruptDirectiveType) in (i as object)))"),
 			),
 			D('If no machine ancestor is found, throw a `PathReferenceError`',
 				JS("if (!lastOf) return { ...state, [S.Return]: action }"),
@@ -1938,13 +1938,13 @@ D('Default Nodes',
 			),
 			D('Update the path to parent>stage',
 				JS("return { ...state, [S.Stack]: [ [...lastOf, action], ...state[S.Stack] ] }"),
-				TS("return { ...state, [S.Stack]: [ [...lastOf, action as InteruptDirectiveType], ...state[S.Stack] ] }"),
+				TS("return { ...state, [S.Stack]: [ [...lastOf, action as InterruptDirectiveType], ...state[S.Stack] ] }"),
 			),
 			CS("}"),
 		),
 		D('',
 			JS("static proceed(action, state) {"),
-			TS(`static proceed<${commonGenericDefinitionInner}SelfType = InteruptDirectiveType,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {`),
+			TS(`static proceed<${commonGenericDefinitionInner}SelfType = InterruptDirectiveType,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {`),
 			D('',
 				CS("const { [S.Stack]: stack, [S.Return]: interceptReturn, ...proceedPrevious } = S._proceed(this, { ...state, [S.Stack]: state[S.Stack].slice(1) }, undefined, true)"),
 			),
@@ -2066,7 +2066,7 @@ D('Default Nodes',
 		),
 		CS("}"),
 	),
-	TS(`export type PathUnit = SequenceDirectiveType | MachineDirectiveType | InteruptDirectiveType
+	TS(`export type PathUnit = SequenceDirectiveType | MachineDirectiveType | InterruptDirectiveType
 export type Path = Array<PathUnit>
 export type Stack = Array<Path>
 
@@ -2093,20 +2093,20 @@ export type ActionType<
 `),
 ),
 
-D('Interuptable',
-	JS("export class Interuptable extends Promise {"),
-	TS("export class Interuptable<Result, Interrupt> extends Promise<Result> {"),
+D('Interruptable',
+	JS("export class Interruptable extends Promise {"),
+	TS("export class Interruptable<Result, Interrupt> extends Promise<Result> {"),
 	D('',
-		JS("#interuptor = () => {}"),
-		TS("private interuptor: (...interuptions: Array<Interrupt>) => void = () => {}"),
+		JS("#interruptor = () => {}"),
+		TS("private interruptor: (...interruptions: Array<Interrupt>) => void = () => {}"),
 	),
 	D('',
 		JS("#settled = false"),
 		TS("private settled: boolean = false"),
 	),
 	D('',
-		JS("constructor(executorOrPromise, interuptor) {"),
-		TS("constructor(executorOrPromise: Promise<Result> | ((resolve: ((arg: Result) => void), reject: ((arg: Error) => void)) => void), interuptor: (...interuptions: Array<Interrupt>) => void) {"),
+		JS("constructor(executorOrPromise, interruptor) {"),
+		TS("constructor(executorOrPromise: Promise<Result> | ((resolve: ((arg: Result) => void), reject: ((arg: Error) => void)) => void), interruptor: (...interruptions: Array<Interrupt>) => void) {"),
 		D('',
 			JS("const settle = f => (...args) => {"),
 			TS("const settle = <A extends Array<unknown> = Array<unknown>>(f: ((...args: A) => void)) => (...args: A): void => {"),
@@ -2126,21 +2126,21 @@ D('Interuptable',
 			CS("else super((resolve, reject) => { Promise.resolve(executorOrPromise).then(settle(resolve)).catch(settle(reject)) })"),
 		),
 		D('',
-			JS("this.#interuptor = interuptor"),
-			TS("this.interuptor = interuptor"),
+			JS("this.#interruptor = interruptor"),
+			TS("this.interruptor = interruptor"),
 		),
 		CS("}"),
 	),
 	D('',
-		JS("interupt(...interuptions) {"),
-		TS("interupt(...interuptions: Array<Interrupt>): void {"),
+		JS("interrupt(...interruptions) {"),
+		TS("interrupt(...interruptions: Array<Interrupt>): void {"),
 		D('',
-			JS("if (this.#settled) throw new Error('A settled Interuptable cannot be interupted.')"),
-			TS("if (this.settled) throw new Error('A settled Interuptable cannot be interupted.')"),
+			JS("if (this.#settled) throw new Error('A settled Interruptable cannot be interrupted.')"),
+			TS("if (this.settled) throw new Error('A settled Interruptable cannot be interrupted.')"),
 		),
 		D('',
-			JS("return this.#interuptor(...interuptions)"),
-			TS("return this.interuptor(...interuptions)"),
+			JS("return this.#interruptor(...interruptions)"),
+			TS("return this.interruptor(...interruptions)"),
 		),
 		CS("}"),
 	),
@@ -2220,7 +2220,7 @@ D('Core',
 		TS("public static readonly types:    typeof NodeTypes = NodeTypes")
 	),
 	D('All the defaults nodes together in one list.',
-		CS("static nodes = [ Changes, Sequence, FunctionN, Undefined, Empty, Condition, Switch, While, Machine, Directive, InteruptDirective, AbsoluteDirective, MachineDirective, SequenceDirective, Return, ]"),
+		CS("static nodes = [ Changes, Sequence, FunctionN, Undefined, Empty, Condition, Switch, While, Machine, Directive, InterruptDirective, AbsoluteDirective, MachineDirective, SequenceDirective, Return, ]"),
 	),
 	D('Config',
 		JS("static config = {"),
@@ -2760,10 +2760,10 @@ D('Core',
 		),
 		JS("static _runAsync (instance, ...input) {"),
 		TS(`public static _runAsync${commonGenericDefinition}(instance: Instance${commonGenericArguments}, ...input: Input): Promise<Output> {`),
-			JS(`let interuptionStack = []`),
-			TS(`let interuptionStack: Array<Symbol> = []`),
-			JS(`return new Interuptable((async () => {`),
-			TS(`return new Interuptable<Output, Symbol>((async () => {`),
+			JS(`let interruptionStack = []`),
+			TS(`let interruptionStack: Array<Symbol> = []`),
+			JS(`return new Interruptable((async () => {`),
+			TS(`return new Interruptable<Output, Symbol>((async () => {`),
 		D('Extract the useful parts of the config',
 			CS("const { pause, until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults, trace } = { ...this.config, ...instance.config }"),
 		),
@@ -2805,8 +2805,8 @@ D('Core',
 			),
 			
 			D('If there are interruptions, perform them one by one',
-				JS("if (interuptionStack.length) currentState = await this._perform(instance, currentState, interuptionStack.shift())"),
-				TS("if (interuptionStack.length) currentState = await this._perform(instance, currentState, interuptionStack.shift() as Action)"),
+				JS("if (interruptionStack.length) currentState = await this._perform(instance, currentState, interruptionStack.shift())"),
+				TS("if (interruptionStack.length) currentState = await this._perform(instance, currentState, interruptionStack.shift() as Action)"),
 			),
 			D('If there are no interruptions, execute the process as normal',
 				CS("else {"),
@@ -2826,13 +2826,13 @@ D('Core',
 		D('When returning, run the ends state adapters, then the output adapter to complete execution.',
 			CS("return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))"),
 		),
-		CS(`})(), (...interuptions) => {
-			if (interuptions.length === 1 && instance.config.nodes.typeof(interuptions[0]) === NodeTypes.ID)
-				interuptionStack.push(interuptions[0])
+		CS(`})(), (...interruptions) => {
+			if (interruptions.length === 1 && instance.config.nodes.typeof(interruptions[0]) === NodeTypes.ID)
+				interruptionStack.push(interruptions[0])
 			else {
-				const interuption = Symbol("System Interuption")
-				instance.process[interuption] = interuptions
-				interuptionStack.push(interuption)
+				const interruption = Symbol("System Interruption")
+				instance.process[interruption] = interruptions
+				interruptionStack.push(interruption)
 			}
 		})`),
 		CS("}"),
@@ -4688,18 +4688,18 @@ D('Requirements',
 	),
 
 	
-    D("Interupts",
-        D("Interupts return to where they were after completing",
+    D("Interrupts",
+        D("Interrupts return to where they were after completing",
             E.equals(() => {
-                const interupt = Symbol('My Interupt')
+                const interrupt = Symbol('My Interrupt')
                 const machine = new S({
                     initial: [
-                        interupt,
+                        interrupt,
                         ({ order }) => ({
                             order: [...order,'dos']
                         })
                     ],
-                    [interupt]: ({ order }) => ({
+                    [interrupt]: ({ order }) => ({
                         order: [...order,'uno']
                     })
                 })
@@ -4707,36 +4707,36 @@ D('Requirements',
                 return machine({ order: [] })
             }, ['uno','dos'])
         ),
-        D("Interupts can be chained / nested",
+        D("Interrupts can be chained / nested",
             E.equals(() => {
-                const interupt1 = Symbol('My Interupt 1')
-                const interupt2 = Symbol('My Interupt 2')
+                const interrupt1 = Symbol('My Interrupt 1')
+                const interrupt2 = Symbol('My Interrupt 2')
                 const machine = new S({
                     initial: [
-                        interupt1,
+                        interrupt1,
                         ({ order }) => ({
                             order: [...order,'qua']
                         })
                     ],
-                    [interupt1]: [
+                    [interrupt1]: [
                         ({ order }) => ({
                             order: [...order,'uno']
                         }),
-                        interupt2,
+                        interrupt2,
                         ({ order }) => ({
                             order: [...order,'tre']
                         }),
                     ],
-                    [interupt2]: ({ order }) => ({
+                    [interrupt2]: ({ order }) => ({
                         order: [...order,'dos']
                     }),
                 }).output(({ order }) => order)
                 return machine({ order: [] })
             }, ['uno','dos','tre','qua'])
         ),
-        D("Interupts can be executed from outside an async machine",
+        D("Interrupts can be executed from outside an async machine",
             E.equals(async () => {
-                const interupt = Symbol('My Interupt')
+                const interrupt = Symbol('My Interrupt')
                 const machine = new S({
                     initial: [
                         () => wait_time(100),
@@ -4748,20 +4748,20 @@ D('Requirements',
                             order: [...order,'tre']
                         }),
                     ],
-                    [interupt]: ({ order }) => ({
+                    [interrupt]: ({ order }) => ({
                         order: [...order,'dos']
                     }),
                 }).async
                 .output(({ order }) => order)
-                const interuptable = machine({ order: [] })
+                const interruptable = machine({ order: [] })
                 await wait_time(150)
-                interuptable.interupt(interupt)
-                return await interuptable
+                interruptable.interrupt(interrupt)
+                return await interruptable
             }, ['uno','dos','tre'], symbols)
         ),
-        D("Complex interupt will make a new interupt process node",
+        D("Complex interrupt will make a new interrupt process node",
             E.equals(async () => {
-                const interupt = Symbol('My Interupt')
+                const interrupt = Symbol('My Interrupt')
                 const machine = new S({
                     initial: [
                         () => wait_time(100),
@@ -4773,7 +4773,7 @@ D('Requirements',
                             order: [...order,'tre']
                         }),
                     ],
-                    [interupt]: [
+                    [interrupt]: [
                         () => wait_time(100),
                         ({ order }) => ({
                             order: [...order,'dos']
@@ -4782,13 +4782,13 @@ D('Requirements',
                 }
                 ).async
                 .output(({ order }) => order)
-                const interuptable = machine({ order: [] })
+                const interruptable = machine({ order: [] })
                 await wait_time(150)
-                interuptable.interupt(
+                interruptable.interrupt(
                     { order : ['one'] },
-                    interupt,
+                    interrupt,
                 )
-                return await interuptable
+                return await interruptable
             }, ['one','dos','tre'])
         )
     ),

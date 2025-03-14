@@ -65,7 +65,7 @@ export const NodeTypes = {
 	CD: 'condition', SW: 'switch', WH: 'while',
 	MC: 'machine', SQ: 'sequence', FN: 'function',
 	CH: 'changes', UN: 'undefined', EM: 'empty',
-	DR: 'directive', RT: 'return', ID: 'interupt-directive', AD: 'absolute-directive', MD: 'machine-directive', SD: 'sequence-directive',
+	DR: 'directive', RT: 'return', ID: 'interrupt-directive', AD: 'absolute-directive', MD: 'machine-directive', SD: 'sequence-directive',
 }
 export const KeyWords = {
 	IT: 'initial',
@@ -190,7 +190,7 @@ export class MachineDirective extends Directive {
 		return { ...state, [S.Stack]: [ [...lastOf, action], ...state[S.Stack].slice(1) ] }
 	}
 }
-export class InteruptDirective extends Directive {
+export class InterruptDirective extends Directive {
 	static type = NodeTypes.ID
 	static typeof(object, objectType, isAction) { return objectType === 'symbol' }
 	static perform(action, state) {
@@ -213,21 +213,21 @@ export class Return extends Directive {
 	static typeof(object, objectType) { return object === S.Return || Boolean(object && objectType === 'object' && (S.Return in object)) }
 	static perform(action, state) { return { ...state, [S.Return]: !action || action === S.Return ? undefined : action[S.Return], } }
 }
-export class Interuptable extends Promise {
-	#interuptor = () => {}
+export class Interruptable extends Promise {
+	#interruptor = () => {}
 	#settled = false
-	constructor(executorOrPromise, interuptor) {
+	constructor(executorOrPromise, interruptor) {
 		const settle = f => (...args) => {
 			this.#settled = true
 			f(...args)
 		}
 		if (typeof executorOrPromise === 'function') super((resolve, reject) => executorOrPromise(settle(resolve), settle(reject)))
 		else super((resolve, reject) => { Promise.resolve(executorOrPromise).then(settle(resolve)).catch(settle(reject)) })
-		this.#interuptor = interuptor
+		this.#interruptor = interruptor
 	}
-	interupt(...interuptions) {
-		if (this.#settled) throw new Error('A settled Interuptable cannot be interupted.')
-		return this.#interuptor(...interuptions)
+	interrupt(...interruptions) {
+		if (this.#settled) throw new Error('A settled Interruptable cannot be interrupted.')
+		return this.#interruptor(...interruptions)
 	}
 }
 export class ExtensibleFunction extends Function {
@@ -244,7 +244,7 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 	static kw          = KeyWords
 	static nodeTypes   = NodeTypes
 	static types       = NodeTypes
-	static nodes = [ Changes, Sequence, FunctionN, Undefined, Empty, Condition, Switch, While, Machine, Directive, InteruptDirective, AbsoluteDirective, MachineDirective, SequenceDirective, Return, ]
+	static nodes = [ Changes, Sequence, FunctionN, Undefined, Empty, Condition, Switch, While, Machine, Directive, InterruptDirective, AbsoluteDirective, MachineDirective, SequenceDirective, Return, ]
 	static config = {
 		defaults: {},
 		input: (state = {}) => state,
@@ -331,8 +331,8 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 		return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
 	}
 	static _runAsync (instance, ...input) {
-	let interuptionStack = []
-	return new Interuptable((async () => {
+	let interruptionStack = []
+	return new Interruptable((async () => {
 		const { pause, until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults, trace } = { ...this.config, ...instance.config }
 		const modifiedInput = (await adaptInput.apply(instance, input)) || {}
 		let r = 0, currentState = { ...before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
@@ -347,7 +347,7 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 			if (until.call(instance, currentState, r)) break;
 			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Stack][0].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, data: { iterations } })
 			if (trace) currentState = { ...currentState, [S.Trace]: [ ...currentState[S.Trace], currentState[S.Stack] ] }
-			if (interuptionStack.length) currentState = await this._perform(instance, currentState, interuptionStack.shift())
+			if (interruptionStack.length) currentState = await this._perform(instance, currentState, interruptionStack.shift())
 			else {
 				const action = await this._execute(instance, currentState)
 				currentState = await this._perform(instance, currentState, action)
@@ -355,13 +355,13 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 			}
 		}
 		return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
-	})(), (...interuptions) => {
-			if (interuptions.length === 1 && instance.config.nodes.typeof(interuptions[0]) === NodeTypes.ID)
-				interuptionStack.push(interuptions[0])
+	})(), (...interruptions) => {
+			if (interruptions.length === 1 && instance.config.nodes.typeof(interruptions[0]) === NodeTypes.ID)
+				interruptionStack.push(interruptions[0])
 			else {
-				const interuption = Symbol("System Interuption")
-				instance.process[interuption] = interuptions
-				interuptionStack.push(interuption)
+				const interruption = Symbol("System Interruption")
+				instance.process[interruption] = interruptions
+				interruptionStack.push(interruption)
 			}
 		})
 	}
