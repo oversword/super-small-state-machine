@@ -1,3 +1,5 @@
+import { toString } from "./d/index.js";
+
 export const clone_object = (obj) => {
 	if (Array.isArray(obj)) return obj.map(clone_object)
 	if (obj === null) return null
@@ -62,6 +64,7 @@ export class NodeReferenceError extends SuperSmallStateMachineReferenceError {}
 export class MaxIterationsError extends SuperSmallStateMachineError {}
 export class PathReferenceError extends SuperSmallStateMachineReferenceError {}
 export const NodeTypes = {
+	WT: 'wait',
 	CD: 'condition', SW: 'switch', WH: 'while',
 	MC: 'machine', SQ: 'sequence', FN: 'function',
 	CH: 'changes', UN: 'undefined', EM: 'empty',
@@ -87,15 +90,25 @@ export class N {
 	static proceed (action, state) {
 		const stack = state[S.Stack] || [[]]
 		if (stack[0].length === 0) {
-			if (stack.length === 1) return { ...state, [S.Return]: state[S.Return] }
-			const { [S.Return]: interceptReturn, ...otherState } = state
-			return { ...otherState, [S.Stack]: stack.slice(1) }
+			if (stack.length === 1) return { ...state, [S.Return]: state[S.Return], [S.Stack]: [] }
+			const { [S.Return]: interruptReturn, ...cleanState } = state
+			return { ...cleanState, [S.Stack]: stack.slice(1), [S.Interrupts]: state[S.Interrupts].slice(1), [state[S.Interrupts][0]]: interruptReturn }
 		}
 		const parPath = stack[0].slice(0,-1)
 		return S._proceed(this, { ...state, [S.Stack]: [parPath, ...stack.slice(1)] }, get_path_object(this.process, parPath), false, stack[0][parPath.length])
 	};
 	static perform(action, state) { return state }
 	static traverse = ident;
+}
+export class ErrorN extends N {
+	static type = NodeTypes.ER
+	static typeof = (object, objectType) => (objectType === 'object' && object instanceof Error)
+		|| (objectType === 'function' && (object === Error || object.prototype instanceof Error));
+	static perform(action, state) {
+		if (typeof action === 'function')
+			throw new action()
+		throw action
+	}
 }
 export class Changes extends N {
 	static type = NodeTypes.CH
@@ -164,7 +177,7 @@ export class Machine extends N {
 	static type = NodeTypes.MC
 	static typeof(object, objectType, isAction) { return Boolean((!isAction) && object && objectType === 'object' && (KeyWords.IT in object)) }
 	static execute(node, state) { return [ ...state[S.Stack][0], KeyWords.IT ] }
-	static traverse(node, path, iterate) { return { ...node, ...Object.fromEntries(Object.keys(node).map(key => [ key, iterate([...path,key]) ])) } }
+	static traverse(node, path, iterate) { return { ...node, ...Object.fromEntries(Object.keys(node).concat(S.Interrupts in node ? node[S.Interrupts]: []).map(key => [ key, iterate([...path,key]) ])) } }
 }
 export class Directive extends N {
 	static type = NodeTypes.DR
@@ -196,11 +209,11 @@ export class InterruptDirective extends Directive {
 	static perform(action, state) {
 		const lastOf = get_closest_path(this.process, state[S.Stack][0].slice(0,-1), i => this.config.nodes.typeof(i) === NodeTypes.MC && (action in i))
 		if (!lastOf) return { ...state, [S.Return]: action }
-		return { ...state, [S.Stack]: [ [...lastOf, action], ...state[S.Stack] ] }
+		return { ...state, [S.Stack]: [ [...lastOf, action], ...state[S.Stack] ], [S.Interrupts]: [action,...state[S.Interrupts]] }
 	}
 	static proceed(action, state) {
-		const { [S.Stack]: stack, [S.Return]: interceptReturn, ...proceedPrevious } = S._proceed(this, { ...state, [S.Stack]: state[S.Stack].slice(1) }, undefined, true)
-		return { ...proceedPrevious, [S.Stack]: [ state[S.Stack][0], ...stack ] }
+		const { [S.Stack]: stack, [S.Interrupts]: interrupts, [S.Return]: interruptReturn, ...proceedPrevious } = S._proceed(this, { ...state, [S.Stack]: state[S.Stack].slice(1), [S.Interrupts]: state[S.Interrupts].slice(1) }, undefined, true)
+		return { ...proceedPrevious, [S.Stack]: [ state[S.Stack][0], ...stack ], [S.Interrupts]: [ action, ...interrupts], }
 	}
 }
 export class AbsoluteDirective extends Directive {
@@ -208,10 +221,14 @@ export class AbsoluteDirective extends Directive {
 	static typeof(object, objectType, isAction) { return isAction && Array.isArray(object) }
 	static perform(action, state) { return { ...state, [S.Stack]: [ action, ...state[S.Stack].slice(1) ] } }
 }
-export class Return extends Directive {
+export class Return extends N {
 	static type = NodeTypes.RT
 	static typeof(object, objectType) { return object === S.Return || Boolean(object && objectType === 'object' && (S.Return in object)) }
 	static perform(action, state) { return { ...state, [S.Return]: !action || action === S.Return ? undefined : action[S.Return], } }
+}
+export class Wait extends N {
+	static type = NodeTypes.WT
+	static typeof(object, objectType) { return object === S.Wait }
 }
 export class Interruptable extends Promise {
 	#interruptor = () => {}
@@ -233,18 +250,22 @@ export class Interruptable extends Promise {
 export class ExtensibleFunction extends Function {
 	constructor(f) { super(); return Object.setPrototypeOf(f, new.target.prototype); };
 }
+
 export class SuperSmallStateMachineCore extends ExtensibleFunction {
 		static Return      = Symbol('Super Small State Machine Return')
 		static Changes     = Symbol('Super Small State Machine Changes')
 		static Goto        = Symbol('Super Small State Machine Goto')
 		static Stack       = Symbol('Super Small State Machine Stack')
+		static Wait        = Symbol('Super Small State Machine Wait')
+		static Interrupts  = Symbol('Super Small State Machine Interrupts')
+		static Interrupt   = Symbol('Super Small State Machine Interrupt')
 		static Trace       = Symbol('Super Small State Machine Trace')
 		static StrictTypes = Symbol('Super Small State Machine Strict Types')
 	static keyWords    = KeyWords
 	static kw          = KeyWords
 	static nodeTypes   = NodeTypes
 	static types       = NodeTypes
-	static nodes = [ Changes, Sequence, FunctionN, Undefined, Empty, Condition, Switch, While, Machine, Directive, InterruptDirective, AbsoluteDirective, MachineDirective, SequenceDirective, Return, ]
+	static nodes = [ Changes, Sequence, FunctionN, Undefined, Empty, Condition, Switch, While, Machine, ErrorN, Directive, InterruptDirective, AbsoluteDirective, MachineDirective, SequenceDirective, Return, Wait ]
 	static config = {
 		defaults: {},
 		input: (state = {}) => state,
@@ -279,7 +300,6 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 		return {
 			...state,
 			...merge(state, allChanges),
-			[S.Stack]: state[S.Stack],
 			[S.Changes]: allChanges
 		}
 	}
@@ -317,7 +337,7 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 		let r = 0, currentState = { ...before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
 			[S.Changes]: {},
 			...defaults,
-			[S.Stack]: modifiedInput[S.Stack] || [[]], [S.Trace]: modifiedInput[S.Trace] || [],
+			[S.Stack]: modifiedInput[S.Stack] || [[]], [S.Interrupts]: [], [S.Trace]: modifiedInput[S.Trace] || [],
 			...(S.Return in modifiedInput ? {[S.Return]: modifiedInput[S.Return]} : {})
 		}, modifiedInput)), [S.Changes]: {} }
 		while (r < iterations) {
@@ -332,13 +352,15 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 	}
 	static _runAsync (instance, ...input) {
 	let interruptionStack = []
-	return new Interruptable((async () => {
+	let interruptionResolve = () => {}
+	const waitForInterruption = resolve => {interruptionResolve = () => {resolve();interruptionResolve = () => {}}}
+	const interruptable = new Interruptable((async () => {
 		const { pause, until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults, trace } = { ...this.config, ...instance.config }
 		const modifiedInput = (await adaptInput.apply(instance, input)) || {}
 		let r = 0, currentState = { ...before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
 			[S.Changes]: {},
 			...defaults,
-			[S.Stack]: modifiedInput[S.Stack] || [[]], [S.Trace]: modifiedInput[S.Trace] || [],
+			[S.Stack]: modifiedInput[S.Stack] || [[]], [S.Interrupts]: [], [S.Interrupt]: (...args) => interruptable.interrupt(...args), [S.Trace]: modifiedInput[S.Trace] || [],
 			...(S.Return in modifiedInput ? {[S.Return]: modifiedInput[S.Return]} : {})
 		}, modifiedInput)), [S.Changes]: {} }
 		while (r < iterations) {
@@ -347,23 +369,30 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 			if (until.call(instance, currentState, r)) break;
 			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[S.Stack][0].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, data: { iterations } })
 			if (trace) currentState = { ...currentState, [S.Trace]: [ ...currentState[S.Trace], currentState[S.Stack] ] }
-			if (interruptionStack.length) currentState = await this._perform(instance, currentState, interruptionStack.shift())
-			else {
+			if (interruptionStack.length) {
+				while (interruptionStack.length)
+					currentState = await this._perform(instance, currentState, interruptionStack.shift())
+			} else {
 				const action = await this._execute(instance, currentState)
+				if (action === S.Wait && !interruptionStack.length) await new Promise(waitForInterruption)
 				currentState = await this._perform(instance, currentState, action)
 				currentState = await this._proceed(instance, currentState, action, true)
 			}
 		}
 		return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
-	})(), (...interruptions) => {
-			if (interruptions.length === 1 && instance.config.nodes.typeof(interruptions[0]) === NodeTypes.ID)
-				interruptionStack.push(interruptions[0])
-			else {
-				const interruption = Symbol("System Interruption")
-				instance.process[interruption] = interruptions
-				interruptionStack.push(interruption)
-			}
-		})
+	})(), (...interruptions) => new Promise((resolve) => {
+				const systemInterruption = Symbol("System Interruption")
+				const interruption = Symbol("User Interruption")
+				const lastInterruption = (interruptions.length && instance.config.nodes.typeof(interruptions[interruptions.length - 1]) === NodeTypes.ID)
+					? interruptions[interruptions.length - 1] : interruption
+				const resolveInterruption = ({ [lastInterruption]: returnVal }) => resolve(returnVal)
+				instance.process[systemInterruption] = [interruption, resolveInterruption]
+				instance.process[interruption] = instance.config.adapt.reduce((prev, adapter) => adapter.call(instance, prev), interruptions)
+				interruptionStack.push(systemInterruption)
+				interruptionResolve()
+			})
+	)
+	return interruptable
 	}
 }
 export class SuperSmallStateMachineChain extends SuperSmallStateMachineCore {
@@ -452,3 +481,6 @@ export const StateMachine = S
 export const SuperSmallStateMachine = S
 export const NodeDefinition = N
 export const NodeDefinitions = NS
+
+const symbols = Object.fromEntries(Object.entries(SuperSmallStateMachineCore).filter(([,v]) => typeof v === 'symbol'))
+const log = () => {}//(...args) => console.log(...args.map(arg => toString(arg, symbols)))

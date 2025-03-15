@@ -995,13 +995,13 @@ D('Errors',
 				const maxIterationsError  = new MaxIterationsError()
 				const pathReferenceError  = new PathReferenceError()
 				return referenceError      instanceof SuperSmallStateMachineError
-				    && typeError           instanceof SuperSmallStateMachineError
-				    && stateReferenceError instanceof SuperSmallStateMachineError
-				    && stateTypeError      instanceof SuperSmallStateMachineError
-				    && nodeTypeError       instanceof SuperSmallStateMachineError
-				    && nodeReferenceError  instanceof SuperSmallStateMachineError
-				    && maxIterationsError  instanceof SuperSmallStateMachineError
-				    && pathReferenceError  instanceof SuperSmallStateMachineError
+					&& typeError           instanceof SuperSmallStateMachineError
+					&& stateReferenceError instanceof SuperSmallStateMachineError
+					&& stateTypeError      instanceof SuperSmallStateMachineError
+					&& nodeTypeError       instanceof SuperSmallStateMachineError
+					&& nodeReferenceError  instanceof SuperSmallStateMachineError
+					&& maxIterationsError  instanceof SuperSmallStateMachineError
+					&& pathReferenceError  instanceof SuperSmallStateMachineError
 			}, true)
 		),
 		D('Passing a state, instance, data, and/or stack with make those properties available in the error',
@@ -1049,8 +1049,8 @@ D('Errors',
 				const nodeReferenceError  = new NodeReferenceError()
 				const pathReferenceError  = new PathReferenceError()
 				return stateReferenceError instanceof SuperSmallStateMachineReferenceError
-				    && nodeReferenceError  instanceof SuperSmallStateMachineReferenceError
-				    && pathReferenceError  instanceof SuperSmallStateMachineReferenceError
+					&& nodeReferenceError  instanceof SuperSmallStateMachineReferenceError
+					&& pathReferenceError  instanceof SuperSmallStateMachineReferenceError
 			}, true)
 		),
 		JS("export class SuperSmallStateMachineReferenceError extends SuperSmallStateMachineError {}"),
@@ -1066,7 +1066,7 @@ D('Errors',
 				const stateTypeError = new StateTypeError()
 				const nodeTypeError  = new NodeTypeError()
 				return stateTypeError instanceof SuperSmallStateMachineTypeError
-				    && nodeTypeError  instanceof SuperSmallStateMachineTypeError
+					&& nodeTypeError  instanceof SuperSmallStateMachineTypeError
 			}, true)
 		),
 		JS("export class SuperSmallStateMachineTypeError extends SuperSmallStateMachineError {}"),
@@ -4688,110 +4688,287 @@ D('Requirements',
 	),
 
 	
-    D("Interrupts",
-        D("Interrupts return to where they were after completing",
-            E.equals(() => {
-                const interrupt = Symbol('My Interrupt')
-                const machine = new S({
-                    initial: [
-                        interrupt,
-                        ({ order }) => ({
-                            order: [...order,'dos']
-                        })
-                    ],
-                    [interrupt]: ({ order }) => ({
-                        order: [...order,'uno']
-                    })
-                })
-                .output(({ order }) => order)
-                return machine({ order: [] })
-            }, ['uno','dos'])
-        ),
-        D("Interrupts can be chained / nested",
-            E.equals(() => {
-                const interrupt1 = Symbol('My Interrupt 1')
-                const interrupt2 = Symbol('My Interrupt 2')
-                const machine = new S({
-                    initial: [
-                        interrupt1,
-                        ({ order }) => ({
-                            order: [...order,'qua']
-                        })
-                    ],
-                    [interrupt1]: [
-                        ({ order }) => ({
-                            order: [...order,'uno']
-                        }),
-                        interrupt2,
-                        ({ order }) => ({
-                            order: [...order,'tre']
-                        }),
-                    ],
-                    [interrupt2]: ({ order }) => ({
-                        order: [...order,'dos']
-                    }),
-                }).output(({ order }) => order)
-                return machine({ order: [] })
-            }, ['uno','dos','tre','qua'])
-        ),
-        D("Interrupts can be executed from outside an async machine",
-            E.equals(async () => {
-                const interrupt = Symbol('My Interrupt')
-                const machine = new S({
-                    initial: [
-                        () => wait_time(100),
-                        ({ order }) => ({
-                            order: [...order,'uno']
-                        }),
-                        () => wait_time(100),
-                        ({ order }) => ({
-                            order: [...order,'tre']
-                        }),
-                    ],
-                    [interrupt]: ({ order }) => ({
-                        order: [...order,'dos']
-                    }),
-                }).async
-                .output(({ order }) => order)
-                const interruptable = machine({ order: [] })
-                await wait_time(150)
-                interruptable.interrupt(interrupt)
-                return await interruptable
-            }, ['uno','dos','tre'], symbols)
-        ),
-        D("Complex interrupt will make a new interrupt process node",
-            E.equals(async () => {
-                const interrupt = Symbol('My Interrupt')
-                const machine = new S({
-                    initial: [
-                        () => wait_time(100),
-                        ({ order }) => ({
-                            order: [...order,'uno']
-                        }),
-                        () => wait_time(100),
-                        ({ order }) => ({
-                            order: [...order,'tre']
-                        }),
-                    ],
-                    [interrupt]: [
-                        () => wait_time(100),
-                        ({ order }) => ({
-                            order: [...order,'dos']
-                        }),
-                    ]
-                }
-                ).async
-                .output(({ order }) => order)
-                const interruptable = machine({ order: [] })
-                await wait_time(150)
-                interruptable.interrupt(
-                    { order : ['one'] },
-                    interrupt,
-                )
-                return await interruptable
-            }, ['one','dos','tre'])
-        )
-    ),
+	D("Interrupts",
+		D("Interrupts return to where they were after completing",
+			E.equals(() => {
+				const interrupt = Symbol('My Interrupt')
+				const machine = new S({
+					initial: [
+						interrupt,
+						({ order }) => ({
+							order: [...order,'dos']
+						})
+					],
+					[interrupt]: ({ order }) => ({
+						order: [...order,'uno']
+					})
+				})
+				.output(({ order }) => order)
+				return machine({ order: [] })
+			}, ['uno','dos'])
+		),
+
+
+		D("The return of an interrupt will be assigned to the context",
+			E.equals(() => {
+				const interrupt = Symbol('My Interrupt')
+				const machine = new S({
+					initial: [
+						interrupt,
+						({ order, [interrupt]: result }) => ({
+							order: [...order,result]
+						})
+					],
+					[interrupt]: [
+						({ order }) => ({
+							order: [...order,'uno']
+						}),
+						{ [S.Return]: 'dos' }
+					]
+				})
+				.output(({ order }) => order)
+				return machine({ order: [] })
+			}, ['uno','dos'])
+		),
+		
+		D("Interrupts can be sent to a child machine",
+			E.equals(async () => {
+				const interrupt = Symbol('My Interrupt')
+				const countMachine = new S({
+					initial: [
+						// ({ [S.Interrupt]: sendPa}),
+						{ num: 1 },
+						'wait'
+					],
+					wait: [
+						S.Wait,
+						'wait'
+					],
+					[interrupt]: [
+						({ num }) => ({ lastNum: num, num: num+1 }),
+						({ lastNum }) => ({ [S.Return]: lastNum }),
+					],
+				}).async
+				const machine = new S({
+					initial: [
+						() => ({ countMachine: countMachine() }),
+						{
+							 while: ({ order }) => order.length < 3,
+							 do: [
+								() => wait_time(50),
+								async ({ countMachine, order }) => ({ order: [ ...order, await countMachine.interrupt(interrupt) ] }),
+							 ]
+						}
+					],
+				}).async
+				.output(({ order }) => order)
+				const interruptable = machine({ order: [] })
+				return await interruptable
+			}, [1,2,3], symbols)
+		),
+		D("Interrupts can be sent to a parent machine",
+			E.equals(async () => {
+				const interrupt = Symbol('My Interrupt')
+				const countMachine = new S({
+					initial: [
+						{ num: 1 },
+						{
+							while: ({ num }) => num < 4,
+							do: [
+							   () => wait_time(50),
+							   ({ sendParent, num }) => sendParent({ childEvent: num }, interrupt),
+							   ({ num }) => ({ num: num + 1 })
+							]
+					   	},
+					],
+				}).async
+				const machine = new S({
+					initial: [
+						({ [S.Interrupt]: sendParent }) => ({ countMachine: countMachine({ sendParent }) }),
+						'wait'
+					],
+					wait: [
+						S.Wait,
+						{
+							if: ({ order }) => order.length < 3,
+							then: 'wait',
+							else: S.Return
+						}
+					],
+					[interrupt]: [
+						({ order, childEvent }) => ({ order: [...order,childEvent]})
+					]
+				}).async
+				.output(({ order }) => order)
+				const interruptable = machine({ order: [] })
+				return await interruptable
+			}, [1,2,3], symbols)
+		),
+		
+		D("Parents can wait for children to complete their interrupts",
+			E.equals(async () => {
+				const interrupt = Symbol('My Interrupt')
+				const countMachine = new S({
+					initial: [
+						// ({ [S.Interrupt]: sendPa}),
+						{ num: 1 },
+						'wait'
+					],
+					wait: [
+						S.Wait,
+						'wait'
+					],
+					[interrupt]: [
+						({ num }) => ({ lastNum: num, num: num+1 }),
+						() => wait_time(10),
+						({ lastNum }) => ({ [S.Return]: lastNum }),
+					],
+				}).async
+				const machine = new S({
+					initial: [
+						() => ({ countMachine: countMachine() }),
+						{
+							 while: ({ order }) => order.length < 3,
+							 do: [
+								() => wait_time(10),
+								async ({ countMachine, order }) => ({ order: [ ...order, await countMachine.interrupt(interrupt) ] }),
+							 ]
+						}
+					],
+				}).async
+				.output(({ order }) => order)
+				const interruptable = machine({ order: [] })
+				return await interruptable
+			}, [1,2,3], symbols)
+		),
+		D("Children can wait for parent interrupts to complete",
+			E.equals(async () => {
+				const interrupt = Symbol('My Interrupt')
+				const countMachine = new S({
+					initial: [
+						{ num: 1, parOrder: [] },
+						{
+							while: ({ parOrder }) => parOrder.length < 3,
+							do: [
+								({ parOrder }) => console.log(parOrder),
+							   () => wait_time(10),
+							   async ({ sendParent, num, parOrder }) => ({ parOrder: await sendParent({ childEvent: num }, interrupt, ({ order }) => ({ [S.Return]: order })) }),
+							   ({ num }) => ({ num: num + 1 })
+							]
+					   	},
+					],
+				}).async
+				const machine = new S({
+					initial: [
+						({ [S.Interrupt]: sendParent }) => ({ countMachine: countMachine({ sendParent }) }),
+						'wait'
+					],
+					wait: [
+						S.Wait,
+						{
+							if: ({ order }) => order.length < 3,
+							then: 'wait',
+							else: S.Return
+						}
+					],
+					[interrupt]: [
+						() => wait_time(10),
+						({ order, childEvent }) => ({ order: [...order,childEvent]}),
+						
+					]
+				}).async
+				.output(({ order }) => order)
+				const interruptable = machine({ order: [] })
+				return await interruptable
+			}, [1,2,3], symbols)
+		),
+
+
+		D("Interrupts can be chained / nested",
+			E.equals(() => {
+				const interrupt1 = Symbol('My Interrupt 1')
+				const interrupt2 = Symbol('My Interrupt 2')
+				const machine = new S({
+					initial: [
+						interrupt1,
+						({ order }) => ({
+							order: [...order,'qua']
+						})
+					],
+					[interrupt1]: [
+						({ order }) => ({
+							order: [...order,'uno']
+						}),
+						interrupt2,
+						({ order }) => ({
+							order: [...order,'tre']
+						}),
+					],
+					[interrupt2]: ({ order }) => ({
+						order: [...order,'dos']
+					}),
+				}).output(({ order }) => order)
+				return machine({ order: [] })
+			}, ['uno','dos','tre','qua'])
+		),
+		D("Interrupts can be executed from outside an async machine",
+			E.equals(async () => {
+				const interrupt = Symbol('My Interrupt')
+				const machine = new S({
+					initial: [
+						() => wait_time(10),
+						({ order }) => ({
+							order: [...order,'uno']
+						}),
+						() => wait_time(10),
+						({ order }) => ({
+							order: [...order,'tre']
+						}),
+					],
+					[interrupt]: ({ order }) => ({
+						order: [...order,'dos']
+					}),
+				}).async
+				.output(({ order }) => order)
+				const interruptable = machine({ order: [] })
+				await wait_time(15)
+				interruptable.interrupt(interrupt)
+				return await interruptable
+			}, ['uno','dos','tre'], symbols)
+		),
+		D("Complex interrupt will make a new interrupt process node",
+			E.equals(async () => {
+				const interrupt = Symbol('My Interrupt')
+				const machine = new S({
+					initial: [
+						() => wait_time(10),
+						({ order }) => ({
+							order: [...order,'uno']
+						}),
+						() => wait_time(10),
+						({ order }) => ({
+							order: [...order,'tre']
+						}),
+					],
+					[interrupt]: [
+						() => wait_time(100),
+						({ order }) => ({
+							order: [...order,'dos']
+						}),
+					]
+				}
+				).async
+				.output(({ order }) => order)
+				const interruptable = machine({ order: [] })
+				await wait_time(15)
+				interruptable.interrupt(
+					{ order : ['one'] },
+					interrupt,
+				)
+				return await interruptable
+			}, ['one','dos','tre'])
+		),
+	),
 
 	D('Wrapping',
 		D('Can use other machine as step',
