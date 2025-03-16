@@ -1,9 +1,6 @@
 import D, { E, JS, TS, CS } from './d/index.js'
-import S, {  list_path_object,  get_closest_path, named, inc, or, forIn, SuperSmallStateMachineReferenceError, NodeTypeError, PathReferenceError, Return, Goto, StrictTypes, Changes, Stack, Trace, Continue, Break, SuperSmallStateMachineTypeError, SuperSmallStateMachineError, not, and, ident, name, shallow_merge_object, update_path_object, set_path_object, clone_object, Node, normalise_function, StateReferenceError, StateTypeError, unique_list_strings, wait_time, get_path_object, deep_merge_object, NodeReferenceError, MaxIterationsError } from './index.js'
+import S, {  list_path_object,  get_closest_path, named, inc, or, forIn, SuperSmallStateMachineReferenceError, NodeTypeError, PathReferenceError, Return, Goto, StrictTypes, Changes, Stack, Trace, Continue, Break, SuperSmallStateMachineTypeError, SuperSmallStateMachineError, not, and, ident, name, shallow_merge_object, update_path_object, set_path_object, clone_object, Node, normalise_function, StateReferenceError, StateTypeError, unique_list_strings, wait_time, get_path_object, deep_merge_object, NodeReferenceError, MaxIterationsError, Interrupts, ConditionNode, SequenceNode } from './index.js'
 import * as testModule from './index.js'
-import { Interrupts } from './index.js'
-import { ConditionNode } from './index.js'
-import { SequenceNode } from './index.js'
 import asyncPlugin, { Interrupt, Wait } from './plugin/async.js'
 import parallelPlugin, { parallel } from './plugin/parallel.js'
 
