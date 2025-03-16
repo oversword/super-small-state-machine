@@ -19,15 +19,16 @@ try {
 
   fs.writeFile('./index.readme.js', JSoutputCommented, handleFileError);
 
-  await test(description)
+  const { default: newDescription } = await import('./description.js')
+  await test(newDescription)
 
   const readmeDescription = D('Super Small State Machine',
-    Q(description, ['Language']),
-    Q(description, ['Instance']),
-    Q(description, ['Chain']),
-    Q(description, ['Core']),
-    Q(description, ['Default Nodes']),
-    Q(description, ['Errors']),
+    Q(newDescription, ['Language']),
+    Q(newDescription, ['Instance']),
+    Q(newDescription, ['Chain']),
+    Q(newDescription, ['Core']),
+    Q(newDescription, ['Default Nodes']),
+    Q(newDescription, ['Errors']),
   )
   const output = await readme(readmeDescription)
   fs.writeFile('./README.md', output, handleFileError);

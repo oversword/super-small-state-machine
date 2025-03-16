@@ -1,31 +1,28 @@
-import S, { deep_merge_object, shallow_merge_object, Sequence } from "../index.js"
+import S, { deep_merge_object, shallow_merge_object, SequenceNode } from "../index.js"
+import { Return } from "../index.js"
+import { Changes } from "../index.js"
+import { Stack } from "../index.js"
+import asyncPlugin from "./async.js"
 
-export const parallelSymbol = Symbol('Super Small State Machine Parallel')
+export const parallelSymbol = Symbol('SSSM Parallel')
 
 export const parallel = (...list) => new Parallel(...list)
 
-export class Parallel extends Sequence {
+export class Parallel extends SequenceNode {
 	static type = 'parallel-sequence'
 	static typeof(object, objectType, isAction) {
 		return super.typeof(object, objectType, isAction) && Boolean(object[parallelSymbol])
 	}
 	static execute(node, state) {
-		if (!this.config.async) 
-			return super.execute(node, state)
 		const merge = this.config.deep ? deep_merge_object : shallow_merge_object
-		return Promise.all(node.map(parallel => new S(parallel, this.config).async.input((state) => {
-			const { [S.Stack]:__path, [S.Changes]: __changes, [S.Return]: __return, ...pureState } = state
+		return Promise.all(node.map(parallel => new S(parallel, this.config).input((state) => {
+			const { [Stack]:__path, [Changes]: __changes, [Return]: __return, ...pureState } = state
 			return pureState
-		}).output(state => state[S.Changes])(state)))
+		}).output(state => state[Changes])(state)))
 			.then(res => merge({}, ...res))
 	}
 	static traverse(item, path, iterate) {
 		return parallel(...super.traverse(item, path, iterate))
-	}
-	static proceed(...args) {
-		if (this.config.async)
-			return N.proceed(...args)
-		return super.proceed(...args)
 	}
 	constructor(...list) {
 		list[parallelSymbol] = true
@@ -33,5 +30,5 @@ export class Parallel extends Sequence {
 	}
 }
 
-export const parallelPlugin = S.addNode(Parallel)
+export const parallelPlugin = S.with(asyncPlugin, S.addNode(Parallel))
 export default parallelPlugin

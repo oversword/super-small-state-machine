@@ -37,14 +37,13 @@ Config
  defaults: { result: undefined },
  iterations: 10000,
  strict: false,
- async: false,
 }
 ```
 
 ```javascript
 	const instance = new S()
 	const modifiedInstance = instance
-		.async
+		.with(asyncPlugin)
 		.for(10)
 		.defaults({ result: 'other' })
 		.strict
@@ -52,7 +51,6 @@ Config
  defaults: { result: 'other' },
  iterations: 10,
  strict: true,
- async: true,
 }
 ```
 
@@ -96,17 +94,17 @@ Create an ExtensibleFunction that can execute the `run` or `override` method in 
 This is private so it cannot be mutated at runtime
 
 ```javascript
-const myConfig = { async: false }
+const myConfig = { iterations: 1000 }
 const instance = new S(null, myConfig)
 const retrievedConfig = instance.config
 return retrievedConfig !== myConfig && retrievedConfig !== instance.config // true
 ```
 
 ```javascript
-const myConfig = { async: 'original' }
+const myConfig = { iterations: 'original' }
 const instance = new S(null, myConfig)
-instance.config.async = 'new value'
-return instance.config.async // 'original'
+instance.config.iterations = 'new value'
+return instance.config.iterations // 'original'
 ```
 
 The process must be public, it cannot be deep merged or cloned as it may contain symbols.
@@ -129,11 +127,11 @@ const instance = new S([
 		if: ({ result }) => result === 'start',
 		then: [
 			{ result: 'second' },
-			S.Return,
+			Return,
 		]
 	}
 ])
-return instance.closest([0, 'then', 1], 'sequence') // [ 0, 'then' ]
+return instance.closest([0, 'then', 1], SequenceNode.type) // [ 0, 'then' ]
 ```
 
 ## instance.changes (state = {}, changes = {})
@@ -147,20 +145,20 @@ This will ignore any symbols in `changes`, and forward the important symbols of 
 ```javascript
 	const instance = new S()
 	const result = instance.changes({
-		[S.Stack]: [['preserved']],
-		[S.Changes]: {},
+		[Stack]: [['preserved']],
+		[Changes]: {},
 		preserved: 'value',
 		common: 'initial',
 	}, {
-		[S.Stack]: [['ignored']],
-		[S.Changes]: { ignored: true },
+		[Stack]: [['ignored']],
+		[Changes]: { ignored: true },
 		common: 'changed',
 	})
 	return result // {
  common: 'changed',
  preserved: 'value',
- [S.Stack]: [ 'preserved' ],
- [S.Changes]: { ignored: undefined, common: 'changed' },
+ [Stack]: [ 'preserved' ],
+ [Changes]: { ignored: undefined, common: 'changed' },
 }
 ```
 
@@ -180,7 +178,7 @@ const instance = new S([
 	],
 	null
 ])
-return instance.proceed({ [S.Stack]: [[ 2, 1 ]] }) // { [S.Stack]: [ [ 3 ] ] }
+return instance.proceed({ [Stack]: [[ 2, 1 ]] }) // { [Stack]: [ [ 3 ] ] }
 ```
 
 ## instance.perform (state = {}, action = null)
@@ -189,7 +187,7 @@ Perform actions on the state.
 
 Applies any changes in the given `action` to the given `state`.
 
-Proceeds to the next node if the action is not itself a directive or return.
+Proceeds to the next node if the action is not itself a goto or return.
 
 ```javascript
 const instance = new S()
@@ -205,15 +203,12 @@ Executes the node in the process at the state's current path and returns it's ac
 If the node is not executable it will be returned as the action.
 
 ```javascript
-	const instance = new S([
-		{ myProperty: 'this value' },
-		{ myProperty: 'that value' },
-		{ myProperty: 'the other value' },
-	])
-	return instance.execute({ [S.Stack]: [[1]], myProperty: 'start value' }, get_path_object(instance.process, [1])) // {
- myProperty: 'that value',
- [S.Stack]: [ [ 2 ] ],
-}
+const instance = new S([
+	{ myProperty: 'this value' },
+	{ myProperty: 'that value' },
+	{ myProperty: 'the other value' },
+])
+return instance.execute({ [Stack]: [[1]], myProperty: 'start value' }, get_path_object(instance.process, [1])) // { myProperty: 'that value', [Stack]: [ [ 2 ] ] }
 ```
 
 instance.traverse(iterator = a => a)
@@ -231,7 +226,7 @@ instance.traverse(iterator = a => a)
 	return instance.traverse((node, path, process, nodeType) => {
 		if (node === 'swap this') return 'with this'
 		if (node === 'also swap this') return 'with that'
-		if (nodeType === 'condition' && node.if === 'swap this too')
+		if (nodeType === ConditionNode.type && node.if === 'swap this too')
 			return {
 				...node,
 				if: 'with another thing'
@@ -252,123 +247,38 @@ Execute the entire process either synchronously or asynchronously depending on t
 Will execute the process
 
 ```javascript
-const instance = new S({ [S.Return]: 'return value' })
+const instance = new S({ [Return]: 'return value' })
 return instance.run() // 'return value'
 ```
 
-Will execute the process in async mode if it is configured
+Will not handle promises in async mode even if it is configured
 
 ```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.async
-return instance.run() // 'return value'
+const instance = new S(() => Promise.resolve({ [Return]: 'return value' }))
+	.with(asyncPlugin)
+return instance.run() // undefined
 ```
 
 Will not handle promises in sync mode
 
 ```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.sync
+const instance = new S(() => Promise.resolve({ [Return]: 'return value' }))
 return instance.run() // undefined
 ```
 
 Is the same as running the executable instance itself
 
 ```javascript
-const instance = new S({ [S.Return]: 'return value' })
+const instance = new S({ [Return]: 'return value' })
 return instance.run() === instance() // true
 ```
 
 Takes the same arguments as the executable instance itself
 
 ```javascript
-const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
+const instance = new S(({ a, b, c }) => ({ [Return]: `${a} + ${b} - ${c}` }))
 	.input((a, b, c) => ({ a, b, c }))
 return instance.run(1, 2, 3) === instance(1, 2, 3) // true
-```
-
-## instance.runSync (...input)
-
-Execute the entire process synchronously.
-
-Will execute the process
-
-```javascript
-const instance = new S({ [S.Return]: 'return value' })
-return instance.runSync() // 'return value'
-```
-
-Will not handle promises even if it is configured
-
-```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.async
-return instance.runSync() // undefined
-```
-
-Will not handle promises in sync mode
-
-```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.sync
-return instance.runSync() // undefined
-```
-
-Is the same as running the executable instance itself
-
-```javascript
-const instance = new S({ [S.Return]: 'return value' })
-return instance.runSync() === instance() // true
-```
-
-Takes the same arguments as the executable instance itself
-
-```javascript
-const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
-	.input((a, b, c) => ({ a, b, c }))
-return instance.runSync(1, 2, 3) === instance(1, 2, 3) // true
-```
-
-## instance.runAsync (...input)
-
-Execute the entire process asynchronously. Always returns a promise.
-
-Will execute the process
-
-```javascript
-const instance = new S({ [S.Return]: 'return value' })
-return instance.runAsync() // 'return value'
-```
-
-Will execute the process in async mode
-
-```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.async
-return instance.runAsync() // 'return value'
-```
-
-Will still handle promises even in sync mode
-
-```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.sync
-return instance.runAsync() // 'return value'
-```
-
-Is the same as running the executable instance itself
-
-```javascript
-const instance = new S({ [S.Return]: 'return value' })
-return await instance.runAsync() === instance() // true
-```
-
-Takes the same arguments as the executable instance itself
-
-```javascript
-const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
-	.input((a, b, c) => ({ a, b, c }))
-return await instance.runAsync(1, 2, 3) === instance(1, 2, 3) // true
 ```
 
 ## instance.do(process) <default: null>
@@ -378,8 +288,8 @@ Defines a process to execute, overrides the existing process.
 Returns a new instance.
 
 ```javascript
-const instance = new S({ [S.Return]: 'old' })
-	.do({ [S.Return]: 'new' })
+const instance = new S({ [Return]: 'old' })
+	.do({ [Return]: 'new' })
 return instance() // 'new'
 ```
 
@@ -390,7 +300,7 @@ Defines the initial state to be used for all executions.
 Returns a new instance.
 
 ```javascript
-const instance = new S(({ result }) => ({ [S.Return]: result }))
+const instance = new S(({ result }) => ({ [Return]: result }))
 	.defaults({ result: 'default' })
 return instance() // 'default'
 ```
@@ -402,7 +312,7 @@ Allows the definition of the arguments the executable will use, and how they wil
 Returns a new instance.
 
 ```javascript
-const instance = new S(({ first, second }) => ({ [S.Return]: `${first} then ${second}` }))
+const instance = new S(({ first, second }) => ({ [Return]: `${first} then ${second}` }))
 	.defaults({ first: '', second: '' })
 	.input((first, second) => ({ first, second }))
 return instance('this', 'that') // 'this then that'
@@ -435,7 +345,7 @@ const instance = new S({
 		null
 	]
 }).untrace
-.output(({ [S.Trace]: trace }) => trace)
+.output(({ [Trace]: trace }) => trace)
 return instance() // [  ]
 ```
 
@@ -454,7 +364,7 @@ Creates a new instance.
 			null
 		]
 	}).trace
-	.output(({ [S.Trace]: trace }) => trace)
+	.output(({ [Trace]: trace }) => trace)
 	return instance() // [
  [ [  ] ],
  [ [ 'initial' ] ],
@@ -552,7 +462,7 @@ Creates a new instance.
 ```javascript
 const instance = new S([
 	() => ({ knownVariable: 45 }),
-	({ knownVariable }) => ({ [S.Return]: knownVariable })
+	({ knownVariable }) => ({ [Return]: knownVariable })
 ])
 	.defaults({ knownVariable: true })
 	.strictTypes
@@ -575,7 +485,7 @@ const instance = new S([
 return instance() // MaxIterationsError
 ```
 
-## instance.until(until) <default: (state => S.Return in state)>
+## instance.until(until) <default: (state => Return in state)>
 
 Stops execution of the machine once the given condition is met, and attempts to return.
 
@@ -604,42 +514,6 @@ const instance = new S().forever
 return instance.config.iterations // Infinity
 ```
 
-## instance.sync <default>
-
-Execute synchronously and not allow for asynchronous actions.
-
-Creates a new instance.
-
-```javascript
-const instance = new S(async () => ({ [S.Return]: 'returned' }))
-	.async
-	.sync
-return instance() // undefined
-```
-
-## instance.async
-
-Execute asynchronously and allow for asynchronous actions.
-
-Creates a new instance.
-
-```javascript
-const instance = new S(async () => ({ [S.Return]: 'returned' }))
-return instance() // undefined
-```
-
-```javascript
-const instance = new S(async () => ({ [S.Return]: 'returned' }))
-	.async
-return await instance() // 'returned'
-```
-
-## instance.pause(pause) <default: (() => false)>
-
-Allows an async execution to be paused between steps.
-
-Returns a new instance.
-
 ## instance.override(override) <default: instance.run>
 
 Overrides the method that will be used when the executable is called.
@@ -647,7 +521,7 @@ Overrides the method that will be used when the executable is called.
 Returns a new instance.
 
 ```javascript
-const instance = new S({ [S.Return]: 'definedResult' })
+const instance = new S({ [Return]: 'definedResult' })
 	.override(function (a, b, c) {
 		// console.log({ scope: this, args }) // { scope: { process: { result: 'definedResult' } }, args: [1, 2, 3] }
 		return `customResult. a: ${a}, b: ${b}, c: ${c}`
@@ -663,13 +537,13 @@ Returns a new instance.
 
 ```javascript
 const specialSymbol = Symbol('My Symbol')
-class SpecialNode extends N {
+class SpecialNode extends Node {
 	static type = 'special'
 	static typeof(object, objectType) { return Boolean(objectType === 'object' && object && specialSymbol in object)}
-	static execute(){ return { [S.Return]: 'specialValue' } }
+	static execute(){ return { [Return]: 'specialValue' } }
 }
 const instance = new S({ [specialSymbol]: true })
-	.output(({ result, [S.Return]: output = result }) => output)
+	.output(({ result, [Return]: output = result }) => output)
 	.addNode(SpecialNode)
 return instance({ result: 'start' }) // 'specialValue'
 ```
@@ -677,7 +551,7 @@ return instance({ result: 'start' }) // 'specialValue'
 ```javascript
 const specialSymbol = Symbol('My Symbol')
 const instance = new S({ [specialSymbol]: true })
-	.output(({ result, [S.Return]: output = result }) => output)
+	.output(({ result, [Return]: output = result }) => output)
 return instance({ result: 'start' }) // 'start'
 ```
 
@@ -692,7 +566,7 @@ const instance = new S([
 ]).adapt(function (process) {
 	return S.traverse((node) => {
 		if (node === replaceMe)
-			return { [S.Return]: 'replaced' }
+			return { [Return]: 'replaced' }
 		return node
 	})(this)
 })
@@ -739,8 +613,8 @@ Returns a new instance.
 
 ```javascript
 const instance = new S()
-	.with(S.strict, S.async, S.for(10))
-return instance.config // { async: true, strict: true, iterations: 10 }
+	.with(S.strict, asyncPlugin, S.for(10))
+return instance.config // { strict: true, iterations: 10 }
 ```
 
 The main class is exported as `{ StateMachine }`
@@ -775,20 +649,20 @@ import { NodeDefinitions } from './index.js'
 return NodeDefinitions; // success
 ```
 
-The node class is exported as `{ N }`
+The node class is exported as `{ Node }`
 
 ```javascript
-import { N } from './index.js'
+import { Node } from './index.js'
 	
-return N; // success
+return Node; // success
 ```
 
-The node collection class is exported as `{ NS }`
+The node collection class is exported as `{ Nodes }`
 
 ```javascript
-import { NS } from './index.js'
+import { Nodes } from './index.js'
 	
-return NS; // success
+return Nodes; // success
 ```
 
 # Chain
@@ -805,11 +679,11 @@ const instance = new S([
 		if: ({ result }) => result === 'start',
 		then: [
 			{ result: 'second' },
-			S.Return,
+			Return,
 		]
 	}
 ])
-return S.closest([0, 'then', 1], 'sequence')(instance) // [ 0, 'then' ]
+return S.closest([0, 'then', 1], SequenceNode.type)(instance) // [ 0, 'then' ]
 ```
 
 ## S.changes (state = {}, changes = {})
@@ -823,20 +697,20 @@ This will ignore any symbols in `changes`, and forward the important symbols of 
 ```javascript
 	const instance = new S()
 	const result = S.changes({
-		[S.Stack]: ['preserved'],
-		[S.Changes]: {},
+		[Stack]: ['preserved'],
+		[Changes]: {},
 		preserved: 'value',
 		common: 'initial',
 	}, {
-		[S.Stack]: ['ignored'],
-		[S.Changes]: { ignored: true },
+		[Stack]: ['ignored'],
+		[Changes]: { ignored: true },
 		common: 'changed',
 	})(instance)
 	return result // {
  common: 'changed',
  preserved: 'value',
- [S.Stack]: [ 'preserved' ],
- [S.Changes]: { ignored: undefined, common: 'changed' },
+ [Stack]: [ 'preserved' ],
+ [Changes]: { ignored: undefined, common: 'changed' },
 }
 ```
 
@@ -856,8 +730,8 @@ const instance = new S([
 	],
 	null
 ])
-const proceeder = S.proceed({ [S.Stack]: [[ 2, 1 ]] })
-return proceeder(instance) // { [S.Stack]: [ [ 3 ] ] }
+const proceeder = S.proceed({ [Stack]: [[ 2, 1 ]] })
+return proceeder(instance) // { [Stack]: [ [ 3 ] ] }
 ```
 
 ## S.perform (state = {}, action = null)
@@ -866,7 +740,7 @@ Perform actions on the state.
 
 Applies any changes in the given `action` to the given `state`.
 
-Proceeds to the next node if the action is not itself a directive or return.
+Proceeds to the next node if the action is not itself a goto or return.
 
 ```javascript
 const instance = new S()
@@ -883,16 +757,13 @@ Executes the node in the process at the state's current path and returns it's ac
 If the node is not executable it will be returned as the action.
 
 ```javascript
-	const instance = new S([
-		{ myProperty: 'this value' },
-		{ myProperty: 'that value' },
-		{ myProperty: 'the other value' },
-	])
-	const executor = S.execute({ [S.Stack]: [[1]], myProperty: 'start value' })
-	return executor(instance) // {
- myProperty: 'that value',
- [S.Stack]: [ [ 2 ] ],
-}
+const instance = new S([
+	{ myProperty: 'this value' },
+	{ myProperty: 'that value' },
+	{ myProperty: 'the other value' },
+])
+const executor = S.execute({ [Stack]: [[1]], myProperty: 'start value' })
+return executor(instance) // { myProperty: 'that value', [Stack]: [ [ 2 ] ] }
 ```
 
 S.traverse(iterator = a => a)
@@ -910,7 +781,7 @@ S.traverse(iterator = a => a)
 	const traverser = S.traverse((node, path, process, nodeType) => {
 		if (node === 'swap this') return 'with this'
 		if (node === 'also swap this') return 'with that'
-		if (nodeType === 'condition' && node.if === 'swap this too')
+		if (nodeType === ConditionNode.type && node.if === 'swap this too')
 			return {
 				...node,
 				if: 'with another thing'
@@ -932,123 +803,38 @@ Execute the entire process either synchronously or asynchronously depending on t
 Will execute the process
 
 ```javascript
-const instance = new S({ [S.Return]: 'return value' })
+const instance = new S({ [Return]: 'return value' })
 return S.run()(instance) // 'return value'
 ```
 
-Will execute the process in async mode if it is configured
+Will not handle promises in async mode even if it is configured
 
 ```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.async
-return S.run()(instance) // 'return value'
+const instance = new S(() => Promise.resolve({ [Return]: 'return value' }))
+	.with(asyncPlugin)
+return S.run()(instance) // undefined
 ```
 
 Will not handle promises in sync mode
 
 ```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.sync
+const instance = new S(() => Promise.resolve({ [Return]: 'return value' }))
 return S.run()(instance) // undefined
 ```
 
 Is the same as running the executable instance itself
 
 ```javascript
-const instance = new S({ [S.Return]: 'return value' })
+const instance = new S({ [Return]: 'return value' })
 return S.run()(instance) === instance() // true
 ```
 
 Takes the same arguments as the executable instance itself
 
 ```javascript
-const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
+const instance = new S(({ a, b, c }) => ({ [Return]: `${a} + ${b} - ${c}` }))
 	.input((a, b, c) => ({ a, b, c }))
 return S.run(1, 2, 3)(instance) === instance(1, 2, 3) // true
-```
-
-## S.runSync (...input)
-
-Execute the entire process synchronously.
-
-Will execute the process
-
-```javascript
-const instance = new S({ [S.Return]: 'return value' })
-return S.runSync()(instance) // 'return value'
-```
-
-Will not handle promises even if it is configured
-
-```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.async
-return S.runSync()(instance) // undefined
-```
-
-Will not handle promises in sync mode
-
-```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.sync
-return S.runSync()(instance) // undefined
-```
-
-Is the same as running the executable instance itself
-
-```javascript
-const instance = new S({ [S.Return]: 'return value' })
-return S.runSync()(instance) === instance() // true
-```
-
-Takes the same arguments as the executable instance itself
-
-```javascript
-const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
-	.input((a, b, c) => ({ a, b, c }))
-return S.runSync(1, 2, 3)(instance) === instance(1, 2, 3) // true
-```
-
-## S.runAsync (...input)
-
-Execute the entire process asynchronously. Always returns a promise.
-
-Will execute the process
-
-```javascript
-const instance = new S({ [S.Return]: 'return value' })
-return S.runAsync()(instance) // 'return value'
-```
-
-Will execute the process in async mode
-
-```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.async
-return S.runAsync()(instance) // 'return value'
-```
-
-Will still handle promises even in sync mode
-
-```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.sync
-return S.runAsync()(instance) // 'return value'
-```
-
-Is the same as running the executable instance itself
-
-```javascript
-const instance = new S({ [S.Return]: 'return value' })
-return await S.runAsync()(instance) === instance() // true
-```
-
-Takes the same arguments as the executable instance itself
-
-```javascript
-const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
-	.input((a, b, c) => ({ a, b, c }))
-return await S.runAsync(1, 2, 3)(instance) === instance(1, 2, 3) // true
 ```
 
 ## S.do(process) <default: null>
@@ -1058,8 +844,8 @@ Defines a process to execute, overrides the existing process.
 Returns a function that will modify a given instance.
 
 ```javascript
-const instance = new S({ [S.Return]: 'old' })
-const newInstance = instance.with(S.do({ [S.Return]: 'new' }))
+const instance = new S({ [Return]: 'old' })
+const newInstance = instance.with(S.do({ [Return]: 'new' }))
 return newInstance() // 'new'
 ```
 
@@ -1070,7 +856,7 @@ Defines the initial state to be used for all executions.
 Returns a function that will modify a given instance.
 
 ```javascript
-const instance = new S(({ result }) => ({ [S.Return]: result }))
+const instance = new S(({ result }) => ({ [Return]: result }))
 const newInstance = instance.with(S.defaults({ result: 'default' }))
 return newInstance() // 'default'
 ```
@@ -1082,7 +868,7 @@ Allows the definition of the arguments the executable will use, and how they wil
 Returns a function that will modify a given instance.
 
 ```javascript
-const instance = new S(({ first, second }) => ({ [S.Return]: `${first} then ${second}` }))
+const instance = new S(({ first, second }) => ({ [Return]: `${first} then ${second}` }))
 .with(
 	S.defaults({ first: '', second: '' }),
 	S.input((first, second) => ({ first, second }))
@@ -1090,7 +876,7 @@ const instance = new S(({ first, second }) => ({ [S.Return]: `${first} then ${se
 return instance('this', 'that') // 'this then that'
 ```
 
-## S.output(output) <default: (state => state[S.Return])>
+## S.output(output) <default: (state => state[Return])>
 
 Allows the modification of the value the executable will return.
 
@@ -1118,7 +904,7 @@ const instance = new S({
 	]
 })
 .with(S.untrace)
-.output(({ [S.Trace]: trace }) => trace)
+.output(({ [Trace]: trace }) => trace)
 return instance() // [  ]
 ```
 
@@ -1138,7 +924,7 @@ Returns a function that will modify a given instance.
 		]
 	})
 	.with(S.trace)
-	.output(({ [S.Trace]: trace }) => trace)
+	.output(({ [Trace]: trace }) => trace)
 	return instance() // [
  [ [  ] ],
  [ [ 'initial' ] ],
@@ -1278,7 +1064,7 @@ const instance = new S([
 return instance() // MaxIterationsError
 ```
 
-## S.until(until) <default: (state => S.Return in state)>
+## S.until(until) <default: (state => Return in state)>
 
 Stops execution of the machine once the given condition is met, and attempts to return.
 
@@ -1311,46 +1097,6 @@ const instance = new S().with(S.forever)
 return instance.config.iterations // Infinity
 ```
 
-## S.sync <default>
-
-Execute synchronously and not allow for asynchronous actions.
-
-Will modify the given instance.
-
-```javascript
-const instance = new S(async () => ({ [S.Return]: 'returned' }))
-.with(
-	S.async,
-	S.sync,
-)
-return instance() // undefined
-```
-
-## S.async
-
-Execute asynchronously and allow for asynchronous actions.
-
-Will modify the given instance.
-
-```javascript
-const instance = new S(async () => ({ [S.Return]: 'returned' }))
-return instance() // undefined
-```
-
-```javascript
-const instance = new S(async () => ({ [S.Return]: 'returned' }))
-.with(
-	S.async
-)
-return await instance() // 'returned'
-```
-
-## S.pause(pause) <default: (() => false)>
-
-Allows an async execution to be paused between steps.
-
-Returns a function that will modify a given instance.
-
 ## S.override(override) <default: instance.run>
 
 Overrides the method that will be used when the executable is called.
@@ -1358,7 +1104,7 @@ Overrides the method that will be used when the executable is called.
 Returns a function that will modify a given instance.
 
 ```javascript
-const instance = new S({ [S.Return]: 'definedResult' })
+const instance = new S({ [Return]: 'definedResult' })
 	.with(
 		S.override(function (a, b, c) {
 			// console.log({ scope: this, args }) // { scope: { process: { result: 'definedResult' } }, args: [1, 2, 3] }
@@ -1376,14 +1122,14 @@ Returns a function that will modify a given instance.
 
 ```javascript
 const specialSymbol = Symbol('My Symbol')
-class SpecialNode extends N {
+class SpecialNode extends Node {
 	static type = 'special'
 	static typeof(object, objectType) { return Boolean(objectType === 'object' && object && specialSymbol in object)}
-	static execute(){ return { [S.Return]: 'specialValue' } }
+	static execute(){ return { [Return]: 'specialValue' } }
 }
 const instance = new S({ [specialSymbol]: true })
 	.with(
-		S.output(({ result, [S.Return]: output = result }) => output),
+		S.output(({ result, [Return]: output = result }) => output),
 		S.addNode(SpecialNode)
 	)
 return instance({ result: 'start' }) // 'specialValue'
@@ -1393,7 +1139,7 @@ return instance({ result: 'start' }) // 'specialValue'
 const specialSymbol = Symbol('My Symbol')
 const instance = new S({ [specialSymbol]: true })
 	.with(
-		S.output(({ result, [S.Return]: output = result }) => output)
+		S.output(({ result, [Return]: output = result }) => output)
 	)
 return instance({ result: 'start' }) // 'start'
 ```
@@ -1412,7 +1158,7 @@ const instance = new S([
 	S.adapt(function (process) {
 		return S.traverse((node) => {
 			if (node === replaceMe)
-				return { [S.Return]: 'replaced' }
+				return { [Return]: 'replaced' }
 			return node
 		})(this)
 	})
@@ -1463,9 +1209,9 @@ Allows for the addition of predifined modules.
 Returns a function that will modify a given instance.
 
 ```javascript
-const plugin = S.with(S.strict, S.async, S.for(10))
+const plugin = S.with(S.strict, asyncPlugin, S.for(10))
 const instance = new S().with(plugin)
-return instance.config // { async: true, strict: true, iterations: 10 }
+return instance.config // { strict: true, iterations: 10 }
 ```
 
 Allow the input of a list or a list of lists, etc.
@@ -1480,63 +1226,10 @@ Make sure an instance is returned.
 
 Every instance must have a process and be callable.
 
-## Symbols
-
-### Return
-
-Use for intentionally exiting the entire process, can be used in an object to return a specific value
-
-```javascript
-return { [S.Return]: "value" } // Succeeds
-```
-
-### Changes
-
-Returned in the state. Should not be passed in.
-
-```javascript
-return { [S.Changes]: {} } // Succeeds
-```
-
-### Goto
-
-Used to change the executing path.
-
-```javascript
-return { [S.Goto]: [] } // Succeeds
-```
-
-### Stack
-
-Returned in the state to indicate the next action path, or passed in with the state to direct the machine.
-
-```javascript
-return { [S.Goto]: [] } // Succeeds
-```
-
-### Trace
-
-Returned in the state when the trace flag is on, will contain every path that was executed during the run.
-
-```javascript
-return { [S.Trace]: [] } // Succeeds
-```
-
-### StrictTypes
-
-Possible value of `config.strict`, used to indicate strict types as well as values.
-
-Key Words
-
-Node NodeTypes
-
-All the defaults nodes together in one list.
-
 ## Config
 
 ```javascript
 	return S.config // {
- async: false,
  deep: false,
  strict: false,
  trace: false,
@@ -1553,17 +1246,13 @@ Initialise an empty state by default
 
 Input the initial state by default
 
-Return the `S.Return` property by default
+Return the `Return` property by default
 
 Do not perform strict state checking by default
 
 Allow 1000 iterations by default
 
 Run util the return symbol is present by default.
-
-Do not allow for asynchronous actions by default
-
-Do not allow for asynchronous actions by default
 
 Do not keep the stack trace by default
 
@@ -1591,11 +1280,11 @@ const instance = new S([
 		if: ({ result }) => result === 'start',
 		then: [
 			{ result: 'second' },
-			S.Return,
+			Return,
 		]
 	}
 ])
-return S._closest(instance, [0, 'then', 1], 'sequence') // [ 0, 'then' ]
+return S._closest(instance, [0, 'then', 1], SequenceNode.type) // [ 0, 'then' ]
 ```
 
 Node types can be passed in as arrays of strings, or arrays of arrays of strings...
@@ -1617,20 +1306,20 @@ This will ignore any symbols in `changes`, and forward the important symbols of 
 ```javascript
 	const instance = new S()
 	const result = S._changes(instance, {
-		[S.Stack]: ['preserved'],
-		[S.Changes]: {},
+		[Stack]: ['preserved'],
+		[Changes]: {},
 		preserved: 'value',
 		common: 'initial',
 	}, {
-		[S.Stack]: ['ignored'],
-		[S.Changes]: { ignored: true },
+		[Stack]: ['ignored'],
+		[Changes]: { ignored: true },
 		common: 'changed',
 	})
 	return result // {
  common: 'changed',
  preserved: 'value',
- [S.Stack]: [ 'preserved' ],
- [S.Changes]: { ignored: undefined, common: 'changed' },
+ [Stack]: [ 'preserved' ],
+ [Changes]: { ignored: undefined, common: 'changed' },
 }
 ```
 
@@ -1654,11 +1343,9 @@ Deep merge the current state with the new changes
 
 Deep merge the current state with the new changes
 
-Carry over the original path.
-
 Update the changes to the new changes
 
-## S._proceed (instance, state = {}, path = state[S.Stack] || [])
+## S._proceed (instance, state = {}, nodeInfo = { node: undefined, action: false, index: undefined })
 
 Proceed to the next execution path.
 
@@ -1668,8 +1355,8 @@ const instance = new S([
 	'secondAction'
 ])
 return S._proceed(instance, {
-	[S.Stack]: [[0]]
-}) // { [S.Stack]: [ [ 1 ] ] }
+	[Stack]: [[0]]
+}) // { [Stack]: [ [ 1 ] ] }
 ```
 
 Performs fallback logic when a node exits.
@@ -1683,8 +1370,8 @@ const instance = new S([
 	'thirdAction'
 ])
 return S._proceed(instance, {
-	[S.Stack]: [[0,1]]
-}) // { [S.Stack]: [ [ 1 ] ] }
+	[Stack]: [[0,1]]
+}) // { [Stack]: [ [ 1 ] ] }
 ```
 
 Determine what type of node is proceeding
@@ -1703,7 +1390,7 @@ const instance = new S([
 	'secondAction',
 	'thirdAction'
 ])
-return S._perform(instance, { [S.Stack]: [[0]], prop: 'value' }, { prop: 'newValue' }) // { prop: 'newValue', [S.Stack]: [ [ 1 ] ] }
+return S._perform(instance, { [Stack]: [[0]], prop: 'value' }, { prop: 'newValue' }) // { prop: 'newValue', [Stack]: [ [ 1 ] ] }
 ```
 
 Applies any changes in the given `action` to the given `state`.
@@ -1714,17 +1401,17 @@ const instance = new S([
 	'secondAction',
 	'thirdAction'
 ])
-return S._perform(instance, { [S.Stack]: [[0]], prop: 'value' }, { [S.Goto]: [2] }) // { prop: 'value', [S.Stack]: [ [ 2 ] ] }
+return S._perform(instance, { [Stack]: [[0]], prop: 'value' }, { [Goto]: [2] }) // { prop: 'value', [Stack]: [ [ 2 ] ] }
 ```
 
-Proceeds to the next node if the action is not itself a directive or return.
+Proceeds to the next node if the action is not itself a goto or return.
 
 ```javascript
 const instance = new S([
 	'firstAction',
 	'secondAction'
 ])
-return S._perform(instance, { [S.Stack]: [[0]] }, null) // { [S.Stack]: [ [ 1 ] ] }
+return S._perform(instance, { [Stack]: [[0]] }, null) // { [Stack]: [ [ 1 ] ] }
 ```
 
 Get the node type of the given `action`
@@ -1733,7 +1420,7 @@ Gets the node definition for the action
 
 Perform the action on the state
 
-## S._execute (instance, state = {}, node = get_path_object(instance.process, state[S.Stack][0])))
+## S._execute (instance, state = {}, node = get_path_object(instance.process, state[Stack][0])))
 
 Executes the node in the process at the state's current path and returns it's action.
 
@@ -1743,7 +1430,7 @@ const instance = new S([
 	() => ({ result: 'second' }),
 	() => ({ result: 'third' }),
 ])
-return S._execute(instance, { [S.Stack]: [[1]] }) // { result: 'second' }
+return S._execute(instance, { [Stack]: [[1]] }) // { result: 'second' }
 ```
 
 If the node is not executable it will be returned as the action.
@@ -1754,7 +1441,7 @@ const instance = new S([
 	({ result: 'second' }),
 	({ result: 'third' }),
 ])
-return S._execute(instance, { [S.Stack]: [[1]] }) // { result: 'second' }
+return S._execute(instance, { [Stack]: [[1]] }) // { result: 'second' }
 ```
 
 Get the type of that node
@@ -1785,7 +1472,7 @@ You can customise how each leaf node is mapped by supplying the `iterator` metho
 	}, (node, path, process, nodeType) => {
 		if (node === 'swap this') return 'with this'
 		if (node === 'also swap this') return 'with that'
-		if (nodeType === 'condition' && node.if === 'swap this too')
+		if (nodeType === ConditionNode.type && node.if === 'swap this too')
 			return {
 				...node,
 				if: 'with another thing'
@@ -1813,90 +1500,43 @@ Call the primary method
 
 ## S._run (instance, ...input)
 
-Execute the entire process either synchronously or asynchronously depending on the config.
+Execute the entire process synchronously.
 
 Will execute the process
 
 ```javascript
-const instance = new S({ [S.Return]: 'return value' })
+const instance = new S({ [Return]: 'return value' })
 return S._run(instance) // 'return value'
 ```
 
-Will execute the process in async mode if it is configured
+Will not handle promises even if it is configured
 
 ```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.async
-return S._run(instance) // 'return value'
+const instance = new S(() => Promise.resolve({ [Return]: 'return value' }))
+.with(asyncPlugin)
+return S._run(instance) // undefined
 ```
 
 Will not handle promises in sync mode
 
 ```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.sync
+const instance = new S(() => Promise.resolve({ [Return]: 'return value' }))
 return S._run(instance) // undefined
 ```
 
 Is the same as running the executable instance itself
 
 ```javascript
-const instance = new S({ [S.Return]: 'return value' })
+const instance = new S({ [Return]: 'return value' })
 return S._run(instance) === instance() // true
 ```
 
 Takes the same arguments as the executable instance itself
 
 ```javascript
-const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
+const instance = new S(({ a, b, c }) => ({ [Return]: `${a} + ${b} - ${c}` }))
 	.input((a, b, c) => ({ a, b, c }))
 return S._run(instance, 1, 2, 3) === instance(1, 2, 3) // true
-```
-
-If the process is asynchronous, execute use `runAsync`
-
-If the process is asynchronous, execute use `runSync`
-
-## S._runSync (instance, ...input)
-
-Execute the entire process synchronously.
-
-Will execute the process
-
-```javascript
-const instance = new S({ [S.Return]: 'return value' })
-return S._runSync(instance) // 'return value'
-```
-
-Will not handle promises even if it is configured
-
-```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.async
-return S._runSync(instance) // undefined
-```
-
-Will not handle promises in sync mode
-
-```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.sync
-return S._runSync(instance) // undefined
-```
-
-Is the same as running the executable instance itself
-
-```javascript
-const instance = new S({ [S.Return]: 'return value' })
-return S._runSync(instance) === instance() // true
-```
-
-Takes the same arguments as the executable instance itself
-
-```javascript
-const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
-	.input((a, b, c) => ({ a, b, c }))
-return S._runSync(instance, 1, 2, 3) === instance(1, 2, 3) // true
 ```
 
 Extract the useful parts of the config
@@ -1919,7 +1559,7 @@ This should be fine for most finite machines, but may be too little for some con
 
 #### Check the configured `until` condition to see if we should exit.
 
-Do it first to catch starting with a `S.Return` in place.
+Do it first to catch starting with a `Return` in place.
 
 If the interations are exceeded, Error
 
@@ -1933,87 +1573,21 @@ Proceed to the next action
 
 When returning, run the ends state adapters, then the output adapter to complete execution.
 
-## S._runAsync (instance, ...input)
-
-Execute the entire process asynchronously. Always returns a promise.
-
-Will execute the process
-
-```javascript
-const instance = new S({ [S.Return]: 'return value' })
-return S._runAsync(instance) // 'return value'
-```
-
-Will execute the process in async mode
-
-```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.async
-return S._runAsync(instance) // 'return value'
-```
-
-Will still handle promises even in sync mode
-
-```javascript
-const instance = new S(() => Promise.resolve({ [S.Return]: 'return value' }))
-	.sync
-return S._runAsync(instance) // 'return value'
-```
-
-Is the same as running the executable instance itself
-
-```javascript
-const instance = new S({ [S.Return]: 'return value' })
-return await S._runAsync(instance) === instance() // true
-```
-
-Takes the same arguments as the executable instance itself
-
-```javascript
-const instance = new S(({ a, b, c }) => ({ [S.Return]: `${a} + ${b} - ${c}` }))
-	.input((a, b, c) => ({ a, b, c }))
-return await S._runAsync(instance, 1, 2, 3) === instance(1, 2, 3) // true
-```
-
-Extract the useful parts of the config
-
-Turn the arguments into an initial condition
-
-### Merge the initial condition with the default initial state
-
-Default to an empty change object
-
-Use the defaults as an initial state
-
-Use the path from the initial state - allows for starting at arbitrary positions
-
-Use the path from the initial state - allows for starting at arbitrary positions
-
-### Repeat for a limited number of iterations.
-
-This should be fine for most finite machines, but may be too little for some constantly running machines.
-
-Pause execution based on the pause customisation method
-
-Check the configured `until` condition to see if we should exit.
-
-If the interaction are exceeded, throw MaxIterationsError
-
-If stack trace is enabled, push the current path to the stack
-
-If there are interruptions, perform them one by one
-
-#### If there are no interruptions, execute the process as normal
-
-Execute the current node on the process, returning the action to perform
-
-Perform any required actions. Updating the currentState
-
-Proceed to the next action
-
-When returning, run the ends state adapters, then the output adapter to complete execution.
-
 # Default Nodes
+
+## Error Node
+
+Throws the given error
+
+
+
+
+
+### 
+
+
+
+
 
 ## Changes Node
 
@@ -2043,7 +1617,7 @@ import { Changes } from './index.js'
 return Changes; // success
 ```
 
-Use the `NodeTypes.CH` (changes) value as the type.
+Use the Changes symbol as the type.
 
 Any object not caught by other conditions should qualify as a state change.
 
@@ -2063,15 +1637,15 @@ const instance = new S([
 return instance({ result: 'start' }) // 'start addition1 addition2'
 ```
 
-This definition is exported by the library as `{ Sequence }`
+This definition is exported by the library as `{ SequenceNode }`
 
 ```javascript
-import { Sequence } from './index.js'
+import { SequenceNode } from './index.js'
 	
-return Sequence; // success
+return SequenceNode; // success
 ```
 
-Use the `NodeTypes.SQ` (sequence) value as the type.
+Use the Sequence symbol as the type.
 
 ### Proceed by running the next node in the sequence
 
@@ -2079,7 +1653,7 @@ Get the current index in this sequence from the path
 
 Increment the index, unless the end has been reached
 
-A sequence is an array. A sequence cannot be an action, that will be interpreted as an absolute-directive.
+A sequence is an array. A sequence cannot be an action, that will be interpreted as an absolute-goto.
 
 Execute a sequence by directing to the first node (so long as it has nodes)
 
@@ -2099,14 +1673,14 @@ const instance = new S(({ result }) => ({ result: result + ' addition' }))
 return instance({ result: 'start' }) // 'start addition'
 ```
 
-A function can return a directive
+A function can return a goto
 
 ```javascript
 const instance = new S([
 	{ result: 'first' },
 	() => 4,
 	{ result: 'skipped' },
-	S.Return,
+	Return,
 	{ result: 'second' },
 ]).output(({ result }) => result)
 return instance({ result: 'start' }) // 'second'
@@ -2115,7 +1689,7 @@ return instance({ result: 'start' }) // 'second'
 A function can return a return statement
 
 ```javascript
-const instance = new S(() => ({ [S.Return]: 'changed' }))
+const instance = new S(() => ({ [Return]: 'changed' }))
 return instance() // 'changed'
 ```
 
@@ -2128,15 +1702,15 @@ const instance = new S(() => {
 return instance({ result: 'start' }) // 'start'
 ```
 
-This definition is exported by the library as `{ FunctionN }`
+This definition is exported by the library as `{ FunctionNode }`
 
 ```javascript
-import { FunctionN } from './index.js'
+import { FunctionNode } from './index.js'
 	
-return FunctionN; // success
+return FunctionNode; // success
 ```
 
-Use the `NodeTypes.FN` (function) value as the type.
+Use the FunctionN symbol as the type.
 
 A function is a JS function. A function cannot be an action.
 
@@ -2144,15 +1718,15 @@ Exectute a functon by running it, passing in the state.
 
 ## Undefined Node
 
-This definition is exported by the library as `{ Undefined }`
+This definition is exported by the library as `{ UndefinedNode }`
 
 ```javascript
-import { Undefined } from './index.js'
+import { UndefinedNode } from './index.js'
 	
-return Undefined; // success
+return UndefinedNode; // success
 ```
 
-Use the `NodeTypes.UN` (undefined) value as the type.
+Use the Undefined symbol as the type.
 
 Undefined is the `undefined` keyword.
 
@@ -2168,22 +1742,22 @@ When used as an action, undefined only moves to the next node.
 ```javascript
 const instance = new S([
 	() => undefined,
-	{ [S.Return]: 'second' }
+	{ [Return]: 'second' }
 ])
 return instance() // 'second'
 ```
 
 ## Empty Node
 
-This definition is exported by the library as `{ Empty }`
+This definition is exported by the library as `{ EmptyNode }`
 
 ```javascript
-import { Empty } from './index.js'
+import { EmptyNode } from './index.js'
 	
-return Empty; // success
+return EmptyNode; // success
 ```
 
-Use the `NodeTypes.EM` (empty) value as the type.
+Use the Empty symbol as the type.
 
 Empty is the `null` keyword.
 
@@ -2197,17 +1771,19 @@ return instance({ result: 'start' }) // 'second'
 
 ## Condition Node
 
-This definition is exported by the library as `{ Condition }`
+This definition is exported by the library as `{ ConditionNode }`
 
 ```javascript
-import { Condition } from './index.js'
+import { ConditionNode } from './index.js'
 	
-return Condition; // success
+return ConditionNode; // success
 ```
 
-Use the `NodeTypes.CD` (condition) value as the type.
+Use the Condition symbol as the type.
 
 A condition is an object with the `'if'` property. A condition cannot be an action.
+
+
 
 ### Execute a condition by evaluating the `'if'` property and directing to the `'then'` or `'else'` clauses
 
@@ -2218,8 +1794,8 @@ If truthy, direct to the `'then'` clause if it exists
 ```javascript
 const instance = new S({
 	if: ({ input }) => input === 'the same',
-	then: { [S.Return]: 'truthy' },
-	else: { [S.Return]: 'falsey' },
+	then: { [Return]: 'truthy' },
+	else: { [Return]: 'falsey' },
 })
 return instance({ input: 'the same' }) // 'truthy'
 ```
@@ -2229,8 +1805,8 @@ Otherwise, direct to the `'else'` clause if it exists
 ```javascript
 const instance = new S({
 	if: ({ input }) => input === 'the same',
-	then: { [S.Return]: 'truthy' },
-	else: { [S.Return]: 'falsey' },
+	then: { [Return]: 'truthy' },
+	else: { [Return]: 'falsey' },
 })
 return instance({ input: 'NOT the same' }) // 'falsey'
 ```
@@ -2249,9 +1825,9 @@ Iterate on the `'else'` clause if it exists
 	const instance = new S({
 		switch: ({ input }) => input,
 		case: {
-			start: { [S.Return]: 'first' },
-			two: { [S.Return]: 'second' },
-			default: { [S.Return]: 'none' },
+			start: { [Return]: 'first' },
+			two: { [Return]: 'second' },
+			default: { [Return]: 'none' },
 		}
 	})
 	const output1 = instance({ input: 'start' })
@@ -2264,17 +1840,19 @@ Iterate on the `'else'` clause if it exists
 }
 ```
 
-This definition is exported by the library as `{ Switch }`
+This definition is exported by the library as `{ SwitchNode }`
 
 ```javascript
-import { Switch } from './index.js'
+import { SwitchNode } from './index.js'
 	
-return Switch; // success
+return SwitchNode; // success
 ```
 
-Use the `NodeTypes.SW` (switch) value as the type.
+Use the Switch symbol as the type.
 
 A switch node is an object with the `'switch'` property.
+
+
 
 ### Execute a switch by evaluating the `'switch'` property and directing to the approprtate `'case'` clause.
 
@@ -2288,17 +1866,19 @@ Traverse a switch by iterating over the `'case'` clauses
 
 ## While Node
 
-This definition is exported by the library as `{ While }`
+This definition is exported by the library as `{ WhileNode }`
 
 ```javascript
-import { While } from './index.js'
+import { WhileNode } from './index.js'
 	
-return While; // success
+return WhileNode; // success
 ```
 
-Use the `NodeTypes.WH` (switch) value as the type.
+Use the While symbol as the type.
 
 A while node is an object with the `'while'` property.
+
+
 
 ### Execute a while by evaluating the `'while'` property and directing to the `'do'` clause if `true`.
 
@@ -2325,31 +1905,33 @@ const instance = new S({
 return instance({ result: 'start' }) // 'second'
 ```
 
-This definition is exported by the library as `{ Machine }`
+This definition is exported by the library as `{ MachineNode }`
 
 ```javascript
-import { Machine } from './index.js'
+import { MachineNode } from './index.js'
 	
-return Machine; // success
+return MachineNode; // success
 ```
 
-Use the `NodeTypes.MC` (machine) value as the type.
+Use the Machine symbol as the type.
 
 A machine is an object with the `'initial'` property. A machine cannot be used as an action.
+
+
 
 Execute a machine by directing to the `'initial'` stages.
 
 Traverse a machine by iterating over all the stages
 
-## Directive Node
+## Goto Node
 
-Transitioning is also possible by using and object with the `S.Stack` key set to a relative or absolute path. This is not recommended as it is almost never required, it should be considered system-only.
+Transitioning is also possible by using and object with the `Stack` key set to a relative or absolute path. This is not recommended as it is almost never required, it should be considered system-only.
 
 ```javascript
 const instance = new S({
 	initial: [
 		{ result: 'first' },
-		{ [S.Goto]: 'next' }
+		{ [Goto]: 'next' }
 	],
 	next: { result: 'second' }
 }).output(({ result }) => result)
@@ -2362,38 +1944,38 @@ It is not possible to send any other information in this object, such as a state
 const instance = new S({
 	initial: [
 		{ result: 'first' },
-		{ [S.Goto]: 'next', result: 'ignored' }
+		{ [Goto]: 'next', result: 'ignored' }
 	],
-	next: S.Return
+	next: Return
 }).output(({ result }) => result)
 return instance({ result: 'start' }) // 'first'
 ```
 
-This definition is exported by the library as `{ Directive }`
+This definition is exported by the library as `{ GotoNode }`
 
 ```javascript
-import { Directive } from './index.js'
+import { GotoNode } from './index.js'
 	
-return Directive; // success
+return GotoNode; // success
 ```
 
-Use the `NodeTypes.DR` (directive) value as the type.
+Use the Goto symbol as the type.
 
-A directive is an object with the `S.Stack` property.
+A goto is an object with the `Stack` property.
 
-A directive is performed by performing the value of the `S.Stack` property to allow for using absolute or relative directives
+A goto is performed by performing the value of the `Stack` property to allow for using absolute or relative gotos
 
-A directive does not require proceeding, simply return the current state unmodified
+A goto does not require proceeding, simply return the current state unmodified
 
-## Sequence Directive Node
+## Sequence Goto Node
 
 Numbers indicate a goto for a sequence. It is not recommended to use this as it may be unclear, but it must be possible, and should be considered system-only.
 
 ```javascript
 const instance = new S([
 	2,
-	{ [S.Return]: 'skipped' },
-	{ [S.Return]: 'second' },
+	{ [Return]: 'skipped' },
+	{ [Return]: 'second' },
 ])
 return instance() // 'second'
 ```
@@ -2407,25 +1989,25 @@ const instance = new S([
 		then: 2,
 		else: 1
 	},
-	{ [S.Return]: 'skipped' },
-	{ [S.Return]: 'second' },
+	{ [Return]: 'skipped' },
+	{ [Return]: 'second' },
 ])
 return instance({ input: 'skip' }) // 'second'
 ```
 
-This definition is exported by the library as `{ SequenceDirective }`
+This definition is exported by the library as `{ SequenceGotoNode }`
 
 ```javascript
-import { SequenceDirective } from './index.js'
+import { SequenceGotoNode } from './index.js'
 	
-return SequenceDirective; // success
+return SequenceGotoNode; // success
 ```
 
-Use the `NodeTypes.SD` (sequence-directive) value as the type.
+Use the SequenceGoto symbol as the type.
 
-A sequence directive is a number.
+A sequence goto is a number.
 
-### A sequence directive is performed by finding the last sequence and setting the index to the given value.
+### A sequence goto is performed by finding the last sequence and setting the index to the given value.
 
 Get the closest ancestor that is a sequence.
 
@@ -2433,11 +2015,11 @@ If there is no such ancestor, throw a `PathReferenceError`
 
 Update the path to the parent>index
 
-## Machine Directive Node
+## Machine Goto Node
 
-Directives are effectively `goto` commands, or `transitions` if you prefer.
+Gotos are effectively `goto` commands, or `transitions` if you prefer.
 
-Directives are the natural way of proceeding in state machines, using the name of a neighboring state as a string you can direct flow through a state machine.
+Gotos are the natural way of proceeding in state machines, using the name of a neighboring state as a string you can direct flow through a state machine.
 
 ```javascript
 const instance = new S({
@@ -2450,19 +2032,19 @@ const instance = new S({
 return instance({ result: 'start' }) // 'second'
 ```
 
-This definition is exported by the library as `{ MachineDirective }`
+This definition is exported by the library as `{ MachineGotoNode }`
 
 ```javascript
-import { MachineDirective } from './index.js'
+import { MachineGotoNode } from './index.js'
 	
-return MachineDirective; // success
+return MachineGotoNode; // success
 ```
 
-Use the `NodeTypes.MD` (machine-directive) value as the type.
+Use the MachineeGoto symbol as the type.
 
-A machine directive is a string.
+A machine goto is a string.
 
-### A machine directive is performed by directing to the given stage.
+### A machine goto is performed by directing to the given stage.
 
 Get the closest ancestor that is a machine.
 
@@ -2470,15 +2052,23 @@ If no machine ancestor is found, throw a `PathReferenceError`
 
 Update the path to parent>stage
 
-## Interrupt Directive Node
+## Interrupt Goto Node
 
-Interrupts are like directives, except they will return to the previous execution path once complete.
+Interrupts are like gotos, except they will return to the previous execution path once complete.
 
-Use the `NodeTypes.ID` (interrupt-directive) value as the type.
+This definition is exported by the library as `{ InterruptGotoNode }`
 
-An interrupt directive is a symbol.
+```javascript
+import { InterruptGotoNode } from './index.js'
+	
+return InterruptGotoNode; // success
+```
 
-### An interrupt directive is performed by directing to the given stage.
+Use the InterruptGoto symbol as the type.
+
+An interrupt goto is a symbol.
+
+### An interrupt goto is performed by directing to the given stage.
 
 Get the closest ancestor that is a machine.
 
@@ -2492,29 +2082,29 @@ Update the path to parent>stage
 
 
 
-## Absolute Directive Node
+## Absolute Goto Node
 
 Arrays can be used to perform absolute redirects. This is not recommended as it may make your transition logic unclear.
 
-Arrays cannot be used on their own, because they would be interpreted as sequences. For this reason they must be contained in an object with the `S.Stack` symbol as a ky, with the array as the value, or returned by an action.
+Arrays cannot be used on their own, because they would be interpreted as sequences. For this reason they must be contained in an object with the `Stack` symbol as a ky, with the array as the value, or returned by an action.
 
-Using an absolute directive in a directive object works
+Using an absolute goto in a goto object works
 
 ```javascript
 const instance = new S({
 	initial: [
 		{ result: 'first' },
-		{ [S.Goto]: ['next',1] }
+		{ [Goto]: ['next',1] }
 	],
 	next: [
 		{ result: 'skipped' },
-		({ result }) => ({ [S.Return]: result }),
+		({ result }) => ({ [Return]: result }),
 	]
 })
 return instance({ result: 'start' }) // 'first'
 ```
 
-Using an absolute directive as a return value works
+Using an absolute goto as a return value works
 
 ```javascript
 const instance = new S({
@@ -2524,13 +2114,13 @@ const instance = new S({
 	],
 	next: [
 		{ result: 'skipped' },
-		({ result }) => ({ [S.Return]: result }),
+		({ result }) => ({ [Return]: result }),
 	]
 })
 return instance({ result: 'start' }) // 'first'
 ```
 
-Using an absolute directive as an action does NOT work.
+Using an absolute goto as an action does NOT work.
 
 ```javascript
 const instance = new S({
@@ -2540,34 +2130,34 @@ const instance = new S({
 	],
 	next: [
 		{ result: 'not skipped' },
-		({ result }) => ({ [S.Return]: result }),
+		({ result }) => ({ [Return]: result }),
 	]
 })
 return instance({ result: 'start' }) // 'not skipped'
 ```
 
-This definition is exported by the library as `{ AbsoluteDirective }`
+This definition is exported by the library as `{ AbsoluteGotoNode }`
 
 ```javascript
-import { AbsoluteDirective } from './index.js'
+import { AbsoluteGotoNode } from './index.js'
 	
-return AbsoluteDirective; // success
+return AbsoluteGotoNode; // success
 ```
 
-Use the `NodeTypes.AD` (absolute-directive) value as the type.
+Use the AbsoluteGoto symbol as the type.
 
-An absolute directive is a list of strings, symbols, and numbers. It can only be used as an action as it would otherwise be interpreted as a sequence.
+An absolute goto is a list of strings, symbols, and numbers. It can only be used as an action as it would otherwise be interpreted as a sequence.
 
-An absolute directive is performed by setting `S.Stack` to the path
+An absolute goto is performed by setting `Stack` to the path
 
 ## Return Node
 
-Causes the entire process to terminate immediately and return, setting `S.Return` to `true` on the state.
+Causes the entire process to terminate immediately and return, setting `Return` to `true` on the state.
 
 If the symbol is used with a `.output` configuration, then it will return according to the given method.
 
 ```javascript
-const instance = new S(S.Return)
+const instance = new S(Return)
 	.output(({ result }) => result)
 return instance({ result: 'start' }) // 'start'
 ```
@@ -2575,35 +2165,71 @@ return instance({ result: 'start' }) // 'start'
 If the symbol is used on its own, then it will simply return `undefined`.
 
 ```javascript
-const instance = new S(S.Return)
+const instance = new S(Return)
 return instance({ result: 'start' }) // undefined
 ```
 
 Using the return symbol as the key to an object will set the return property to that value before returning.
 
 ```javascript
-const instance = new S({ [S.Return]: 'custom' })
+const instance = new S({ [Return]: 'custom' })
 return instance() // 'custom'
 ```
 
 ```javascript
-const instance = new S({ [S.Return]: 'custom' })
-return instance.output(state => state)({ result: 'start' }) // { result: 'start', [S.Return]: 'custom' }
+const instance = new S({ [Return]: 'custom' })
+return instance.output(state => state)({ result: 'start' }) // { result: 'start', [Return]: 'custom' }
 ```
 
-This definition is exported by the library as `{ Return }`
+This definition is exported by the library as `{ ReturnNode }`
 
 ```javascript
-import { Return } from './index.js'
+import { ReturnNode } from './index.js'
 	
-return Return; // success
+return ReturnNode; // success
 ```
 
-Use the `NodeTypes.RT` (return) value as the type.
+Use the Return symbol as the type.
 
-A return node is the `S.Return` symbol itself, or an object with an `S.Return` property.
+A return node is the `Return` symbol itself, or an object with an `Return` property.
 
-Perform a return by setting the `S.Return` property on the state to the return value
+Perform a return by setting the `Return` property on the state to the return value
+
+
+
+## Continue Node
+
+
+
+
+
+
+
+### 
+
+
+
+
+
+
+
+## Break Node
+
+
+
+
+
+
+
+### 
+
+
+
+
+
+
+
+
 
 # Errors
 
@@ -2645,13 +2271,13 @@ const nodeReferenceError  = new NodeReferenceError()
 const maxIterationsError  = new MaxIterationsError()
 const pathReferenceError  = new PathReferenceError()
 return referenceError      instanceof SuperSmallStateMachineError
-    && typeError           instanceof SuperSmallStateMachineError
-    && stateReferenceError instanceof SuperSmallStateMachineError
-    && stateTypeError      instanceof SuperSmallStateMachineError
-    && nodeTypeError       instanceof SuperSmallStateMachineError
-    && nodeReferenceError  instanceof SuperSmallStateMachineError
-    && maxIterationsError  instanceof SuperSmallStateMachineError
-    && pathReferenceError  instanceof SuperSmallStateMachineError // true
+	&& typeError           instanceof SuperSmallStateMachineError
+	&& stateReferenceError instanceof SuperSmallStateMachineError
+	&& stateTypeError      instanceof SuperSmallStateMachineError
+	&& nodeTypeError       instanceof SuperSmallStateMachineError
+	&& nodeReferenceError  instanceof SuperSmallStateMachineError
+	&& maxIterationsError  instanceof SuperSmallStateMachineError
+	&& pathReferenceError  instanceof SuperSmallStateMachineError // true
 ```
 
 Passing a state, instance, data, and/or stack with make those properties available in the error
@@ -2695,8 +2321,8 @@ const stateReferenceError = new StateReferenceError()
 const nodeReferenceError  = new NodeReferenceError()
 const pathReferenceError  = new PathReferenceError()
 return stateReferenceError instanceof SuperSmallStateMachineReferenceError
-    && nodeReferenceError  instanceof SuperSmallStateMachineReferenceError
-    && pathReferenceError  instanceof SuperSmallStateMachineReferenceError // true
+	&& nodeReferenceError  instanceof SuperSmallStateMachineReferenceError
+	&& pathReferenceError  instanceof SuperSmallStateMachineReferenceError // true
 ```
 
 ## SuperSmallStateMachineTypeError
@@ -2717,7 +2343,7 @@ All exported type errors inherit from this class
 const stateTypeError = new StateTypeError()
 const nodeTypeError  = new NodeTypeError()
 return stateTypeError instanceof SuperSmallStateMachineTypeError
-    && nodeTypeError  instanceof SuperSmallStateMachineTypeError // true
+	&& nodeTypeError  instanceof SuperSmallStateMachineTypeError // true
 ```
 
 ## StateReferenceError
