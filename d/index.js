@@ -222,7 +222,7 @@ export const E = {
 		}, string => {
 			const lines = string.split('\n')
 			const returnLine = lines.length-2
-			lines[returnLine] = `${lines[returnLine]} // ${toString(value, symbols)}`
+			lines[returnLine] = `${lines[returnLine]} // ${toStringFlat(value, symbols)}`
 			return lines.join('\n')
 		})
 	},
@@ -234,7 +234,7 @@ export const E = {
 		}, string => {
 			const lines = string.split('\n')
 			const returnLine = lines.length-2
-			lines[returnLine] = `${lines[returnLine]} // not ${toString(value, symbols)}`
+			lines[returnLine] = `${lines[returnLine]} // not ${toStringFlat(value, symbols)}`
 			return lines.join('\n')
 		})
 	},
@@ -246,7 +246,7 @@ export const E = {
 		}, string => {
 			const lines = string.split('\n')
 			const returnLine = lines.length-2
-			lines[returnLine] = `${lines[returnLine]} // ${toString(value, symbols)}`
+			lines[returnLine] = `${lines[returnLine]} // ${toStringFlat(value, symbols)}`
 			return lines.join('\n')
 		})
 	},
@@ -258,7 +258,7 @@ export const E = {
 		}, string => {
 			const lines = string.split('\n')
 			const returnLine = lines.length-2
-			lines[returnLine] = `${lines[returnLine]} // not ${toString(value, symbols)}`
+			lines[returnLine] = `${lines[returnLine]} // not ${toStringFlat(value, symbols)}`
 			return lines.join('\n')
 		})
 	},

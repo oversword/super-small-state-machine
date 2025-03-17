@@ -32,26 +32,18 @@ return instance.process // { result: 'value' }
 Config
 
 ```javascript
-	const instance = new S()
-	return instance.config // {
- defaults: { result: undefined },
- iterations: 10000,
- strict: false,
-}
+const instance = new S()
+return instance.config // { defaults: { result: undefined }, iterations: 10000, strict: false }
 ```
 
 ```javascript
-	const instance = new S()
-	const modifiedInstance = instance
-		.with(asyncPlugin)
-		.for(10)
-		.defaults({ result: 'other' })
-		.strict
-	return modifiedInstance.config // {
- defaults: { result: 'other' },
- iterations: 10,
- strict: true,
-}
+const instance = new S()
+const modifiedInstance = instance
+	.with(asyncPlugin)
+	.for(10)
+	.defaults({ result: 'other' })
+	.strict
+return modifiedInstance.config // { defaults: { result: 'other' }, iterations: 10, strict: true }
 ```
 
 ## Instance Constructor
@@ -143,23 +135,18 @@ Merges the `changes` with the given `state` and returns it.
 This will ignore any symbols in `changes`, and forward the important symbols of the given `state`.
 
 ```javascript
-	const instance = new S()
-	const result = instance.changes({
-		[Stack]: [['preserved']],
-		[Changes]: {},
-		preserved: 'value',
-		common: 'initial',
-	}, {
-		[Stack]: [['ignored']],
-		[Changes]: { ignored: true },
-		common: 'changed',
-	})
-	return result // {
- common: 'changed',
- preserved: 'value',
- [Stack]: [ 'preserved' ],
- [Changes]: { ignored: undefined, common: 'changed' },
-}
+const instance = new S()
+const result = instance.changes({
+	[Stack]: [['preserved']],
+	[Changes]: {},
+	preserved: 'value',
+	common: 'initial',
+}, {
+	[Stack]: [['ignored']],
+	[Changes]: { ignored: true },
+	common: 'changed',
+})
+return result // { common: 'changed', preserved: 'value', [Stack]: [ 'preserved' ], [Changes]: { ignored: undefined, common: 'changed' } }
 ```
 
 ## instance.proceed (state = {}, node = undefined)
@@ -214,30 +201,25 @@ return instance.execute({ [Stack]: [[1]], myProperty: 'start value' }, get_path_
 instance.traverse(iterator = a => a)
 
 ```javascript
-	const instance = new S({
-		initial: 'swap this',
-		other: [
-			{
-				if: 'swap this too',
-				then: 'also swap this'
-			}
-		]
-	})
-	return instance.traverse((node, path, process, nodeType) => {
-		if (node === 'swap this') return 'with this'
-		if (node === 'also swap this') return 'with that'
-		if (nodeType === ConditionNode.type && node.if === 'swap this too')
-			return {
-				...node,
-				if: 'with another thing'
-			}
-		return node
-	}) // {
- initial: 'with this',
- other: [
-  { if: 'with another thing', then: 'with that' },
- ],
-}
+const instance = new S({
+	initial: 'swap this',
+	other: [
+		{
+			if: 'swap this too',
+			then: 'also swap this'
+		}
+	]
+})
+return instance.traverse((node, path, process, nodeType) => {
+	if (node === 'swap this') return 'with this'
+	if (node === 'also swap this') return 'with that'
+	if (nodeType === ConditionNode.type && node.if === 'swap this too')
+		return {
+			...node,
+			if: 'with another thing'
+		}
+	return node
+}) // { initial: 'with this', other: [ { if: 'with another thing', then: 'with that' } ] }
 ```
 
 ## instance.run (...input)
@@ -356,23 +338,16 @@ Enables the stack trace.
 Creates a new instance.
 
 ```javascript
-	const instance = new S({
-		initial: 'other',
-		other: 'oneMore',
-		oneMore: [
-			null,
-			null
-		]
-	}).trace
-	.output(({ [Trace]: trace }) => trace)
-	return instance() // [
- [ [  ] ],
- [ [ 'initial' ] ],
- [ [ 'other' ] ],
- [ [ 'oneMore' ] ],
- [ [ 'oneMore', 0 ] ],
- [ [ 'oneMore', 1 ] ],
-]
+const instance = new S({
+	initial: 'other',
+	other: 'oneMore',
+	oneMore: [
+		null,
+		null
+	]
+}).trace
+.output(({ [Trace]: trace }) => trace)
+return instance() // [ [ [  ] ], [ [ 'initial' ] ], [ [ 'other' ] ], [ [ 'oneMore' ] ], [ [ 'oneMore', 0 ] ], [ [ 'oneMore', 1 ] ] ]
 ```
 
 ## instance.shallow <default>
@@ -382,16 +357,10 @@ Shallow merges the state every time a state change in made.
 Creates a new instance.
 
 ```javascript
-	const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
-		.shallow
-		.output(ident)
-	return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } }) // {
- myProperty: {
-  existingKey: 'newValue',
-  anotherKey: undefined,
-  deepKey: { deepVaue: undefined, deepValue2: 7 },
- },
-}
+const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
+	.shallow
+	.output(ident)
+return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } }) // { myProperty: { existingKey: 'newValue', anotherKey: undefined, deepKey: { deepVaue: undefined, deepValue2: 7 } } }
 ```
 
 ## instance.deep
@@ -401,16 +370,10 @@ Deep merges the all properties in the state every time a state change in made.
 Creates a new instance.
 
 ```javascript
-	const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
-		.deep
-		.output(ident)
-	return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } }) // {
- myProperty: {
-  existingKey: 'newValue',
-  anotherKey: 'anotherValue',
-  deepKey: { deepVaue: 6, deepValue2: 7 },
- },
-}
+const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
+	.deep
+	.output(ident)
+return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } }) // { myProperty: { existingKey: 'newValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6, deepValue2: 7 } } }
 ```
 
 ## instance.unstrict <default>
@@ -695,23 +658,18 @@ Merges the `changes` with the given `state` and returns it.
 This will ignore any symbols in `changes`, and forward the important symbols of the given `state`.
 
 ```javascript
-	const instance = new S()
-	const result = S.changes({
-		[Stack]: ['preserved'],
-		[Changes]: {},
-		preserved: 'value',
-		common: 'initial',
-	}, {
-		[Stack]: ['ignored'],
-		[Changes]: { ignored: true },
-		common: 'changed',
-	})(instance)
-	return result // {
- common: 'changed',
- preserved: 'value',
- [Stack]: [ 'preserved' ],
- [Changes]: { ignored: undefined, common: 'changed' },
-}
+const instance = new S()
+const result = S.changes({
+	[Stack]: ['preserved'],
+	[Changes]: {},
+	preserved: 'value',
+	common: 'initial',
+}, {
+	[Stack]: ['ignored'],
+	[Changes]: { ignored: true },
+	common: 'changed',
+})(instance)
+return result // { common: 'changed', preserved: 'value', [Stack]: [ 'preserved' ], [Changes]: { ignored: undefined, common: 'changed' } }
 ```
 
 ## S.proceed (state = {}, action = undefined)
@@ -769,31 +727,26 @@ return executor(instance) // { myProperty: 'that value', [Stack]: [ [ 2 ] ] }
 S.traverse(iterator = a => a)
 
 ```javascript
-	const instance = new S({
-		initial: 'swap this',
-		other: [
-			{
-				if: 'swap this too',
-				then: 'also swap this'
-			}
-		]
-	})
-	const traverser = S.traverse((node, path, process, nodeType) => {
-		if (node === 'swap this') return 'with this'
-		if (node === 'also swap this') return 'with that'
-		if (nodeType === ConditionNode.type && node.if === 'swap this too')
-			return {
-				...node,
-				if: 'with another thing'
-			}
-		return node
-	})
-	return traverser(instance) // {
- initial: 'with this',
- other: [
-  { if: 'with another thing', then: 'with that' },
- ],
-}
+const instance = new S({
+	initial: 'swap this',
+	other: [
+		{
+			if: 'swap this too',
+			then: 'also swap this'
+		}
+	]
+})
+const traverser = S.traverse((node, path, process, nodeType) => {
+	if (node === 'swap this') return 'with this'
+	if (node === 'also swap this') return 'with that'
+	if (nodeType === ConditionNode.type && node.if === 'swap this too')
+		return {
+			...node,
+			if: 'with another thing'
+		}
+	return node
+})
+return traverser(instance) // { initial: 'with this', other: [ { if: 'with another thing', then: 'with that' } ] }
 ```
 
 ## S.run (...input)
@@ -915,24 +868,17 @@ Deep merges the all properties in the state every time a state change in made.
 Returns a function that will modify a given instance.
 
 ```javascript
-	const instance = new S({
-		initial: 'other',
-		other: 'oneMore',
-		oneMore: [
-			null,
-			null
-		]
-	})
-	.with(S.trace)
-	.output(({ [Trace]: trace }) => trace)
-	return instance() // [
- [ [  ] ],
- [ [ 'initial' ] ],
- [ [ 'other' ] ],
- [ [ 'oneMore' ] ],
- [ [ 'oneMore', 0 ] ],
- [ [ 'oneMore', 1 ] ],
-]
+const instance = new S({
+	initial: 'other',
+	other: 'oneMore',
+	oneMore: [
+		null,
+		null
+	]
+})
+.with(S.trace)
+.output(({ [Trace]: trace }) => trace)
+return instance() // [ [ [  ] ], [ [ 'initial' ] ], [ [ 'other' ] ], [ [ 'oneMore' ] ], [ [ 'oneMore', 0 ] ], [ [ 'oneMore', 1 ] ] ]
 ```
 
 ## S.shallow <default>
@@ -942,16 +888,10 @@ Shallow merges the state every time a state change in made.
 Returns a function that will modify a given instance.
 
 ```javascript
-	const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
-		.with(S.shallow)
-		.output(ident)
-	return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } }) // {
- myProperty: {
-  existingKey: 'newValue',
-  anotherKey: undefined,
-  deepKey: { deepVaue: undefined, deepValue2: 7 },
- },
-}
+const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
+	.with(S.shallow)
+	.output(ident)
+return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } }) // { myProperty: { existingKey: 'newValue', anotherKey: undefined, deepKey: { deepVaue: undefined, deepValue2: 7 } } }
 ```
 
 ## S.deep
@@ -961,16 +901,10 @@ Deep merges the all properties in the state every time a state change in made.
 Returns a function that will modify a given instance.
 
 ```javascript
-	const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
-		.with(S.deep)
-		.output(ident)
-	return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } }) // {
- myProperty: {
-  existingKey: 'newValue',
-  anotherKey: 'anotherValue',
-  deepKey: { deepVaue: 6, deepValue2: 7 },
- },
-}
+const instance = new S({ myProperty: { existingKey: 'newValue', deepKey: { deepValue2: 7 } } })
+	.with(S.deep)
+	.output(ident)
+return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6 } } }) // { myProperty: { existingKey: 'newValue', anotherKey: 'anotherValue', deepKey: { deepVaue: 6, deepValue2: 7 } } }
 ```
 
 ## S.unstrict <default>
@@ -1229,17 +1163,7 @@ Every instance must have a process and be callable.
 ## Config
 
 ```javascript
-	return S.config // {
- deep: false,
- strict: false,
- trace: false,
- iterations: 10000,
- override: null,
- adapt: [  ],
- before: [  ],
- after: [  ],
- defaults: {  },
-}
+return S.config // { deep: false, strict: false, trace: false, iterations: 10000, override: null, adapt: [  ], before: [  ], after: [  ], defaults: {  } }
 ```
 
 Initialise an empty state by default
@@ -1304,23 +1228,18 @@ Merges the `changes` with the given `state` and returns it.
 This will ignore any symbols in `changes`, and forward the important symbols of the given `state`.
 
 ```javascript
-	const instance = new S()
-	const result = S._changes(instance, {
-		[Stack]: ['preserved'],
-		[Changes]: {},
-		preserved: 'value',
-		common: 'initial',
-	}, {
-		[Stack]: ['ignored'],
-		[Changes]: { ignored: true },
-		common: 'changed',
-	})
-	return result // {
- common: 'changed',
- preserved: 'value',
- [Stack]: [ 'preserved' ],
- [Changes]: { ignored: undefined, common: 'changed' },
-}
+const instance = new S()
+const result = S._changes(instance, {
+	[Stack]: ['preserved'],
+	[Changes]: {},
+	preserved: 'value',
+	common: 'initial',
+}, {
+	[Stack]: ['ignored'],
+	[Changes]: { ignored: true },
+	common: 'changed',
+})
+return result // { common: 'changed', preserved: 'value', [Stack]: [ 'preserved' ], [Changes]: { ignored: undefined, common: 'changed' } }
 ```
 
 ### If the strict state flag is truthy, perform state checking logic
@@ -1457,33 +1376,28 @@ Traverses a process, mapping each node to a new value, effectively cloning the p
 You can customise how each leaf node is mapped by supplying the `iterator` method
 
 ```javascript
-	const inputProcess = {
-		initial: 'swap this',
-		other: [
-			{
-				if: 'swap this too',
-				then: 'also swap this'
-			}
-		]
-	}
-	return S._traverse({
-		process: inputProcess,
-		config: S.config,
-	}, (node, path, process, nodeType) => {
-		if (node === 'swap this') return 'with this'
-		if (node === 'also swap this') return 'with that'
-		if (nodeType === ConditionNode.type && node.if === 'swap this too')
-			return {
-				...node,
-				if: 'with another thing'
-			}
-		return node
-	}) // {
- initial: 'with this',
- other: [
-  { if: 'with another thing', then: 'with that' },
- ],
+const inputProcess = {
+	initial: 'swap this',
+	other: [
+		{
+			if: 'swap this too',
+			then: 'also swap this'
+		}
+	]
 }
+return S._traverse({
+	process: inputProcess,
+	config: S.config,
+}, (node, path, process, nodeType) => {
+	if (node === 'swap this') return 'with this'
+	if (node === 'also swap this') return 'with that'
+	if (nodeType === ConditionNode.type && node.if === 'swap this too')
+		return {
+			...node,
+			if: 'with another thing'
+		}
+	return node
+}) // { initial: 'with this', other: [ { if: 'with another thing', then: 'with that' } ] }
 ```
 
 ### Create an interation function to be used recursively
@@ -1822,22 +1736,18 @@ Iterate on the `'else'` clause if it exists
 ## Switch Node
 
 ```javascript
-	const instance = new S({
-		switch: ({ input }) => input,
-		case: {
-			start: { [Return]: 'first' },
-			two: { [Return]: 'second' },
-			default: { [Return]: 'none' },
-		}
-	})
-	const output1 = instance({ input: 'start' })
-	const output2 = instance({ input: 'two' })
-	const output3 = instance({ input: 'other' })
-	return { output1, output2, output3 } // {
- output1: 'first',
- output2: 'second',
- output3: 'none',
-}
+const instance = new S({
+	switch: ({ input }) => input,
+	case: {
+		start: { [Return]: 'first' },
+		two: { [Return]: 'second' },
+		default: { [Return]: 'none' },
+	}
+})
+const output1 = instance({ input: 'start' })
+const output2 = instance({ input: 'two' })
+const output3 = instance({ input: 'other' })
+return { output1, output2, output3 } // { output1: 'first', output2: 'second', output3: 'none' }
 ```
 
 This definition is exported by the library as `{ SwitchNode }`
@@ -2283,15 +2193,11 @@ return referenceError      instanceof SuperSmallStateMachineError
 Passing a state, instance, data, and/or stack with make those properties available in the error
 
 ```javascript
-	return new SuperSmallStateMachineError('', {
-		instance: 'something',
-		state: 'my state',
-		data: 'special data'
-	}) // {
- instance: 'something',
- state: 'my state',
- data: 'special data',
-}
+return new SuperSmallStateMachineError('', {
+	instance: 'something',
+	state: 'my state',
+	data: 'special data'
+}) // { instance: 'something', state: 'my state', data: 'special data' }
 ```
 
 Declare contextual properties on the class
