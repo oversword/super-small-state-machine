@@ -1,4 +1,4 @@
-import S, { Node, noop , Stack, Trace, InterruptGotoNode, Return, Changes, Interrupts } from "../index.js"
+import S, { Node, noop , Stack, Trace, InterruptGotoNode, Return, Changes } from "../index.js"
 
 export const Wait = Symbol("SSSM Wait")
 export class WaitNode extends Node {
@@ -13,13 +13,13 @@ export class UninterruptableNode extends Node {
     static perform(action, state) {
         return {
             ...state,
-            [Stack]: [  [ ...state[Stack][0], Uninterruptable ], ...state[Stack].slice(1) ],
+            [Stack]: [  { ...state[Stack][0], path: [ ...state[Stack][0].path, Uninterruptable ], point: state[Stack][0].point + 1  }, ...state[Stack].slice(1) ],
             [Uninterruptable]: state[Uninterruptable] + 1,
         }
     }
-    static proceed(nodeInfo, state) {
-        if (nodeInfo.action) return state;
-        const proceedAsNormal = Node.proceed.call(this, nodeInfo, state)
+    static proceed(node, state) {
+        if (state[Stack][0].point === state[Stack][0].path.length) return state;
+        const proceedAsNormal = Node.proceed.call(this, node, state)
         return { ...proceedAsNormal, [Uninterruptable]: proceedAsNormal[Uninterruptable] - 1 }
     }
 }
@@ -54,25 +54,26 @@ export function runAsync(...input) {
         let r = 0, currentState = { ...before.reduce((prev, modifier) => modifier.call(this, prev), S._changes(this, {
             [Changes]: {},
             ...defaults,
-			[Stack]: modifiedInput[Stack] || [[]],
-			[Interrupts]: modifiedInput[Interrupts] || [],
+			[Stack]: modifiedInput[Stack] || [{path:[],origin:Return,point:0}],
 			[Trace]: modifiedInput[Trace] || [],
             [Uninterruptable]: 0,
             [Interrupt]: (...args) => interruptable.interrupt(...args),
             ...(Return in modifiedInput ? {[Return]: modifiedInput[Return]} : {})
-        }, modifiedInput)), [Changes]: {} }
+        }, modifiedInput)), [Changes]: modifiedInput[Changes] || {} }
+
+
         while (r < iterations) {
             if (await until.call(this, currentState, r)) break;
             if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[Stack][0].map(key => key.toString()).join(', ')} ]`, { instance: this, state: currentState, data: { iterations } })
             if (trace) currentState = { ...currentState, [Trace]: [ ...currentState[Trace], currentState[Stack] ] }
             if (interruptionStack.length && currentState[Uninterruptable] <= 0) {
                 while (interruptionStack.length)
-                    currentState = await S._perform(this, currentState, interruptionStack.shift())
+                    currentState = await S._perform(this, currentState, interruptionStack.pop())
             } else {
                 const action = await S._execute(this, currentState)
                 if (action === Wait && !interruptionStack.length) await new Promise(waitForInterruption)
                 currentState = await S._perform(this, currentState, action)
-                currentState = await S._proceed(this, currentState, { node: action, action: true })
+                currentState = await S._proceed(this, currentState, action)
             }
         }
         return adaptOutput.call(this, after.reduce((prev, modifier) => modifier.call(this, prev), currentState))

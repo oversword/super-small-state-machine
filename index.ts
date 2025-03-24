@@ -2,43 +2,42 @@ export const clone_object = <T extends unknown = unknown>(obj: T): T => {
 	if (Array.isArray(obj)) return obj.map(clone_object) as T
 	if (obj === null) return null as T
 	if (typeof obj !== 'object') return obj
-	return Object.fromEntries(Object.entries(obj).map(([key,value]) => [ key, clone_object(value) ])) as T;
+	return { ...obj, ...Object.fromEntries(Object.entries(obj).concat(Symbols in obj ? (obj[Symbols] as Array<string>).map(key => [key,obj[key]]) : []).map(([key,value]) => [ key, clone_object(value) ])) }
 }
-export const unique_list_strings = <T extends unknown = unknown>(list: Array<T>, getId: ((item: T) => string) = item => item as string): Array<T> => Object.values(Object.fromEntries(list.map(item=>[getId(item),item])));
 const reduce_get_path_object = <T extends unknown = unknown, O extends unknown = unknown>(obj: T | O | undefined, step: PathUnit): T | undefined => obj ? ((obj as any)[step] as T) : undefined
 export const get_path_object = <T extends unknown = unknown, O extends unknown = unknown>(object: O, path: Path = []): undefined | T => (path.reduce(reduce_get_path_object<T,O>, object) as (T | undefined))
 export const set_path_object = <T extends unknown = unknown>(object: T, path: Path = [], value: unknown = undefined): T => {
-	if (path.length === 0 || typeof object !== 'object' || !object) return value as T
-	if (Array.isArray(object)) return [ ...object.slice(0, path[0] as number), set_path_object(object[path[0] as number], path.slice(1), value), ...object.slice(1 + (path[0] as number)) ] as T
-	return { ...object, [path[0]]: set_path_object((object as Record<string,unknown>)[path[0] as string], path.slice(1), value), }
+if (path.length === 0 || typeof object !== 'object' || !object) return value as T
+if (Array.isArray(object)) return [ ...object.slice(0, path[0] as number), set_path_object(object[path[0] as number], path.slice(1), value), ...object.slice(1 + (path[0] as number)) ] as T
+return { ...object, [path[0]]: set_path_object((object as Record<string,unknown>)[path[0] as string], path.slice(1), value), }
 }
 export const update_path_object = <T extends unknown = unknown, O extends unknown = unknown>(object: O, path: Path = [], transformer: ((original: T, path: Path, object: O) => T) = ident) => set_path_object(object, path, transformer(get_path_object<T>(object, path)!, path, object))
 const map_list_path_object = ([ key, value ]: [ string, unknown ]): Array<Path> => list_path_object(value).map(path => [ key, ...path ])
 export const list_path_object = (object: unknown): Array<Path> => typeof object !== 'object' || !object ? [[]] : ([[]] as Array<Path>).concat(...Object.entries(object).map(map_list_path_object))
-export const normalise_function = (functOrResult: Function | unknown): Function => (typeof functOrResult === 'function') ? functOrResult : () => functOrResult
+export const normalise_function = (functOrReturn: Function | unknown): Function => ((functOrReturn instanceof Function) || (typeof functOrReturn === 'function')) ? functOrReturn : () => functOrReturn
 const reduce_deep_merge_object = <T extends unknown = unknown>(base: T, override: unknown): T => {
-	if (!((base && typeof base === 'object') && !Array.isArray(base) && (override && typeof override === 'object') && !Array.isArray(override)))
-		return override as T;
-	const allKeys = unique_list_strings(Object.keys(base).concat(Object.keys(override)));
-	return Object.fromEntries(allKeys.map(key => [ key, key in override ? deep_merge_object((base as Record<string,unknown>)[key], (override as Record<string,unknown>)[key]) : (base as Record<string,unknown>)[key] ])) as T;
+if (!((base && typeof base === 'object') && !Array.isArray(base) && (override && typeof override === 'object') && !Array.isArray(override)))
+	return override as T
+const allKeys = [ ...new Set((Object.keys(base) as Array<string | symbol>).concat(Symbols in base ? (base[Symbols] as Array<symbol>) : [], Object.keys(override), Symbols in override ? (override[Symbols] as Array<symbol>) : [])) ]
+return { ...base, ...override, ...Object.fromEntries(allKeys.map(key => [ key, key in override ? deep_merge_object((base as Record<string|symbol,unknown>)[key], (override as Record<string|symbol,unknown>)[key]) : (base as Record<string|symbol,unknown>)[key] ])) }
 }
 export const deep_merge_object = <T extends unknown = unknown>(base: T, ...overrides: Array<unknown>): T => overrides.reduce(reduce_deep_merge_object<T>, base)
-export const shallow_merge_object = <T extends unknown = unknown>(a: T, ...objects: Array<Partial<T>>): T => Object.fromEntries(([] as Array<[string, unknown]>).concat(...[a,...objects].map(object => Object.entries(object)))) as T
+export const shallow_merge_object = <T extends unknown = unknown>(a: T, ...objects: Array<Partial<T>>): T => Object.assign({}, a, ...objects) as T
 export const get_closest_path = <T extends unknown = unknown, O extends unknown = unknown>(object: O, path: Path = [], condition: ((item: T, path: Path, object: O) => boolean) = () => true): Path | null => {
-const item = get_path_object<T>(object, path)!
-if (condition(item, path, object)) return path
-if (path.length === 0) return null
-return get_closest_path(object, path.slice(0,-1), condition)
+	const item = get_path_object<T>(object, path)!
+	if (condition(item, path, object)) return path
+	if (path.length === 0) return null
+	return get_closest_path(object, path.slice(0,-1), condition)
 }
 export const wait_time = (delay: number): Promise<void> => (delay ? new Promise(resolve => setTimeout(resolve, delay)) : Promise.resolve())
 export const name = (obj: Function | { name?: string } | (Array<unknown> & { name?: string })): string | undefined => obj.name
 export const named = <T extends unknown = unknown>(name: string, obj: T): T & { name: string } => {
-	const type = typeof obj
-	if (typeof obj === 'function') return ({ [name]: (...args: Array<unknown>) => obj(...args) })[name] as T & { name: string }
-	if (typeof obj === 'object' && !Array.isArray(obj)) return { ...obj, name }
-	const ret = Array.isArray(obj) ? [...obj] : obj;
-	(ret as T & { name: string }).name = name
-	return (ret as T & { name: string })
+const type = typeof obj
+if (typeof obj === 'function') return ({ [name]: (...args: Array<unknown>) => obj(...args) })[name] as T & { name: string }
+if (typeof obj === 'object' && !Array.isArray(obj)) return { ...obj, name }
+const ret = Array.isArray(obj) ? [...obj] : obj;
+(ret as T & { name: string }).name = name
+return (ret as T & { name: string })
 }
 export const noop = () => {}
 export const ident = <T extends unknown = unknown>(original: T): T => original
@@ -60,13 +59,13 @@ export class SuperSmallStateMachineError<
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 > extends Error {
-	public instance?: Partial<S<State, Output, Input, Action, Process>>
-	public state?: SystemState<State, Output>
-	public data?: any
-	constructor(message: string, { instance, state, data }: Partial<SuperSmallStateMachineError<State, Output, Input, Action, Process>>) {
-		super(message)
-		Object.assign(this, { instance, state, data })
-	}
+public instance?: Partial<S<State, Output, Input, Action, Process>>
+public state?: SystemState<State, Output>
+public data?: any
+constructor(message: string, { instance, state, data }: Partial<SuperSmallStateMachineError<State, Output, Input, Action, Process>>) {
+	super(message)
+	Object.assign(this, { instance, state, data })
+}
 }
 export class SuperSmallStateMachineReferenceError<
 	State extends InitialState = InitialState,
@@ -125,7 +124,7 @@ export class PathReferenceError<
 	Process extends unknown = ProcessType<State, Output, Action>,
 > extends SuperSmallStateMachineReferenceError<State, Output, Input, Action, Process> {}
 export const Stack       = Symbol('SSSM Stack')
-export const Interrupts  = Symbol('SSSM Interrupts')
+export const Symbols     = Symbol('SSSM Symbols')
 export const Trace       = Symbol('SSSM Trace')
 export const StrictTypes = Symbol('SSSM Strict Types')
 export class Nodes<
@@ -137,6 +136,7 @@ export class Nodes<
 > extends Map<string | symbol, typeof Node> {
 	constructor(...nodes: Array<typeof Node>) { super(nodes.flat(Infinity).map(node => [node.type,node])) }
 	typeof(object: unknown, objectType: (typeof object) = typeof object, isAction: boolean = false): false | string | symbol {
+		if (object instanceof Node) return (object.constructor as typeof Node).type
 		const foundType = [...this.values()].reverse().find(current => current.typeof(object, objectType, isAction))
 		return foundType ? foundType.type : false
 	}
@@ -159,15 +159,14 @@ SelfType extends unknown = never,>(this: Instance<State, Output, Input, Action, 
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-SelfType extends unknown = never,>(this: Instance<State, Output, Input, Action, Process>, nodeInfo: NodeInfo<SelfType>, state: SystemState<State, Output>): SystemState<State, Output> | Promise<SystemState<State, Output>> {
-		const stack = state[Stack] || [[]]
-		if (stack[0].length === 0) {
+SelfType extends unknown = never,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise<SystemState<State, Output>> {
+		const stack = state[Stack] || [{path:[],origin:Return,point:0}]
+		if (stack[0].point === 0) {
 			if (stack.length === 1) return { ...state, [Return]: state[Return], [Stack]: [] }
 			const { [Return]: interruptReturn, ...cleanState } = state
-			return { ...cleanState, [Stack]: stack.slice(1), [Interrupts]: state[Interrupts].slice(1), [state[Interrupts][0]]: interruptReturn } as SystemState<State, Output>
+			return { ...cleanState, [Stack]: stack.slice(1), [stack[0].origin]: interruptReturn } as SystemState<State, Output>
 		}
-		const parPath = stack[0].slice(0,-1)
-		return S._proceed(this, { ...state, [Stack]: [parPath, ...stack.slice(1)] }, { node: get_path_object(this.process, parPath), action: false, index: stack[0][parPath.length] })
+		return S._proceed(this, { ...state, [Stack]: [{ ...stack[0], point: stack[0].point-1 }, ...stack.slice(1)] }, get_path_object(this.process, stack[0].path.slice(0,stack[0].point-1)))
 	}
 	static perform<
 	State extends InitialState = InitialState,
@@ -183,6 +182,8 @@ SelfType extends unknown = never,>(this: Instance<State, Output, Input, Action, 
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 SelfType extends unknown = never,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return node }
+	value = undefined
+	constructor(node) { this.value = node }
 }
 export interface Instance<
 	State extends InitialState = InitialState,
@@ -199,7 +200,6 @@ export interface InitialState {
 }
 export type SystemState<State extends InitialState = InitialState, Output extends unknown = undefined> = State & {
 	[Stack]: StackType
-	[Interrupts]: Array<InterruptGotoType>
 	[Trace]: Array<StackType>
 	[Changes]: Partial<State>
 	[Return]?: Output | undefined
@@ -226,11 +226,6 @@ export interface Config<
 	nodes: Nodes<State, Output, Input, Action, Process>,
 	trace: boolean,
 	deep: boolean,
-}
-export interface NodeInfo<T extends unknown> {
-	node?: T | undefined
-	action?: boolean | undefined
-	index?: PathUnit | undefined
 }
 	export type ErrorType = Error | ErrorConstructor
 	export const ErrorN = Symbol('SSSM Error')
@@ -271,9 +266,11 @@ SelfType = ChangesType<State>,>(this: Instance<State, Output, Input, Action, Pro
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-SelfType = SequenceType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, nodeInfo: NodeInfo<SelfType>, state: SystemState<State, Output>): SystemState<State, Output> | Promise<SystemState<State, Output>> {
-			if (nodeInfo.node && (typeof nodeInfo.index === 'number') && (nodeInfo.index+1 < (nodeInfo.node as SequenceType<State, Output, Action>).length)) return { ...state, [Stack]: [[...state[Stack][0], nodeInfo.index+1], ...state[Stack].slice(1)] }
-			return Node.proceed.call(this, nodeInfo, state)
+SelfType = SequenceType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise<SystemState<State, Output>> {
+			const index = state[Stack][0].path[state[Stack][0].point]
+			if (node && (typeof index === 'number') && (index+1 < (node as SequenceType<State, Output, Action>).length))
+				return { ...state, [Stack]: [{ ...state[Stack][0], path: [...state[Stack][0].path.slice(0,state[Stack][0].point), index+1], point: state[Stack][0].point + 1 }, ...state[Stack].slice(1)] }
+			return Node.proceed.call(this, node, state)
 		}
 		static typeof<SelfType = SequenceType>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType { return ((!isAction) && objectType === 'object' && Array.isArray(object)) }
 		static execute<
@@ -314,7 +311,7 @@ SelfType = FunctionType<State, Output, Action>,>(this: Instance<State, Output, I
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-SelfType = undefined>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> { throw new NodeReferenceError(`There is nothing to execute at path [ ${state[Stack][0].map(key => key.toString()).join(', ')} ]`, { instance: this, state, data: { node } }) }
+SelfType = undefined>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> { throw new NodeReferenceError(`There is nothing to execute at path [ ${state[Stack][0].path.slice(0,state[Stack][0].point).map(key => key.toString()).join(', ')} ]`, { instance: this, state, data: { node } }) }
 	}
 	export const Empty = Symbol('SSSM Empty')
 	export class EmptyNode extends Node {
@@ -343,8 +340,8 @@ SelfType = undefined>(this: Instance<State, Output, Input, Action, Process>, nod
 	Process extends unknown = ProcessType<State, Output, Action>,
 SelfType = ConditionType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> {
 			if (normalise_function((node as ConditionType<State, Output, Action>).if)(state))
-			return ('then' in (node as ConditionType<State, Output, Action>) ? [ ...state[Stack][0], 'then' ] : null) as Action
-			return ('else' in (node as ConditionType<State, Output, Action>) ? [ ...state[Stack][0], 'else' ] : null) as Action
+			return ('then' in (node as ConditionType<State, Output, Action>) ? [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'then' ] : null) as Action
+			return ('else' in (node as ConditionType<State, Output, Action>) ? [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'else' ] : null) as Action
 		}
 		static traverse<
 	State extends InitialState = InitialState,
@@ -355,7 +352,8 @@ SelfType = ConditionType<State, Output, Action>,>(this: Instance<State, Output, 
 SelfType = ConditionType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return {
 			...node,
 			...('then' in (node as ConditionType<State, Output, Action>) ? { then: iterate([...path,'then']) } : {}),
-			...('else' in (node as ConditionType<State, Output, Action>) ? { else: iterate([...path,'else']) } : {})
+			...('else' in (node as ConditionType<State, Output, Action>) ? { else: iterate([...path,'else']) } : {}),
+			...(Symbols in (node as ConditionType<State, Output, Action>) ? Object.fromEntries((node[Symbols] as Array<symbol>).map(key => [key, iterate([...path,key])])) : {}),
 		} }
 	}
 	export const Switch = Symbol('SSSM Switch')
@@ -380,7 +378,7 @@ SelfType = ConditionType<State, Output, Action>,>(this: Instance<State, Output, 
 SelfType = SwitchType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> {
 			const key = normalise_function((node as SwitchType<State, Output, Action>).switch)(state)
 			const fallbackKey = (key in (node as SwitchType<State, Output, Action>).case) ? key : 'default'
-			return ((fallbackKey in (node as SwitchType<State, Output, Action>).case) ? [ ...state[Stack][0], 'case', fallbackKey ] : null) as Action
+			return ((fallbackKey in (node as SwitchType<State, Output, Action>).case) ? [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'case', fallbackKey ] : null) as Action
 		}
 		static traverse<
 	State extends InitialState = InitialState,
@@ -388,7 +386,7 @@ SelfType = SwitchType<State, Output, Action>,>(this: Instance<State, Output, Inp
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-SelfType = SwitchType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return { ...node, case: Object.fromEntries(Object.keys((node as SwitchType<State, Output, Action>).case).map(key => [ key, iterate([...path,'case',key]) ])), } }
+SelfType = SwitchType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return { ...node, case: Object.fromEntries(Object.keys((node as SwitchType<State, Output, Action>).case).map(key => [ key, iterate([...path,'case',key]) ])), ...(Symbols in (node as SwitchType<State, Output, Action>) ? Object.fromEntries((node[Symbols] as Array<symbol>).map(key => [key, iterate([...path,key])])) : {}) } }
 	}
 	export const While = Symbol('SSSM While')
 	export interface WhileType<
@@ -411,7 +409,7 @@ SelfType = SwitchType<State, Output, Action>,>(this: Instance<State, Output, Inp
 	Process extends unknown = ProcessType<State, Output, Action>,
 SelfType = WhileType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> {
 			if (!(('do' in (node as WhileType<State, Output, Action>)) && normalise_function((node as WhileType<State, Output, Action>).while(state)))) return null as Action
-			return [ ...state[Stack][0], 'do' ] as Action
+			return [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'do' ] as Action
 		}
 		static proceed<
 	State extends InitialState = InitialState,
@@ -419,14 +417,14 @@ SelfType = WhileType<State, Output, Action>,>(this: Instance<State, Output, Inpu
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-SelfType = WhileType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, nodeInfo: NodeInfo<SelfType>, state: SystemState<State, Output>): SystemState<State, Output> | Promise<SystemState<State, Output>> { return state }
+SelfType = WhileType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise<SystemState<State, Output>> { return { ...state, [Stack]: [ { ...state[Stack][0], path: state[Stack][0].path.slice(0,state[Stack][0].point) }, ...state[Stack].slice(1) ] } }
 		static traverse<
 	State extends InitialState = InitialState,
 	Output extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-SelfType = WhileType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return { ...node, ...('do' in (node as object) ? { do: iterate([ ...path, 'do' ]) } : {}), } }
+SelfType = WhileType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return { ...node, ...('do' in (node as WhileType<State, Output, Action>) ? { do: iterate([ ...path, 'do' ]) } : {}), ...(Symbols in (node as WhileType<State, Output, Action>) ? Object.fromEntries((node[Symbols] as Array<symbol>).map(key => [key, iterate([...path,key])])) : {}), } }
 	}
 	export const Machine = Symbol('SSSM Machine')
 	export interface MachineType<
@@ -436,7 +434,7 @@ SelfType = WhileType<State, Output, Action>,>(this: Instance<State, Output, Inpu
 		> {
 			initial: ProcessType<State, Output, Action>
 			[key: string | number]: ProcessType<State, Output, Action>
-			[Interrupts]?: Array<InterruptGotoType>
+			[Symbols]?: Array<InterruptGotoType>
 		}
 	export class MachineNode extends Node {
 		static type = Machine
@@ -448,14 +446,14 @@ SelfType = WhileType<State, Output, Action>,>(this: Instance<State, Output, Inpu
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-SelfType = MachineType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> { return [ ...state[Stack][0], 'initial' ] as Action }
+SelfType = MachineType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> { return [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'initial' ] as Action }
 		static traverse<
 	State extends InitialState = InitialState,
 	Output extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-SelfType = MachineType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return { ...node, ...Object.fromEntries(Object.keys(node as object).concat((Interrupts in (node as object)) ? (node as SelfType)[Interrupts]: []).map(key => [ key, iterate([...path,key]) ])) } }
+SelfType = MachineType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return { ...node, ...Object.fromEntries(Object.keys(node as object).concat((Symbols in (node as object)) ? (node as SelfType)[Symbols]: []).map(key => [ key, iterate([...path,key]) ])) } }
 	}
 	export const Goto = Symbol('SSSM Goto')
 	export type GotoType = { [Goto]: AbsoluteGotoType | SequenceGotoType | MachineGotoType }
@@ -469,7 +467,7 @@ SelfType = MachineType<State, Output, Action>,>(this: Instance<State, Output, In
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 SelfType = GotoType,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> { return S._perform(this, state, (action as GotoType)[Stack] as Action) }
-		static proceed(nodeInfo, state) { return state }
+		static proceed(node, state) { return state }
 	}
 	export const SequenceGoto = Symbol('SSSM Sequence Goto')
 	export type SequenceGotoType = number
@@ -483,9 +481,9 @@ SelfType = GotoType,>(this: Instance<State, Output, Input, Action, Process>, act
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 SelfType = SequenceGotoType,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {
-			const lastOf = S._closest(this, state[Stack][0].slice(0,-1), SequenceNode.type)
-			if (!lastOf) throw new PathReferenceError(`A relative goto has been provided as a number (${String(action)}), but no sequence exists that this number could be an index of from path [ ${state[Stack][0].map(key => key.toString()).join(', ')} ].`, { instance: this, state, data: { action } })
-			return { ...state, [Stack]: [ [...lastOf, action as SequenceGotoType], ...state[Stack].slice(1) ] }
+			const lastOf = S._closest(this, state[Stack][0].path.slice(0,state[Stack][0].point-1), SequenceNode.type)
+			if (!lastOf) throw new PathReferenceError(`A relative goto has been provided as a number (${String(action)}), but no sequence exists that this number could be an index of from path [ ${state[Stack][0].path.slice(0,state[Stack][0].point).map(key => key.toString()).join(', ')} ].`, { instance: this, state, data: { action } })
+			return { ...state, [Stack]: [ { ...state[Stack][0], path: [...lastOf, action as SequenceGotoType], point: lastOf.length + 1 }, ...state[Stack].slice(1) ] }
 		}
 	}
 	export const MachineGoto = Symbol('SSSM Machine Goto')
@@ -500,9 +498,9 @@ SelfType = SequenceGotoType,>(this: Instance<State, Output, Input, Action, Proce
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 SelfType = MachineGotoType,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {
-			const lastOf = S._closest(this, state[Stack][0].slice(0,-1), MachineNode.type)
-			if (!lastOf) throw new PathReferenceError(`A relative goto has been provided as a string (${String(action)}), but no state machine exists that this string could be a state of. From path [ ${state[Stack][0].map(key => key.toString()).join(', ')} ].`, { instance: this, state, data: { action } })
-			return { ...state, [Stack]: [ [...lastOf, action as MachineGotoType], ...state[Stack].slice(1) ] }
+			const lastOf = S._closest(this, state[Stack][0].path.slice(0,state[Stack][0].point-1), MachineNode.type)
+			if (!lastOf) throw new PathReferenceError(`A relative goto has been provided as a string (${String(action)}), but no state machine exists that this string could be a state of. From path [ ${state[Stack][0].path.slice(0,state[Stack][0].point).map(key => key.toString()).join(', ')} ].`, { instance: this, state, data: { action } })
+			return { ...state, [Stack]: [ { ...state[Stack][0], path: [...lastOf, action as MachineGotoType], point: lastOf.length + 1 }, ...state[Stack].slice(1) ] }
 		}
 	}
 	export const InterruptGoto = Symbol('SSSM Interrupt Goto')
@@ -517,9 +515,9 @@ SelfType = MachineGotoType,>(this: Instance<State, Output, Input, Action, Proces
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 SelfType = InterruptGotoType,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {
-			const lastOf = get_closest_path(this.process, state[Stack][0].slice(0,-1), parentNode => Boolean(parentNode && (typeof parentNode === 'object') && ((action as InterruptGotoType) in (parentNode as object))))
+			const lastOf = get_closest_path(this.process, state[Stack][0].path.slice(0,state[Stack][0].point-1), parentNode => Boolean(parentNode && (typeof parentNode === 'object') && ((action as InterruptGotoType) in (parentNode as object))))
 			if (!lastOf) return { ...state, [Return]: action } as SystemState<State, Output>
-			return { ...state, [Stack]: [ [...lastOf, action as InterruptGotoType], ...state[Stack] ], [Interrupts]: [ action as InterruptGotoType, ...state[Interrupts] ] }
+			return { ...state, [Stack]: [ { origin: action as InterruptGotoType, path: [...lastOf, action as InterruptGotoType], point: lastOf.length + 1 }, ...state[Stack] ] }
 		}
 		static proceed<
 	State extends InitialState = InitialState,
@@ -527,9 +525,9 @@ SelfType = InterruptGotoType,>(this: Instance<State, Output, Input, Action, Proc
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-SelfType = InterruptGotoType,>(this: Instance<State, Output, Input, Action, Process>, nodeInfo: NodeInfo<SelfType>, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {
-			const { [Stack]: stack, [Interrupts]: interrupts, [Return]: interruptReturn, ...proceedPrevious } = S._proceed(this, { ...state, [Stack]: state[Stack].slice(1), [Interrupts]: state[Interrupts].slice(1) }, { action: true })
-			return { ...proceedPrevious, [Stack]: [ state[Stack][0], ...stack ], [Interrupts]: [ state[Interrupts][0], ...interrupts ], } as SystemState<State, Output>
+SelfType = InterruptGotoType,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {
+			const { [Stack]: stack, [Return]: interruptReturn, ...proceedPrevious } = S._proceed(this, { ...state, [Stack]: state[Stack].slice(1) }, undefined)
+			return { ...proceedPrevious, [Stack]: [ state[Stack][0], ...stack ] } as SystemState<State, Output>
 		}
 	}
 	export const AbsoluteGoto = Symbol('SSSM Absolute Goto')
@@ -543,7 +541,7 @@ SelfType = InterruptGotoType,>(this: Instance<State, Output, Input, Action, Proc
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-SelfType = AbsoluteGotoType,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> { return { ...state, [Stack]: [ action as AbsoluteGotoType, ...state[Stack].slice(1) ] } }
+SelfType = AbsoluteGotoType,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> { return { ...state, [Stack]: [ { ...state[Stack][0], path: (action as AbsoluteGotoType), point: (action as AbsoluteGotoType).length }, ...state[Stack].slice(1) ] } }
 	}
 	export const Return = Symbol('SSSM Return')
 	export type ReturnObjectType<Output extends unknown = unknown> = { [Return]: Output }
@@ -572,9 +570,9 @@ SelfType = ReturnType<Output>,>(this: Instance<State, Output, Input, Action, Pro
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 SelfType = ContinueType,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {
-			const lastOf = S._closest(this, state[Stack][0].slice(0,-1), WhileNode.type)
-			if (!lastOf) throw new PathReferenceError(`A Continue has been used, but no while exists that this Continue could refer to. From path [ ${state[Stack][0].map(key => key.toString()).join(', ')} ].`, { instance: this, state, data: { action } })
-			return { ...state, [Stack]: [ lastOf, ...state[Stack].slice(1) ] }
+			const lastOf = S._closest(this, state[Stack][0].path.slice(0,state[Stack][0].point-1), WhileNode.type)
+			if (!lastOf) throw new PathReferenceError(`A Continue has been used, but no While exists that this Continue could refer to. From path [ ${state[Stack][0].path.slice(0,state[Stack][0].point).map(key => key.toString()).join(', ')} ].`, { instance: this, state, data: { action } })
+			return { ...state, [Stack]: [ { ...state[Stack][0], path: lastOf, point: lastOf.length }, ...state[Stack].slice(1) ] }
 		}
 	}
 	export const Break = Symbol('SSSM Break')
@@ -588,16 +586,16 @@ SelfType = ContinueType,>(this: Instance<State, Output, Input, Action, Process>,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-SelfType = BreakType,>(this: Instance<State, Output, Input, Action, Process>, nodeInfo: NodeInfo<SelfType>, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {
-			const lastOf = S._closest(this, state[Stack][0].slice(0,-1), WhileNode.type)
-			if (!lastOf) throw new PathReferenceError(`A Break has been used, but no while exists that this Break could refer to. From path [ ${state[Stack][0].map(key => key.toString()).join(', ')} ].`, { instance: this, state, data: { nodeInfo } })
-			return S._proceed(this, { ...state, [Stack]: [lastOf.slice(0,-1), ...state[Stack].slice(1)] }, { node: get_path_object(this.process, lastOf.slice(0,-1)), action: false, index: lastOf[lastOf.length-1] })
+SelfType = BreakType,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {
+			const lastOf = S._closest(this, state[Stack][0].path.slice(0,state[Stack][0].point-1), WhileNode.type)
+			if (!lastOf) throw new PathReferenceError(`A Break has been used, but no While exists that this Break could refer to. From path [ ${state[Stack][0].path.slice(0,state[Stack][0].point).map(key => key.toString()).join(', ')} ].`, { instance: this, state, data: { node } })
+			return S._proceed(this, { ...state, [Stack]: [{ ...state[Stack][0], point: lastOf.length-1 }, ...state[Stack].slice(1)] }, get_path_object(this.process, lastOf.slice(0,-1)))
 		}
 		static perform = Node.perform
 	}
 export type PathUnit = SequenceGotoType | MachineGotoType | InterruptGotoType
 export type Path = Array<PathUnit>
-export type StackType = Array<Path>
+export type StackType = Array<{ path: Path, origin: typeof Return | InterruptGotoType, point: number }>
 
 export type ProcessType<
 	State extends InitialState = InitialState,
@@ -660,8 +658,8 @@ export abstract class SuperSmallStateMachineCore<
 	Process extends unknown = ProcessType<State, Output, Action>,
 >(instance: Instance<State, Output, Input, Action, Process>, path: Path, ...nodeTypes: Array<string | symbol | Array<string | symbol>>): Path | null {
 		const flatTypes = nodeTypes.flat(Infinity)
-		return get_closest_path(instance.process, path, i => {
-			const nodeType = instance.config.nodes.typeof(i)
+		return get_closest_path(instance.process, path, node => {
+			const nodeType = instance.config.nodes.typeof(node)
 			return Boolean(nodeType && flatTypes.includes(nodeType))
 		})
 	}
@@ -673,16 +671,12 @@ export abstract class SuperSmallStateMachineCore<
 	Process extends unknown = ProcessType<State, Output, Action>,
 >(instance: Instance<State, Output, Input, Action, Process>, state: SystemState<State, Output>, changes: Partial<State>): SystemState<State, Output> {
 		if (instance.config.strict && Object.entries(changes).some(([property]) => !(property in state)))
-			throw new StateReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).map(key => key.toString()).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).map(key => key.toString()).join(', ')} ].\nPath: [ ${state[Stack][0].map(key => key.toString()).join(' / ')} ]`, { instance, state, data: { changes } })
+			throw new StateReferenceError(`Only properties that exist on the initial context may be updated.\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).map(key => key.toString()).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).map(key => key.toString()).join(', ')} ].\nPath: [ ${state[Stack][0].path.slice(0,state[Stack][0].point).map(key => key.toString()).join(' / ')} ]`, { instance, state, data: { changes } })
 		if (instance.config.strict === StrictTypes && Object.entries(changes).some(([property,value]) => typeof value !== typeof state[property]))
 			throw new StateTypeError(`Properties must have the same type as their initial value. ${Object.entries(changes).filter(([property,value]) => typeof value !== typeof state[property]).map(([property,value]) => `${typeof value} given for '${property}', should be ${typeof state[property]}`).join('. ')}.`, { instance, state, data: { changes } })
 		const merge = instance.config.deep ? deep_merge_object : shallow_merge_object
 		const allChanges = merge(state[Changes] || {}, changes)
-		return {
-			...state,
-			...merge(state, allChanges),
-			[Changes]: allChanges
-		}
+		return { ...merge(state, allChanges), [Changes]: allChanges } as SystemState<State, Output>
 	}
 	public static _proceed<
 	State extends InitialState = InitialState,
@@ -690,10 +684,10 @@ export abstract class SuperSmallStateMachineCore<
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
->(instance: Instance<State, Output, Input, Action, Process>, state: SystemState<State, Output>, nodeInfo: NodeInfo<Process | Action> = { node: undefined, action: false, index: undefined }): SystemState<State, Output> {
-		const nodeType = instance.config.nodes.typeof(nodeInfo.node, typeof nodeInfo.node, nodeInfo.action)
-		if (!nodeType) throw new NodeTypeError(`Unknown action type: ${typeof nodeInfo.node}${nodeType ? `, nodeType: ${String(nodeType)}` : ''}`, { instance, state, data: { nodeInfo } })
-		return instance.config.nodes.get(nodeType)!.proceed.call(instance, nodeInfo, state)
+>(instance: Instance<State, Output, Input, Action, Process>, state: SystemState<State, Output>, node: Process | Action = undefined as unknown as Action): SystemState<State, Output> {
+		const nodeType = instance.config.nodes.typeof(node, typeof node, state[Stack][0].point === state[Stack][0].path.length)
+		if (!nodeType) throw new NodeTypeError(`Unknown action type: ${typeof node}${nodeType ? `, nodeType: ${String(nodeType)}` : ''}`, { instance, state, data: { node } })
+		return instance.config.nodes.get(nodeType)!.proceed.call(instance, node instanceof Node ? node.value : node, state)
 	}
 	public static _perform<
 	State extends InitialState = InitialState,
@@ -704,7 +698,7 @@ export abstract class SuperSmallStateMachineCore<
 >(instance: Instance<State, Output, Input, Action, Process>, state: SystemState<State, Output>, action: Action = null as Action): SystemState<State, Output> {
 		const nodeType = instance.config.nodes.typeof(action, typeof action, true)
 		if (!nodeType) throw new NodeTypeError(`Unknown action type: ${typeof action}${nodeType ? `, nodeType: ${String(nodeType)}` : ''}.`, { instance, state, data: { action } })
-		return instance.config.nodes.get(nodeType)!.perform.call(instance as any, action, state) as SystemState<State, Output>
+		return instance.config.nodes.get(nodeType)!.perform.call(instance as any, action instanceof Node ? action.value : action, state) as SystemState<State, Output>
 	}
 	public static _execute<
 	State extends InitialState = InitialState,
@@ -712,10 +706,10 @@ export abstract class SuperSmallStateMachineCore<
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
->(instance: Instance<State, Output, Input, Action, Process>, state: SystemState<State, Output>, node: Process = get_path_object(instance.process, state[Stack][0]) as Process): Action {
+>(instance: Instance<State, Output, Input, Action, Process>, state: SystemState<State, Output>, node: Process = get_path_object(instance.process, state[Stack][0].path.slice(0,state[Stack][0].point)) as Process): Action {
 		const nodeType = instance.config.nodes.typeof(node)
 		if (!nodeType) throw new NodeTypeError(`Unknown node type: ${typeof node}${nodeType ? `, nodeType: ${String(nodeType)}` : ''}.`, { instance, state, data: { node } })
-		return instance.config.nodes.get(nodeType)!.execute.call(instance as any, node, state) as Action
+		return instance.config.nodes.get(nodeType)!.execute.call(instance as any, node instanceof Node ? node.value : node, state) as Action
 	}
 	public static _traverse<
 	State extends InitialState = InitialState,
@@ -728,7 +722,7 @@ export abstract class SuperSmallStateMachineCore<
 			const node = get_path_object<Process>(instance.process, path)!
 			const nodeType = instance.config.nodes.typeof(node)
 			if (!nodeType) throw new NodeTypeError(`Unknown node type: ${typeof node}${nodeType ? `, nodeType: ${String(nodeType)}` : ''} at [ ${path.map(key => key.toString()).join(', ')} ]`, { instance, data: { node } })
-			return iterator.call(instance, instance.config.nodes.get(nodeType)!.traverse.call(instance as any, node, path, iterate) as Process, path, instance.process, nodeType)
+			return iterator.call(instance, instance.config.nodes.get(nodeType)!.traverse.call(instance as any, node instanceof Node ? node.value : node, path, iterate) as Process, path, instance.process, nodeType)
 		}
 		return iterate()
 	}
@@ -744,16 +738,16 @@ export abstract class SuperSmallStateMachineCore<
 		let r = 0, currentState = { ...before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {
 			[Changes]: {},
 			...defaults,
-			[Stack]: modifiedInput[Stack] || [[]], [Interrupts]: modifiedInput[Interrupts] || [], [Trace]: modifiedInput[Trace] || [],
+			[Stack]: modifiedInput[Stack] || [{path:[],origin:Return,point:0}], [Trace]: modifiedInput[Trace] || [],
 			...(Return in modifiedInput ? {[Return]: modifiedInput[Return]} : {})
-		} as SystemState<State, Output>, modifiedInput)), [Changes]: {} }
+		} as SystemState<State, Output>, modifiedInput)), [Changes]: modifiedInput[Changes] || {} }
 		while (r < iterations) {
-			if (until.call(instance, currentState, r)) break;
-			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[Stack][0].map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, data: { iterations } })
+			if (until.call(instance, currentState, r)) break
+			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[Stack][0].path.slice(0,currentState[Stack][0].point).map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, data: { iterations } })
 			if (trace) currentState = { ...currentState, [Trace]: [ ...currentState[Trace], currentState[Stack] ] }
 			const action = this._execute(instance, currentState)
 			currentState = this._perform(instance, currentState, action)
-			currentState = this._proceed(instance, currentState, { node: action, action: true })
+			currentState = this._proceed(instance, currentState, action)
 		}
 		return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))
 	}
@@ -785,7 +779,7 @@ export abstract class SuperSmallStateMachineChain<
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
->(state: SystemState<State, Output>, nodeInfo: NodeInfo<Process | Action>) { return (instance: Instance<State, Output, Input, Action, Process>): SystemState<State, Output> => this._proceed(instance, state, nodeInfo) }
+>(state: SystemState<State, Output>, node: Process | Action) { return (instance: Instance<State, Output, Input, Action, Process>): SystemState<State, Output> => this._proceed(instance, state, node) }
 	static perform<
 	State extends InitialState = InitialState,
 	Output extends unknown = undefined,
@@ -987,7 +981,7 @@ export default class S<
 	}
 	closest(path: Path, ...nodeTypes: Array<string | symbol | Array<string | symbol>>): Path | null { return S._closest(this, path, ...nodeTypes) }
 	changes(state: SystemState<State, Output>, changes: Partial<State>): SystemState<State, Output> { return S._changes(this, state, changes) }
-	proceed(state: SystemState<State, Output>, nodeInfo: NodeInfo<Process | Action>) { return S._proceed(this, state, nodeInfo) }
+	proceed(state: SystemState<State, Output>, node: Process | Action) { return S._proceed(this, state, node) }
 	perform(state: SystemState<State, Output>, action: Action) { return S._perform(this, state, action) }
 	execute(state: SystemState<State, Output>, node: Process) { return S._execute(this, state, node) }
 	traverse(iterator: ((node: Process, path: Path, process: Process, nodeType: string | symbol) => Process)){ return S._traverse(this, iterator) }

@@ -6,15 +6,21 @@ A process is made of nodes
 
 Nodes are executables or actions
 
+There are three phases: execute, perform, proceed
+
+An executable results in an action
+
 Actions are performed on the state
 
-It then proceeds to the next node
+Then we proceed to the next node
 
 The state is made of properties
 
 The state may be given special system symbols containing execution information
 
-Machines have multiple stages, refered to by strings or symbols
+Machines have multiple stages, refered to by strings
+
+Machines have multiple interrupts, refered to by symbols
 
 Sequences have multiple indexes, refered to by numbers
 
@@ -165,7 +171,7 @@ const instance = new S([
 	],
 	null
 ])
-return instance.proceed({ [Stack]: [[ 2, 1 ]] }) // { [Stack]: [ [ 3 ] ] }
+return instance.proceed({ [Stack]: [{path:[ 2, 1 ],origin:Return,point:2}] }) // { [Stack]: [ { path: [ 3 ], origin: Symbol(SSSM Return), point: 1 } ] }
 ```
 
 ## instance.perform (state = {}, action = null)
@@ -195,7 +201,7 @@ const instance = new S([
 	{ myProperty: 'that value' },
 	{ myProperty: 'the other value' },
 ])
-return instance.execute({ [Stack]: [[1]], myProperty: 'start value' }, get_path_object(instance.process, [1])) // { myProperty: 'that value', [Stack]: [ [ 2 ] ] }
+return instance.execute({ [Stack]: [{path:[1],origin:Return,point:1}], myProperty: 'start value' }, get_path_object(instance.process, [1])) // { myProperty: 'that value', [Stack]: [ { path: [ 2 ], origin: Symbol(SSSM Return), point: 1 } ] }
 ```
 
 instance.traverse(iterator = a => a)
@@ -347,7 +353,7 @@ const instance = new S({
 	]
 }).trace
 .output(({ [Trace]: trace }) => trace)
-return instance() // [ [ [  ] ], [ [ 'initial' ] ], [ [ 'other' ] ], [ [ 'oneMore' ] ], [ [ 'oneMore', 0 ] ], [ [ 'oneMore', 1 ] ] ]
+return instance() // [ [ { path: [  ], origin: Symbol(SSSM Return), point: 0 } ], [ { path: [ 'initial' ], origin: Symbol(SSSM Return), point: 1 } ], [ { path: [ 'other' ], origin: Symbol(SSSM Return), point: 1 } ], [ { path: [ 'oneMore' ], origin: Symbol(SSSM Return), point: 1 } ], [ { path: [ 'oneMore', 0 ], origin: Symbol(SSSM Return), point: 2 } ], [ { path: [ 'oneMore', 1 ], origin: Symbol(SSSM Return), point: 2 } ] ]
 ```
 
 ## instance.shallow <default>
@@ -688,8 +694,8 @@ const instance = new S([
 	],
 	null
 ])
-const proceeder = S.proceed({ [Stack]: [[ 2, 1 ]] })
-return proceeder(instance) // { [Stack]: [ [ 3 ] ] }
+const proceeder = S.proceed({ [Stack]: [{path:[ 2, 1 ],origin:Return,point:2}] })
+return proceeder(instance) // { [Stack]: [ { path: [ 3 ], origin: Symbol(SSSM Return), point: 1 } ] }
 ```
 
 ## S.perform (state = {}, action = null)
@@ -720,8 +726,8 @@ const instance = new S([
 	{ myProperty: 'that value' },
 	{ myProperty: 'the other value' },
 ])
-const executor = S.execute({ [Stack]: [[1]], myProperty: 'start value' })
-return executor(instance) // { myProperty: 'that value', [Stack]: [ [ 2 ] ] }
+const executor = S.execute({ [Stack]: [{path:[1],origin:Return,point:1}], myProperty: 'start value' })
+return executor(instance) // { myProperty: 'that value', [Stack]: [ { path: [ 2 ], origin: Symbol(SSSM Return), point: 1 } ] }
 ```
 
 S.traverse(iterator = a => a)
@@ -878,7 +884,7 @@ const instance = new S({
 })
 .with(S.trace)
 .output(({ [Trace]: trace }) => trace)
-return instance() // [ [ [  ] ], [ [ 'initial' ] ], [ [ 'other' ] ], [ [ 'oneMore' ] ], [ [ 'oneMore', 0 ] ], [ [ 'oneMore', 1 ] ] ]
+return instance() // [ [ { path: [  ], origin: Symbol(SSSM Return), point: 0 } ], [ { path: [ 'initial' ], origin: Symbol(SSSM Return), point: 1 } ], [ { path: [ 'other' ], origin: Symbol(SSSM Return), point: 1 } ], [ { path: [ 'oneMore' ], origin: Symbol(SSSM Return), point: 1 } ], [ { path: [ 'oneMore', 0 ], origin: Symbol(SSSM Return), point: 2 } ], [ { path: [ 'oneMore', 1 ], origin: Symbol(SSSM Return), point: 2 } ] ]
 ```
 
 ## S.shallow <default>
@@ -1256,15 +1262,9 @@ Throw a StateTypeError if a property changes types.
 
 Collect all the changes in the changes object.
 
-### Return a new object
-
 Deep merge the current state with the new changes
 
-Deep merge the current state with the new changes
-
-Update the changes to the new changes
-
-## S._proceed (instance, state = {}, nodeInfo = { node: undefined, action: false, index: undefined })
+## S._proceed (instance, state = {}, node = undefined)
 
 Proceed to the next execution path.
 
@@ -1274,8 +1274,8 @@ const instance = new S([
 	'secondAction'
 ])
 return S._proceed(instance, {
-	[Stack]: [[0]]
-}) // { [Stack]: [ [ 1 ] ] }
+	[Stack]: [{path:[0],origin:Return,point:1}]
+}) // { [Stack]: [ { path: [ 1 ], origin: Symbol(SSSM Return), point: 1 } ] }
 ```
 
 Performs fallback logic when a node exits.
@@ -1289,8 +1289,8 @@ const instance = new S([
 	'thirdAction'
 ])
 return S._proceed(instance, {
-	[Stack]: [[0,1]]
-}) // { [Stack]: [ [ 1 ] ] }
+	[Stack]: [{path:[0,1],origin:Return,point:2}]
+}) // { [Stack]: [ { path: [ 1 ], origin: Symbol(SSSM Return), point: 1 } ] }
 ```
 
 Determine what type of node is proceeding
@@ -1299,7 +1299,7 @@ If the node is unrecognised, throw a TypeEror
 
 Call the `proceed` method of the node to get the next path.
 
-## S._perform (instance, state = {}, action = null)
+## S._perform (instance, state = {}, action = undefined)
 
 Perform actions on the state.
 
@@ -1309,7 +1309,7 @@ const instance = new S([
 	'secondAction',
 	'thirdAction'
 ])
-return S._perform(instance, { [Stack]: [[0]], prop: 'value' }, { prop: 'newValue' }) // { prop: 'newValue', [Stack]: [ [ 1 ] ] }
+return S._perform(instance, { [Stack]: [{path:[0],origin:Return,point:1}], prop: 'value' }, { prop: 'newValue' }) // { prop: 'newValue', [Stack]: [ { path: [ 1 ], origin: Symbol(SSSM Return), point: 1 } ] }
 ```
 
 Applies any changes in the given `action` to the given `state`.
@@ -1320,7 +1320,7 @@ const instance = new S([
 	'secondAction',
 	'thirdAction'
 ])
-return S._perform(instance, { [Stack]: [[0]], prop: 'value' }, { [Goto]: [2] }) // { prop: 'value', [Stack]: [ [ 2 ] ] }
+return S._perform(instance, { [Stack]: [{path:[0],origin:Return,point:1}], prop: 'value' }, { [Goto]: [2] }) // { prop: 'value', [Stack]: [ { path: [ 2 ], origin: Symbol(SSSM Return), point: 1 } ] }
 ```
 
 Proceeds to the next node if the action is not itself a goto or return.
@@ -1330,7 +1330,7 @@ const instance = new S([
 	'firstAction',
 	'secondAction'
 ])
-return S._perform(instance, { [Stack]: [[0]] }, null) // { [Stack]: [ [ 1 ] ] }
+return S._perform(instance, { [Stack]: [{path:[0],origin:Return,point:1}] }, null) // { [Stack]: [ { path: [ 1 ], origin: Symbol(SSSM Return), point: 1 } ] }
 ```
 
 Get the node type of the given `action`
@@ -1339,7 +1339,7 @@ Gets the node definition for the action
 
 Perform the action on the state
 
-## S._execute (instance, state = {}, node = get_path_object(instance.process, state[Stack][0])))
+## S._execute (instance, state = {}, node = get_path_object(instance.process, state[Stack][0].path.slice(0,state[Stack][0].point))))
 
 Executes the node in the process at the state's current path and returns it's action.
 
@@ -1349,7 +1349,7 @@ const instance = new S([
 	() => ({ result: 'second' }),
 	() => ({ result: 'third' }),
 ])
-return S._execute(instance, { [Stack]: [[1]] }) // { result: 'second' }
+return S._execute(instance, { [Stack]: [{path:[1],origin:Return,point:1}] }) // { result: 'second' }
 ```
 
 If the node is not executable it will be returned as the action.
@@ -1360,7 +1360,7 @@ const instance = new S([
 	({ result: 'second' }),
 	({ result: 'third' }),
 ])
-return S._execute(instance, { [Stack]: [[1]] }) // { result: 'second' }
+return S._execute(instance, { [Stack]: [{path:[1],origin:Return,point:1}] }) // { result: 'second' }
 ```
 
 Get the type of that node
@@ -1565,7 +1565,11 @@ Use the Sequence symbol as the type.
 
 Get the current index in this sequence from the path
 
-Increment the index, unless the end has been reached
+#### If there are more nodes to execute
+
+Execute the next node
+
+Proceed as normal if the list is complete
 
 A sequence is an array. A sequence cannot be an action, that will be interpreted as an absolute-goto.
 
@@ -1732,6 +1736,8 @@ Copy over the original properties to preserve any custom symbols.
 Iterate on the `'then'` clause if it exists
 
 Iterate on the `'else'` clause if it exists
+
+Iterate over any symbols specified
 
 ## Switch Node
 

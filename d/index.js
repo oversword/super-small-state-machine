@@ -19,16 +19,16 @@ const rebase_string = (str, add = '') => {
 	// .join('\n')
 }
 
-const matches = (object, match, symbols = []) => {
+const matches = (object, match, symbols = {}) => {
 	if (object === null || match === null || typeof object !== 'object' || typeof match !== 'object')
 		return object === match
 	if (Array.isArray(match) && match.length !== object.length) return false;
-	return Object.keys(match).concat(symbols)
+	return Object.keys(match).concat(Object.values(symbols))
 		.every(key => (!(key in match)) || matches(object[key], match[key], symbols))
 }
 
 
-export const keyToString = (obj, symbols = []) => {
+export const keyToString = (obj, symbols = {}) => {
 	switch (typeof obj) {
 		case 'symbol': {
 			const foundSymbol = Object.entries(symbols).find(([_, value]) => value === obj)
@@ -44,7 +44,7 @@ export const keyToString = (obj, symbols = []) => {
 			return String(obj)
 	}
 }
-export const toStringFlat = (obj, symbols = []) => {
+export const toStringFlat = (obj, symbols = {}) => {
 	switch (typeof obj) {
 		case 'boolean':
 			return obj ? 'true' : 'false'
@@ -79,7 +79,7 @@ export const toStringFlat = (obj, symbols = []) => {
 	}
 }
 
-export const toString = (obj, symbols = [], level = 0) => {
+export const toString = (obj, symbols = {}, level = 0) => {
 	const flat = toStringFlat(obj, symbols)
 	if (flat.length < (50 - level)) return flat
 
@@ -366,20 +366,20 @@ export const test = async description => {
 
 
 	const runTest = async ({ code, path }) => {
-		const captured = capture()
+		// const captured = capture()
 		try {
 			const result = await code()
-			captured.restore()
+			// captured.restore()
 			return {
 				success: true,
 				result,
 				path,
 			}
 		} catch (error) {
-			captured.restore()
+			// captured.restore()
 			return {
 				success: false,
-				log: captured,
+				// log: captured,
 				error,
 				path,
 			}

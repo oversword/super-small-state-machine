@@ -120,53 +120,6 @@
 // ),
 
 
-// D('Symbols',
-// 	D('Return',
-// 		'Use for intentionally exiting the entire process, can be used in an object to return a specific value',
-// 		E.success(() => {
-// 			return { [Return]: "value" }
-// 		}),
-// 		JS("static Return      = Symbol('Super Small State Machine Return')"),
-// 		TS("public static readonly Return = Symbol('Super Small State Machine Return')")
-// 	),
-// 	D('Changes',
-// 		'Returned in the state. Should not be passed in.',
-// 		E.success(() => {
-// 			return { [Changes]: {} }
-// 		}),
-// 		JS("static Changes     = Symbol('Super Small State Machine Changes')"),
-// 		TS("public static readonly Changes = Symbol('Super Small State Machine Changes')"),
-// 	),
-// 	D('Goto',
-// 		'Used to change the executing path.',
-// 		E.success(() => {
-// 			return { [Goto]: [] }
-// 		}),
-// 		JS("static Goto        = Symbol('Super Small State Machine Goto')"),
-// 		TS("public static readonly Goto = Symbol('Super Small State Machine Goto')"),
-// 	),
-// 	D('Stack',
-// 		'Returned in the state to indicate the next action path, or passed in with the state to direct the machine.',
-// 		E.success(() => {
-// 			return { [Goto]: [] }
-// 		}),
-// 		JS("static Stack       = Symbol('Super Small State Machine Stack')"),
-// 		TS("public static readonly Stack = Symbol('Super Small State Machine Stack')"),
-// 	),
-// 	D('Trace',
-// 		'Returned in the state when the trace flag is on, will contain every path that was executed during the run.',
-// 		E.success(() => {
-// 			return { [Trace]: [] }
-// 		}),
-// 		JS("static Trace       = Symbol('Super Small State Machine Trace')"),
-// 		TS("public static readonly Trace = Symbol('Super Small State Machine Trace')"),
-// 	),
-// 	D('StrictTypes',
-// 		'Possible value of `config.strict`, used to indicate strict types as well as values.',
-// 		JS("static StrictTypes = Symbol('Super Small State Machine Strict Types')"),
-// 		TS("public static readonly StrictTypes = Symbol('Super Small State Machine Strict Types')"),
-// 	),
-// ),
 // D('Key Words',
 // 	JS("static keyWords    = KeyWords"),
 // 	JS("static kw          = KeyWords"),
