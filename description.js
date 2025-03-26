@@ -1284,7 +1284,7 @@ export type SystemState<State extends InitialState = InitialState, Output extend
 	[Changes]: Partial<State>
 	[Return]?: Output | undefined
 }
-export type InputSystemState<State extends InitialState = InitialState, Output extends unknown = undefined> = State & Partial<Pick<SystemState<State, Output>, typeof Stack | typeof Return | typeof Trace>>
+export type InputSystemState<State extends InitialState = InitialState, Output extends unknown = undefined> = State & Partial<Pick<SystemState<State, Output>, typeof Stack | typeof Return | typeof Trace | typeof Changes>>
 
 export interface Config<
 	State extends InitialState = InitialState,
@@ -1409,7 +1409,8 @@ D('Default Nodes',
 				),
 			),
 			D('Proceed as normal if the list is complete',
-				CS("return Node.proceed.call(this, node, state)"),
+				JS("return Node.proceed.call(this, node, state)"),
+				TS("return Node.proceed.call(this as any, node, state) as SystemState<State, Output>"),
 			),
 			CS("}"),
 		),
@@ -2369,7 +2370,7 @@ D('Core',
 		),
 		D('Call the `proceed` method of the node to get the next path.',
 			JS(`return instance.config.nodes.get(nodeType).proceed.call(instance, node instanceof Node ? node.value : node, state)`),
-			TS(`return instance.config.nodes.get(nodeType)!.proceed.call(instance, node instanceof Node ? node.value : node, state)`),
+			TS(`return instance.config.nodes.get(nodeType)!.proceed.call(instance as any, node instanceof Node ? node.value : node, state) as SystemState<State, Output>`),
 		),
 		CS("}")
 	),

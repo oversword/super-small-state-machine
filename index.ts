@@ -204,7 +204,7 @@ export type SystemState<State extends InitialState = InitialState, Output extend
 	[Changes]: Partial<State>
 	[Return]?: Output | undefined
 }
-export type InputSystemState<State extends InitialState = InitialState, Output extends unknown = undefined> = State & Partial<Pick<SystemState<State, Output>, typeof Stack | typeof Return | typeof Trace>>
+export type InputSystemState<State extends InitialState = InitialState, Output extends unknown = undefined> = State & Partial<Pick<SystemState<State, Output>, typeof Stack | typeof Return | typeof Trace | typeof Changes>>
 
 export interface Config<
 	State extends InitialState = InitialState,
@@ -270,7 +270,7 @@ SelfType = SequenceType<State, Output, Action>,>(this: Instance<State, Output, I
 			const index = state[Stack][0].path[state[Stack][0].point]
 			if (node && (typeof index === 'number') && (index+1 < (node as SequenceType<State, Output, Action>).length))
 				return { ...state, [Stack]: [{ ...state[Stack][0], path: [...state[Stack][0].path.slice(0,state[Stack][0].point), index+1], point: state[Stack][0].point + 1 }, ...state[Stack].slice(1)] }
-			return Node.proceed.call(this, node, state)
+			return Node.proceed.call(this as any, node, state) as SystemState<State, Output>
 		}
 		static typeof<SelfType = SequenceType>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType { return ((!isAction) && objectType === 'object' && Array.isArray(object)) }
 		static execute<
@@ -687,7 +687,7 @@ export abstract class SuperSmallStateMachineCore<
 >(instance: Instance<State, Output, Input, Action, Process>, state: SystemState<State, Output>, node: Process | Action = undefined as unknown as Action): SystemState<State, Output> {
 		const nodeType = instance.config.nodes.typeof(node, typeof node, state[Stack][0].point === state[Stack][0].path.length)
 		if (!nodeType) throw new NodeTypeError(`Unknown action type: ${typeof node}${nodeType ? `, nodeType: ${String(nodeType)}` : ''}`, { instance, state, data: { node } })
-		return instance.config.nodes.get(nodeType)!.proceed.call(instance, node instanceof Node ? node.value : node, state)
+		return instance.config.nodes.get(nodeType)!.proceed.call(instance as any, node instanceof Node ? node.value : node, state) as SystemState<State, Output>
 	}
 	public static _perform<
 	State extends InitialState = InitialState,

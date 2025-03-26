@@ -1493,15 +1493,15 @@ When returning, run the ends state adapters, then the output adapter to complete
 
 Throws the given error
 
+Use the ErrorN symbol as the type.
 
+Look for Error objects, or Error constructors.
 
+### Perform an error by throwing it, no fancy magic.
 
+Throw an error constructed by the function.
 
-### 
-
-
-
-
+Throw an existing error instance.
 
 ## Changes Node
 
@@ -1701,7 +1701,7 @@ Use the Condition symbol as the type.
 
 A condition is an object with the `'if'` property. A condition cannot be an action.
 
-
+Defines `'if', 'then', 'else'` keywords
 
 ### Execute a condition by evaluating the `'if'` property and directing to the `'then'` or `'else'` clauses
 
@@ -1768,7 +1768,7 @@ Use the Switch symbol as the type.
 
 A switch node is an object with the `'switch'` property.
 
-
+Defines `'switch', 'case', 'default'` keywords.
 
 ### Execute a switch by evaluating the `'switch'` property and directing to the approprtate `'case'` clause.
 
@@ -1794,7 +1794,7 @@ Use the While symbol as the type.
 
 A while node is an object with the `'while'` property.
 
-
+Defines `'while`, 'do'` keywords
 
 ### Execute a while by evaluating the `'while'` property and directing to the `'do'` clause if `true`.
 
@@ -1833,7 +1833,7 @@ Use the Machine symbol as the type.
 
 A machine is an object with the `'initial'` property. A machine cannot be used as an action.
 
-
+Defines `'initial'` keyword.
 
 Execute a machine by directing to the `'initial'` stages.
 
@@ -1972,6 +1972,20 @@ Update the path to parent>stage
 
 Interrupts are like gotos, except they will return to the previous execution path once complete.
 
+Interrupts a way of performing other paths, then returning to the current path, using the symbol of a neghboring interrupt you can direct flow through a state machine.
+
+```javascript
+const interrupt = Symbol('interrupt')
+const instance = new S({
+	initial: [
+		{ result: 'first' },
+		interrupt
+	],
+	[interrupt]: { result: 'second' }
+}).output(({ result }) => result)
+return instance({ result: 'start' }) // 'second'
+```
+
 This definition is exported by the library as `{ InterruptGotoNode }`
 
 ```javascript
@@ -1992,11 +2006,11 @@ If no machine ancestor is found, throw a `PathReferenceError`
 
 Update the path to parent>stage
 
-### 
+### An interrupt goto proceed the path previous to it, but preserves its place at the front of the queue.
 
+Proceed the stack before this point, and strip out the affected system properties.
 
-
-
+Add the current inercept back in to the resulting stack.
 
 ## Absolute Goto Node
 
@@ -2111,41 +2125,41 @@ A return node is the `Return` symbol itself, or an object with an `Return` prope
 
 Perform a return by setting the `Return` property on the state to the return value
 
-
+Inherit from root node definition, not GotoNode.
 
 ## Continue Node
 
+Exit this pass of a While loop and evaluate the condition again.
 
+Use the Continue symbol as the type.
 
+Look for the Continue symbol specifically.
 
+### A Continue is performed by finding the closest While loop and re-entering.
 
+Find the closest While loop.
 
+If there is none, throw a `PathReferenceError`.
 
-### 
-
-
-
-
-
-
+Modify the stack to point to the closest While loop.
 
 ## Break Node
 
+Break out of a while loop, and proceed as if the condition has failed.
 
+Use the Break symbol as the type.
 
+Look for the Break symbol specifically.
 
+### A Break is performed by finding the closest While loop and proceeding from there.
 
+Find the closest While loop.
 
+If there is none, throw a `PathReferenceError`.
 
-### 
+Proceed on the While loop as if it is exiting.
 
-
-
-
-
-
-
-
+Perform by doing nothing, do not inherit from `GotoNode`.
 
 # Errors
 
@@ -2196,7 +2210,7 @@ return referenceError      instanceof SuperSmallStateMachineError
 	&& pathReferenceError  instanceof SuperSmallStateMachineError // true
 ```
 
-Passing a state, instance, data, and/or stack with make those properties available in the error
+Passing a state, instance, and/or data will make those properties available in the error
 
 ```javascript
 return new SuperSmallStateMachineError('', {
