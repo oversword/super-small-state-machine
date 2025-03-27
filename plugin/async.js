@@ -64,7 +64,7 @@ export function runAsync(...input) {
 
         while (r < iterations) {
             if (await until.call(this, currentState, r)) break;
-            if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[Stack][0].map(key => key.toString()).join(', ')} ]`, { instance: this, state: currentState, data: { iterations } })
+            if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[Stack][0].path.map(key => key.toString()).join(', ')} ]`, { instance: this, state: currentState, data: { iterations } })
             if (trace) currentState = { ...currentState, [Trace]: [ ...currentState[Trace], currentState[Stack] ] }
             if (interruptionStack.length && currentState[Uninterruptable] <= 0) {
                 while (interruptionStack.length)

@@ -459,14 +459,14 @@ SelfType = MachineType<State, Output, Action>,>(this: Instance<State, Output, In
 	export type GotoType = { [Goto]: AbsoluteGotoType | SequenceGotoType | MachineGotoType }
 	export class GotoNode extends Node {
 		static type = Goto
-		static typeof<SelfType = GotoType>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType  { return Boolean(object && objectType === 'object' && (Stack in (object as object))) }
+		static typeof<SelfType = GotoType>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType  { return Boolean(object && objectType === 'object' && (Goto in (object as object))) }
 		static perform<
 	State extends InitialState = InitialState,
 	Output extends unknown = undefined,
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-SelfType = GotoType,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> { return S._perform(this, state, (action as GotoType)[Stack] as Action) }
+SelfType = GotoType,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> { return S._perform(this, state, (action as GotoType)[Goto] as Action) }
 		static proceed(node, state) { return state }
 	}
 	export const SequenceGoto = Symbol('SSSM Sequence Goto')

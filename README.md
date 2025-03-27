@@ -8,11 +8,11 @@ Nodes are executables or actions
 
 There are three phases: execute, perform, proceed
 
-An executable results in an action
+- An executable results in an action
 
-Actions are performed on the state
+- Actions are performed on the state
 
-Then we proceed to the next node
+- Then we proceed to the next node
 
 The state is made of properties
 
@@ -25,6 +25,67 @@ Machines have multiple interrupts, refered to by symbols
 Sequences have multiple indexes, refered to by numbers
 
 Conditions (including switch) have clauses
+
+# Tutorial
+
+To create a new state machine, create a new instance of the `S` class
+
+```javascript
+const instance = new S() // Succeeds
+```
+
+The instance is executable, and can be run just like a function
+
+```javascript
+const instance = new S([
+	{ myProperty: 'myValue' },
+	({ myProperty }) => ({ [Return]: myProperty })
+])
+return instance() // 'myValue'
+```
+
+The initial state can be passed into the function call
+
+```javascript
+const instance = new S([
+	({ myProperty }) => ({ [Return]: myProperty })
+])
+return instance({ myProperty: 'myValue' }) // 'myValue'
+```
+
+An intuitive syntax can be used to construct the process of the state machine
+
+```javascript
+const instance = new S({
+	initial: [
+		{ order: [] }, // Set the "order" property to an empty list
+		'second',      // Goto the "second" stage
+	],
+	second: { // Conditionally add the next number
+		if: ({ order }) => order.length < 10,
+		then: ({ order }) => ({ order: [ ...order, order.length ] }),
+		else: 'end' // Goto the "end" stage if we have already counted to 10
+	},
+	end: ({ order }) => ({ [Return]: order }) // Return the list we have constructed
+}) // Succeeds
+```
+
+To configure the state machine, you can cahin configuration methods
+
+```javascript
+const instance = new S()
+	.deep
+	.strict
+	.forever // Succeeds
+```
+
+You can avoid making a new instance for each method by using `.with`
+
+```javascript
+const specificConfig = S.with(S.deep, S.strict, S.forever)
+const instance = new S()
+	.with(specificConfig) // Succeeds
+```
 
 # Instance
 
@@ -76,7 +137,7 @@ const instance = new S({}, {})
 return instance() // Succeeds
 ```
 
-Neither of these arguments are required, and it is not recommended to configure them config via the constructor. Instead you should update the config using the various chainable methods and properties.
+Neither of these arguments are required, and it is not recommended to configure them via the constructor. Instead you should update the config using the various chainable methods and properties.
 
 ```javascript
 const instance = new S(process)
@@ -85,7 +146,9 @@ const instance = new S(process)
 	.output() // Succeeds
 ```
 
-Create an ExtensibleFunction that can execute the `run` or `override` method in scope of the new SuperSmallStateMachine instance.
+### The executable instance will be an `instanceof ExecutableFunction` 
+
+It will execute the `run` or `override` method in scope of the new SuperSmallStateMachine instance.
 
 ### Create the config by merging the passed config with the defaults.
 
@@ -138,21 +201,16 @@ Safely apply the given `changes` to the given `state`.
 
 Merges the `changes` with the given `state` and returns it.
 
-This will ignore any symbols in `changes`, and forward the important symbols of the given `state`.
-
 ```javascript
 const instance = new S()
 const result = instance.changes({
-	[Stack]: [['preserved']],
 	[Changes]: {},
 	preserved: 'value',
 	common: 'initial',
 }, {
-	[Stack]: [['ignored']],
-	[Changes]: { ignored: true },
 	common: 'changed',
 })
-return result // { common: 'changed', preserved: 'value', [Stack]: [ 'preserved' ], [Changes]: { ignored: undefined, common: 'changed' } }
+return result // { common: 'changed', preserved: 'value', [Changes]: { common: 'changed' } }
 ```
 
 ## instance.proceed (state = {}, node = undefined)
@@ -180,8 +238,6 @@ Perform actions on the state.
 
 Applies any changes in the given `action` to the given `state`.
 
-Proceeds to the next node if the action is not itself a goto or return.
-
 ```javascript
 const instance = new S()
 return instance.perform({ myProperty: 'start value' }, { myProperty: 'new value' }) // { myProperty: 'new value' }
@@ -191,7 +247,7 @@ return instance.perform({ myProperty: 'start value' }, { myProperty: 'new value'
 
 Execute a node in the process, return an action.
 
-Executes the node in the process at the state's current path and returns it's action.
+Executes the node in the process at the state's current path and returns its action.
 
 If the node is not executable it will be returned as the action.
 
@@ -201,10 +257,14 @@ const instance = new S([
 	{ myProperty: 'that value' },
 	{ myProperty: 'the other value' },
 ])
-return instance.execute({ [Stack]: [{path:[1],origin:Return,point:1}], myProperty: 'start value' }, get_path_object(instance.process, [1])) // { myProperty: 'that value', [Stack]: [ { path: [ 2 ], origin: Symbol(SSSM Return), point: 1 } ] }
+return instance.execute({ [Stack]: [{path:[1],origin:Return,point:1}], myProperty: 'start value' }, get_path_object(instance.process, [1])) // { myProperty: 'that value' }
 ```
 
-instance.traverse(iterator = a => a)
+## instance.traverse(iterator = a => a)
+
+Traverses the process of the instance, mapping each node to a new value, effectively cloning the process.
+
+You can customise how each leaf node is mapped by supplying the `iterator` method
 
 ```javascript
 const instance = new S({
@@ -230,7 +290,7 @@ return instance.traverse((node, path, process, nodeType) => {
 
 ## instance.run (...input)
 
-Execute the entire process either synchronously or asynchronously depending on the config.
+Execute the entire process.
 
 Will execute the process
 
@@ -358,7 +418,7 @@ return instance() // [ [ { path: [  ], origin: Symbol(SSSM Return), point: 0 } ]
 
 ## instance.shallow <default>
 
-Shallow merges the state every time a state change in made.
+Shallow merges the state every time a state change is made.
 
 Creates a new instance.
 
@@ -371,7 +431,7 @@ return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anoth
 
 ## instance.deep
 
-Deep merges the all properties in the state every time a state change in made.
+Deep merges the all properties in the state every time a state change is made.
 
 Creates a new instance.
 
@@ -605,9 +665,9 @@ return SuperSmallStateMachine; // success
 The node class is exported as `{ NodeDefinition }`
 
 ```javascript
-import { NodeDefinitions } from './index.js'
+import { NodeDefinition } from './index.js'
 	
-return NodeDefinitions; // success
+return NodeDefinition; // success
 ```
 
 The node collection class is exported as `{ NodeDefinitions }`
@@ -661,21 +721,16 @@ Safely apply the given `changes` to the given `state`.
 
 Merges the `changes` with the given `state` and returns it.
 
-This will ignore any symbols in `changes`, and forward the important symbols of the given `state`.
-
 ```javascript
 const instance = new S()
 const result = S.changes({
-	[Stack]: ['preserved'],
 	[Changes]: {},
 	preserved: 'value',
 	common: 'initial',
 }, {
-	[Stack]: ['ignored'],
-	[Changes]: { ignored: true },
 	common: 'changed',
 })(instance)
-return result // { common: 'changed', preserved: 'value', [Stack]: [ 'preserved' ], [Changes]: { ignored: undefined, common: 'changed' } }
+return result // { common: 'changed', preserved: 'value', [Changes]: { common: 'changed' } }
 ```
 
 ## S.proceed (state = {}, action = undefined)
@@ -688,7 +743,7 @@ Performs fallback logic when a node exits.
 const instance = new S([
 	null,
 	null,
-[
+	[
 		null,
 		null,
 	],
@@ -704,8 +759,6 @@ Perform actions on the state.
 
 Applies any changes in the given `action` to the given `state`.
 
-Proceeds to the next node if the action is not itself a goto or return.
-
 ```javascript
 const instance = new S()
 const performer = S.perform({ myProperty: 'start value' }, { myProperty: 'new value' })
@@ -716,7 +769,7 @@ return performer(instance) // { myProperty: 'new value' }
 
 Execute a node in the process, return an action.
 
-Executes the node in the process at the state's current path and returns it's action.
+Executes the node in the process at the state's current path and returns its action.
 
 If the node is not executable it will be returned as the action.
 
@@ -727,10 +780,14 @@ const instance = new S([
 	{ myProperty: 'the other value' },
 ])
 const executor = S.execute({ [Stack]: [{path:[1],origin:Return,point:1}], myProperty: 'start value' })
-return executor(instance) // { myProperty: 'that value', [Stack]: [ { path: [ 2 ], origin: Symbol(SSSM Return), point: 1 } ] }
+return executor(instance) // { myProperty: 'that value' }
 ```
 
-S.traverse(iterator = a => a)
+## S.traverse(iterator = a => a)
+
+Traverses the process of the given instance, mapping each node to a new value, effectively cloning the process.
+
+You can customise how each leaf node is mapped by supplying the `iterator` method
 
 ```javascript
 const instance = new S({
@@ -757,7 +814,7 @@ return traverser(instance) // { initial: 'with this', other: [ { if: 'with anoth
 
 ## S.run (...input)
 
-Execute the entire process either synchronously or asynchronously depending on the config.
+Execute the entire process.
 
 Will execute the process
 
@@ -849,7 +906,7 @@ return instance({ myReturnValue: 'start' }) // 'start extra'
 
 ## S.untrace <default>
 
-Shallow merges the state every time a state change in made.
+Shallow merges the state every time a state change is made.
 
 Returns a function that will modify a given instance.
 
@@ -869,7 +926,7 @@ return instance() // [  ]
 
 ## S.trace
 
-Deep merges the all properties in the state every time a state change in made.
+Deep merges the all properties in the state every time a state change is made.
 
 Returns a function that will modify a given instance.
 
@@ -889,7 +946,7 @@ return instance() // [ [ { path: [  ], origin: Symbol(SSSM Return), point: 0 } ]
 
 ## S.shallow <default>
 
-Shallow merges the state every time a state change in made.
+Shallow merges the state every time a state change is made.
 
 Returns a function that will modify a given instance.
 
@@ -902,7 +959,7 @@ return instance({ myProperty: { existingKey: 'existingValue', anotherKey: 'anoth
 
 ## S.deep
 
-Deep merges the all properties in the state every time a state change in made.
+Deep merges the all properties in the state every time a state change is made.
 
 Returns a function that will modify a given instance.
 
@@ -1190,7 +1247,7 @@ Shallow merge changes by default
 
 Do not override the execution method by default
 
-Use the provided nodes by default.
+Uses the provided nodes by default.
 
 Initialise with an empty adapters list.
 
@@ -1231,21 +1288,16 @@ Safely apply the given `changes` to the given `state`.
 
 Merges the `changes` with the given `state` and returns it.
 
-This will ignore any symbols in `changes`, and forward the important symbols of the given `state`.
-
 ```javascript
 const instance = new S()
 const result = S._changes(instance, {
-	[Stack]: ['preserved'],
 	[Changes]: {},
 	preserved: 'value',
 	common: 'initial',
 }, {
-	[Stack]: ['ignored'],
-	[Changes]: { ignored: true },
 	common: 'changed',
 })
-return result // { common: 'changed', preserved: 'value', [Stack]: [ 'preserved' ], [Changes]: { ignored: undefined, common: 'changed' } }
+return result // { common: 'changed', preserved: 'value', [Changes]: { common: 'changed' } }
 ```
 
 ### If the strict state flag is truthy, perform state checking logic
@@ -1309,7 +1361,7 @@ const instance = new S([
 	'secondAction',
 	'thirdAction'
 ])
-return S._perform(instance, { [Stack]: [{path:[0],origin:Return,point:1}], prop: 'value' }, { prop: 'newValue' }) // { prop: 'newValue', [Stack]: [ { path: [ 1 ], origin: Symbol(SSSM Return), point: 1 } ] }
+return S._perform(instance, { [Stack]: [{path:[0],origin:Return,point:1}], prop: 'value' }, { prop: 'newValue' }) // { prop: 'newValue', [Stack]: [ { path: [ 0 ], origin: Symbol(SSSM Return), point: 1 } ] }
 ```
 
 Applies any changes in the given `action` to the given `state`.
@@ -1323,16 +1375,6 @@ const instance = new S([
 return S._perform(instance, { [Stack]: [{path:[0],origin:Return,point:1}], prop: 'value' }, { [Goto]: [2] }) // { prop: 'value', [Stack]: [ { path: [ 2 ], origin: Symbol(SSSM Return), point: 1 } ] }
 ```
 
-Proceeds to the next node if the action is not itself a goto or return.
-
-```javascript
-const instance = new S([
-	'firstAction',
-	'secondAction'
-])
-return S._perform(instance, { [Stack]: [{path:[0],origin:Return,point:1}] }, null) // { [Stack]: [ { path: [ 1 ], origin: Symbol(SSSM Return), point: 1 } ] }
-```
-
 Get the node type of the given `action`
 
 Gets the node definition for the action
@@ -1341,7 +1383,7 @@ Perform the action on the state
 
 ## S._execute (instance, state = {}, node = get_path_object(instance.process, state[Stack][0].path.slice(0,state[Stack][0].point))))
 
-Executes the node in the process at the state's current path and returns it's action.
+Executes the node in the process at the state's current path and returns its action.
 
 ```javascript
 const instance = new S([
@@ -1461,11 +1503,11 @@ Turn the arguments into an initial condition
 
 Default to an empty change object
 
-Use the defaults as an initial state
+Uses the defaults as an initial state
 
-Use the path from the initial state - allows for starting at arbitrary positions
+Uses the path from the initial state - allows for starting at arbitrary positions
 
-Use the path from the initial state - allows for starting at arbitrary positions
+Uses the path from the initial state - allows for starting at arbitrary positions
 
 ### Repeat for a limited number of iterations.
 
@@ -1493,9 +1535,29 @@ When returning, run the ends state adapters, then the output adapter to complete
 
 Throws the given error
 
-Use the ErrorN symbol as the type.
+Uses the ErrorN symbol as the type.
+
+```javascript
+return ErrorNode.type // Symbol(SSSM Error)
+```
 
 Look for Error objects, or Error constructors.
+
+```javascript
+return S.config.nodes.typeof(new Error('My Error')) // Symbol(SSSM Error)
+```
+
+```javascript
+return S.config.nodes.typeof(Error) // Symbol(SSSM Error)
+```
+
+```javascript
+return S.config.nodes.typeof(new TypeError('My Error')) // Symbol(SSSM Error)
+```
+
+```javascript
+return S.config.nodes.typeof(TypeError) // Symbol(SSSM Error)
+```
 
 ### Perform an error by throwing it, no fancy magic.
 
@@ -1531,9 +1593,17 @@ import { Changes } from './index.js'
 return Changes; // success
 ```
 
-Use the Changes symbol as the type.
+Uses the Changes symbol as the type.
+
+```javascript
+return ChangesNode.type // Symbol(SSSM Changes)
+```
 
 Any object not caught by other conditions should qualify as a state change.
+
+```javascript
+return S.config.nodes.typeof({ someProperty: 'someValue' }) // Symbol(SSSM Changes)
+```
 
 Apply the changes to the state and step forward to the next node
 
@@ -1559,7 +1629,11 @@ import { SequenceNode } from './index.js'
 return SequenceNode; // success
 ```
 
-Use the Sequence symbol as the type.
+Uses the Sequence symbol as the type.
+
+```javascript
+return SequenceNode.type // Symbol(SSSM Sequence)
+```
 
 ### Proceed by running the next node in the sequence
 
@@ -1572,6 +1646,10 @@ Execute the next node
 Proceed as normal if the list is complete
 
 A sequence is an array. A sequence cannot be an action, that will be interpreted as an absolute-goto.
+
+```javascript
+return S.config.nodes.typeof([ 1, 2, 3 ]) // Symbol(SSSM Sequence)
+```
 
 Execute a sequence by directing to the first node (so long as it has nodes)
 
@@ -1628,9 +1706,17 @@ import { FunctionNode } from './index.js'
 return FunctionNode; // success
 ```
 
-Use the FunctionN symbol as the type.
+Uses the FunctionN symbol as the type.
+
+```javascript
+return FunctionNode.type // Symbol(SSSM Function)
+```
 
 A function is a JS function. A function cannot be an action.
+
+```javascript
+return S.config.nodes.typeof(() => {}) // Symbol(SSSM Function)
+```
 
 Exectute a functon by running it, passing in the state.
 
@@ -1644,9 +1730,17 @@ import { UndefinedNode } from './index.js'
 return UndefinedNode; // success
 ```
 
-Use the Undefined symbol as the type.
+Uses the Undefined symbol as the type.
+
+```javascript
+return UndefinedNode.type // Symbol(SSSM Undefined)
+```
 
 Undefined is the `undefined` keyword.
+
+```javascript
+return S.config.nodes.typeof(undefined) // Symbol(SSSM Undefined)
+```
 
 Un undefined node cannot be executed, throw an error to help catch incorrect configuration.
 
@@ -1675,9 +1769,17 @@ import { EmptyNode } from './index.js'
 return EmptyNode; // success
 ```
 
-Use the Empty symbol as the type.
+Uses the Empty symbol as the type.
+
+```javascript
+return EmptyNode.type // Symbol(SSSM Empty)
+```
 
 Empty is the `null` keyword.
+
+```javascript
+return S.config.nodes.typeof(null) // Symbol(SSSM Empty)
+```
 
 Empty is a no-op, and will do nothing except move to the next node
 
@@ -1697,11 +1799,23 @@ import { ConditionNode } from './index.js'
 return ConditionNode; // success
 ```
 
-Use the Condition symbol as the type.
+Uses the Condition symbol as the type.
+
+```javascript
+return ConditionNode.type // Symbol(SSSM Condition)
+```
 
 A condition is an object with the `'if'` property. A condition cannot be an action.
 
+```javascript
+return S.config.nodes.typeof({ if: false }) // Symbol(SSSM Condition)
+```
+
 Defines `'if', 'then', 'else'` keywords
+
+```javascript
+return ConditionNode.keywords // [ 'if', 'then', 'else' ]
+```
 
 ### Execute a condition by evaluating the `'if'` property and directing to the `'then'` or `'else'` clauses
 
@@ -1764,11 +1878,23 @@ import { SwitchNode } from './index.js'
 return SwitchNode; // success
 ```
 
-Use the Switch symbol as the type.
+Uses the Switch symbol as the type.
+
+```javascript
+return SwitchNode.type // Symbol(SSSM Switch)
+```
 
 A switch node is an object with the `'switch'` property.
 
+```javascript
+return S.config.nodes.typeof({ switch: false }) // Symbol(SSSM Switch)
+```
+
 Defines `'switch', 'case', 'default'` keywords.
+
+```javascript
+return SwitchNode.keywords // [ 'switch', 'case', 'default' ]
+```
 
 ### Execute a switch by evaluating the `'switch'` property and directing to the approprtate `'case'` clause.
 
@@ -1790,11 +1916,23 @@ import { WhileNode } from './index.js'
 return WhileNode; // success
 ```
 
-Use the While symbol as the type.
+Uses the While symbol as the type.
+
+```javascript
+return WhileNode.type // Symbol(SSSM While)
+```
 
 A while node is an object with the `'while'` property.
 
+```javascript
+return S.config.nodes.typeof({ while: false }) // Symbol(SSSM While)
+```
+
 Defines `'while`, 'do'` keywords
+
+```javascript
+return WhileNode.keywords // [ 'while', 'do' ]
+```
 
 ### Execute a while by evaluating the `'while'` property and directing to the `'do'` clause if `true`.
 
@@ -1829,11 +1967,23 @@ import { MachineNode } from './index.js'
 return MachineNode; // success
 ```
 
-Use the Machine symbol as the type.
+Uses the Machine symbol as the type.
+
+```javascript
+return MachineNode.type // Symbol(SSSM Machine)
+```
 
 A machine is an object with the `'initial'` property. A machine cannot be used as an action.
 
+```javascript
+return S.config.nodes.typeof({ initial: null }) // Symbol(SSSM Machine)
+```
+
 Defines `'initial'` keyword.
+
+```javascript
+return MachineNode.keywords // [ 'initial' ]
+```
 
 Execute a machine by directing to the `'initial'` stages.
 
@@ -1841,7 +1991,7 @@ Traverse a machine by iterating over all the stages
 
 ## Goto Node
 
-Transitioning is also possible by using and object with the `Stack` key set to a relative or absolute path. This is not recommended as it is almost never required, it should be considered system-only.
+Transitioning is also possible by using and object with the `Goto` key set to a relative or absolute path. This is not recommended as it is almost never required, it should be considered system-only.
 
 ```javascript
 const instance = new S({
@@ -1875,11 +2025,19 @@ import { GotoNode } from './index.js'
 return GotoNode; // success
 ```
 
-Use the Goto symbol as the type.
+Uses the Goto symbol as the type.
 
-A goto is an object with the `Stack` property.
+```javascript
+return GotoNode.type // Symbol(SSSM Goto)
+```
 
-A goto is performed by performing the value of the `Stack` property to allow for using absolute or relative gotos
+A goto is an object with the `Goto` property.
+
+```javascript
+return S.config.nodes.typeof({ [Goto]: 'stage' }) // Symbol(SSSM Goto)
+```
+
+A goto is performed by performing the value of the `Goto` property to allow for using absolute or relative gotos
 
 A goto does not require proceeding, simply return the current state unmodified
 
@@ -1919,9 +2077,17 @@ import { SequenceGotoNode } from './index.js'
 return SequenceGotoNode; // success
 ```
 
-Use the SequenceGoto symbol as the type.
+Uses the SequenceGoto symbol as the type.
+
+```javascript
+return SequenceGotoNode.type // Symbol(SSSM Sequence Goto)
+```
 
 A sequence goto is a number.
+
+```javascript
+return S.config.nodes.typeof(8) // Symbol(SSSM Sequence Goto)
+```
 
 ### A sequence goto is performed by finding the last sequence and setting the index to the given value.
 
@@ -1932,8 +2098,6 @@ If there is no such ancestor, throw a `PathReferenceError`
 Update the path to the parent>index
 
 ## Machine Goto Node
-
-Gotos are effectively `goto` commands, or `transitions` if you prefer.
 
 Gotos are the natural way of proceeding in state machines, using the name of a neighboring state as a string you can direct flow through a state machine.
 
@@ -1956,9 +2120,17 @@ import { MachineGotoNode } from './index.js'
 return MachineGotoNode; // success
 ```
 
-Use the MachineeGoto symbol as the type.
+Uses the MachineGoto symbol as the type.
+
+```javascript
+return MachineGotoNode.type // Symbol(SSSM Machine Goto)
+```
 
 A machine goto is a string.
+
+```javascript
+return S.config.nodes.typeof('stage') // Symbol(SSSM Machine Goto)
+```
 
 ### A machine goto is performed by directing to the given stage.
 
@@ -1966,7 +2138,7 @@ Get the closest ancestor that is a machine.
 
 If no machine ancestor is found, throw a `PathReferenceError`
 
-Update the path to parent>stage
+Update the path to parent > stage
 
 ## Interrupt Goto Node
 
@@ -1994,19 +2166,27 @@ import { InterruptGotoNode } from './index.js'
 return InterruptGotoNode; // success
 ```
 
-Use the InterruptGoto symbol as the type.
+Uses the InterruptGoto symbol as the type.
+
+```javascript
+return InterruptGotoNode.type // Symbol(SSSM Interrupt Goto)
+```
 
 An interrupt goto is a symbol.
 
-### An interrupt goto is performed by directing to the given stage.
+```javascript
+return S.config.nodes.typeof(testSymbol) // Symbol(SSSM Interrupt Goto)
+```
 
-Get the closest ancestor that is a machine.
+### An interrupt goto is performed by directing to the given interrupt.
 
-If no machine ancestor is found, throw a `PathReferenceError`
+Get the closest ancestor that contains this interrupt symbol.
 
-Update the path to parent>stage
+If no suitable ancestor is found, return the interrupt symbol itself.
 
-### An interrupt goto proceed the path previous to it, but preserves its place at the front of the queue.
+Update the path to parent > interrupt
+
+### An interrupt goto proceeds the path previous to it, but preserves the interrupts place at the top of the stack.
 
 Proceed the stack before this point, and strip out the affected system properties.
 
@@ -2016,7 +2196,7 @@ Add the current inercept back in to the resulting stack.
 
 Arrays can be used to perform absolute redirects. This is not recommended as it may make your transition logic unclear.
 
-Arrays cannot be used on their own, because they would be interpreted as sequences. For this reason they must be contained in an object with the `Stack` symbol as a ky, with the array as the value, or returned by an action.
+Arrays cannot be used on their own, because they would be interpreted as sequences. For this reason they must be contained in an object with the `Goto` symbol as a key, with the array as the value, or returned by an action.
 
 Using an absolute goto in a goto object works
 
@@ -2074,9 +2254,18 @@ import { AbsoluteGotoNode } from './index.js'
 return AbsoluteGotoNode; // success
 ```
 
-Use the AbsoluteGoto symbol as the type.
+Uses the AbsoluteGoto symbol as the type.
+
+```javascript
+return AbsoluteGotoNode.type // Symbol(SSSM Absolute Goto)
+```
 
 An absolute goto is a list of strings, symbols, and numbers. It can only be used as an action as it would otherwise be interpreted as a sequence.
+
+```javascript
+const path = [1,'stage',testSymbol]
+return S.config.nodes.typeof(path, typeof path, true) // Symbol(SSSM Absolute Goto)
+```
 
 An absolute goto is performed by setting `Stack` to the path
 
@@ -2119,9 +2308,21 @@ import { ReturnNode } from './index.js'
 return ReturnNode; // success
 ```
 
-Use the Return symbol as the type.
+Uses the Return symbol as the type.
+
+```javascript
+return ReturnNode.type // Symbol(SSSM Return)
+```
 
 A return node is the `Return` symbol itself, or an object with an `Return` property.
+
+```javascript
+return S.config.nodes.typeof(Return) // Symbol(SSSM Return)
+```
+
+```javascript
+return S.config.nodes.typeof({ [Return]: 'value' }) // Symbol(SSSM Return)
+```
 
 Perform a return by setting the `Return` property on the state to the return value
 
@@ -2131,9 +2332,17 @@ Inherit from root node definition, not GotoNode.
 
 Exit this pass of a While loop and evaluate the condition again.
 
-Use the Continue symbol as the type.
+Uses the Continue symbol as the type.
 
-Look for the Continue symbol specifically.
+```javascript
+return ContinueNode.type // Symbol(SSSM Continue)
+```
+
+Looks for the Continue symbol specifically.
+
+```javascript
+return S.config.nodes.typeof(Continue) // Symbol(SSSM Continue)
+```
 
 ### A Continue is performed by finding the closest While loop and re-entering.
 
@@ -2147,9 +2356,17 @@ Modify the stack to point to the closest While loop.
 
 Break out of a while loop, and proceed as if the condition has failed.
 
-Use the Break symbol as the type.
+Uses the Break symbol as the type.
 
-Look for the Break symbol specifically.
+```javascript
+return BreakNode.type // Symbol(SSSM Break)
+```
+
+Looks for the Break symbol specifically.
+
+```javascript
+return S.config.nodes.typeof(Break) // Symbol(SSSM Break)
+```
 
 ### A Break is performed by finding the closest While loop and proceeding from there.
 
