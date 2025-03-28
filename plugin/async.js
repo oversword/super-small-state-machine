@@ -1,4 +1,4 @@
-import S, { Node, noop , Stack, Trace, InterruptGotoNode, Return, Changes } from "../index.js"
+import S, { Node, noop , Stack, Trace, InterruptGotoNode, Return, Changes, MaxIterationsError } from "../index.js"
 
 export const Wait = Symbol("SSSM Wait")
 export class WaitNode extends Node {

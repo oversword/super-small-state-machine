@@ -1,6 +1,4 @@
-import S, { deep_merge_object, shallow_merge_object, SequenceNode, Changes } from "../index.js"
-import { Stack } from "../index.js"
-import { Return } from "../index.js"
+import S, { deep_merge_object, shallow_merge_object, SequenceNode, Changes, Stack, Return } from "../index.js"
 import asyncPlugin from "./async.js"
 
 export const parallelSymbol = Symbol('SSSM Parallel')

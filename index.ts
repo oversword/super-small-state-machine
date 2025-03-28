@@ -62,7 +62,7 @@ export class SuperSmallStateMachineError<
 public instance?: Partial<S<State, Output, Input, Action, Process>>
 public state?: SystemState<State, Output>
 public data?: any
-constructor(message: string, { instance, state, data }: Partial<SuperSmallStateMachineError<State, Output, Input, Action, Process>>) {
+constructor(message: string, { instance, state, data }: Partial<SuperSmallStateMachineError<State, Output, Input, Action, Process>> = {}) {
 	super(message)
 	Object.assign(this, { instance, state, data })
 }
@@ -279,7 +279,7 @@ SelfType = SequenceType<State, Output, Action>,>(this: Instance<State, Output, I
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-SelfType = SequenceType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> { return ((node as SequenceType<State, Output, Action>).length ? [ ...state[Stack], 0 ] : null) as Action }
+SelfType = SequenceType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> { return ((node as SequenceType<State, Output, Action>).length ? [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 0 ] : null) as Action }
 		static traverse<
 	State extends InitialState = InitialState,
 	Output extends unknown = undefined,
@@ -408,7 +408,7 @@ SelfType = SwitchType<State, Output, Action>,>(this: Instance<State, Output, Inp
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 SelfType = WhileType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> {
-			if (!(('do' in (node as WhileType<State, Output, Action>)) && normalise_function((node as WhileType<State, Output, Action>).while(state)))) return null as Action
+			if (!(('do' in (node as WhileType<State, Output, Action>)) && normalise_function((node as WhileType<State, Output, Action>).while)(state))) return null as Action
 			return [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'do' ] as Action
 		}
 		static proceed<

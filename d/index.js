@@ -366,20 +366,20 @@ export const test = async description => {
 
 
 	const runTest = async ({ code, path }) => {
-		// const captured = capture()
+		const captured = capture()
 		try {
 			const result = await code()
-			// captured.restore()
+			captured.restore()
 			return {
 				success: true,
 				result,
 				path,
 			}
 		} catch (error) {
-			// captured.restore()
+			captured.restore()
 			return {
 				success: false,
-				// log: captured,
+				log: captured,
 				error,
 				path,
 			}
