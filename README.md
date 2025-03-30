@@ -1231,29 +1231,214 @@ return S.config // { deep: false, strict: false, trace: false, iterations: 10000
 
 Initialise an empty state by default
 
+```javascript
+return Object.keys(new S(null).config.defaults) // [  ]
+```
+
 Input the initial state by default
+
+```javascript
+return new S(null).config.input({ myProperty: 'myValue' }, 2, 3) // { myProperty: 'myValue' }
+```
 
 Return the `Return` property by default
 
+```javascript
+return new S(null).config.output({ [Return]: 'myValue' }) // 'myValue'
+```
+
 Do not perform strict state checking by default
 
-Allow 1000 iterations by default
+```javascript
+return new S(null).config.strict // false
+```
 
-Run util the return symbol is present by default.
+Allow 10000 iterations by default
+
+```javascript
+return new S(null).config.iterations // 10000
+```
+
+Run until the return symbol is present by default.
+
+```javascript
+return new S(null).config.until({ [Return]: undefined }) // true
+```
 
 Do not keep the stack trace by default
 
+```javascript
+return new S(null).config.trace // false
+```
+
 Shallow merge changes by default
+
+```javascript
+return new S(null).config.deep // false
+```
 
 Do not override the execution method by default
 
+```javascript
+return new S(null).config.override // null
+```
+
 Uses the provided nodes by default.
 
-Initialise with an empty adapters list.
+```javascript
+	return new S(null).config.nodes // { [Changes]: class ChangesNode extends Node {
+	static type = Changes
+	static typeof(object, objectType) { return Boolean(object && objectType === 'object') }
+	static perform(action, state) { return S._changes(this, state, action) }
+}, [Sequence]: class SequenceNode extends Node {
+	static type = Sequence
+	static proceed(node, state) {
+		const index = state[Stack][0].path[state[Stack][0].point]
+		if (node && (typeof index === 'number') && (index+1 < node.length))
+			return { ...state, [Stack]: [{ ...state[Stack][0], path: [...state[Stack][0].path.slice(0,state[Stack][0].point), index+1], point: state[Stack][0].point + 1 }, ...state[Stack].slice(1)] }
+		return Node.proceed.call(this, node, state)
+	}
+	static typeof(object, objectType, isAction) { return ((!isAction) && objectType === 'object' && Array.isArray(object)) }
+	static execute(node, state) { return node.length ? [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 0 ] : null }
+	static traverse(node, path, iterate) { return node.map((_,i) => iterate([...path,i])) }
+}, [FunctionN]: class FunctionNode extends Node {
+	static type = FunctionN
+	static typeof(object, objectType, isAction) { return (!isAction) && objectType === 'function' }
+	static execute(node, state) { return node(state) }
+}, [Condition]: class ConditionNode extends Node {
+	static type = Condition
+	static typeof(object, objectType, isAction) { return Boolean((!isAction) && object && objectType === 'object' && ('if' in object)) }
+	static keywords = ['if','then','else']
+	static execute(node, state) {
+		if (normalise_function(node.if)(state))
+		return 'then' in node ? [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'then' ] : null
+		return 'else' in node ? [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'else' ] : null
+	}
+	static traverse(node, path, iterate) { return {
+		...node,
+		...('then' in node ? { then: iterate([...path,'then']) } : {}),
+		...('else' in node ? { else: iterate([...path,'else']) } : {}),
+		...(Symbols in node ? Object.fromEntries(node[Symbols].map(key => [key, iterate([...path,key])])) : {}),
+	} }
+}, [Switch]: class SwitchNode extends Node {
+	static type = Switch
+	static typeof(object, objectType, isAction) { return Boolean((!isAction) && object && objectType === 'object' && ('switch' in object)) }
+	static keywords = ['switch','case','default']
+	static execute(node, state) {
+		const key = normalise_function(node.switch)(state)
+		const fallbackKey = (key in node.case) ? key : 'default'
+		return (fallbackKey in node.case) ? [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'case', fallbackKey ] : null
+	}
+	static traverse(node, path, iterate) { return { ...node, case: Object.fromEntries(Object.keys(node.case).map(key => [ key, iterate([...path,'case',key]) ])), ...(Symbols in node ? Object.fromEntries(node[Symbols].map(key => [key, iterate([...path,key])])) : {}) } }
+}, [While]: class WhileNode extends Node {
+	static type = While
+	static typeof(object, objectType, isAction) { return Boolean((!isAction) && object && objectType === 'object' && ('while' in object)) }
+	static keywords = ['while','do']
+	static execute(node, state) {
+		if (!(('do' in node) && normalise_function(node.while)(state))) return null
+		return [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'do' ]
+	}
+	static proceed(node, state) { return { ...state, [Stack]: [ { ...state[Stack][0], path: state[Stack][0].path.slice(0,state[Stack][0].point) }, ...state[Stack].slice(1) ] } }
+	static traverse(node, path, iterate) { return { ...node, ...('do' in node ? { do: iterate([ ...path, 'do' ]) } : {}), ...(Symbols in node ? Object.fromEntries(node[Symbols].map(key => [key, iterate([...path,key])])) : {}), } }
+}, [Machine]: class MachineNode extends Node {
+	static type = Machine
+	static typeof(object, objectType, isAction) { return Boolean((!isAction) && object && objectType === 'object' && ('initial' in object)) }
+	static keywords = ['initial']
+	static execute(node, state) { return [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'initial' ] }
+	static traverse(node, path, iterate) { return { ...node, ...Object.fromEntries(Object.keys(node).concat(Symbols in node ? node[Symbols]: []).map(key => [ key, iterate([...path,key]) ])) } }
+}, [Goto]: class GotoNode extends Node {
+	static type = Goto
+	static typeof(object, objectType, isAction) { return Boolean(object && objectType === 'object' && (Goto in object)) }
+	static perform(action, state) { return S._perform(this, state, action[Goto]) }
+	static proceed(node, state) { return state }
+}, [InterruptGoto]: class InterruptGotoNode extends GotoNode {
+	static type = InterruptGoto
+	static typeof(object, objectType, isAction) { return objectType === 'symbol' }
+	static perform(action, state) {
+		const lastOf = get_closest_path(this.process, state[Stack][state[Stack].length-1].path.slice(0,state[Stack][state[Stack].length-1].point-1), parentNode => Boolean(parentNode && (typeof parentNode === 'object') && (action in parentNode)))
+		if (!lastOf) return { ...state, [Return]: action }
+		return { ...state, [Stack]: [ { origin: action, path: [...lastOf, action], point: lastOf.length + 1 }, ...state[Stack] ] }
+	}
+	static proceed(node, state) {
+		const { [Stack]: stack, [Return]: interruptReturn, ...proceedPrevious } = S._proceed(this, { ...state, [Stack]: state[Stack].slice(1) }, undefined)
+		return { ...proceedPrevious, [Stack]: [ state[Stack][0], ...stack ] }
+	}
+}, [AbsoluteGoto]: class AbsoluteGotoNode extends GotoNode {
+	static type = AbsoluteGoto
+	static typeof(object, objectType, isAction) { return isAction && Array.isArray(object) }
+	static perform(action, state) { return { ...state, [Stack]: [ { ...state[Stack][0], path: action, point: action.length }, ...state[Stack].slice(1) ] } }
+}, [MachineGoto]: class MachineGotoNode extends GotoNode {
+	static type = MachineGoto
+	static typeof(object, objectType, isAction) { return objectType === 'string' }
+	static perform(action, state) {
+		const lastOf = S._closest(this, state[Stack][0].path.slice(0,state[Stack][0].point-1), MachineNode.type)
+		if (!lastOf) throw new PathReferenceError(`A relative goto has been provided as a string (${String(action)}), but no state machine exists that this string could be a state of. From path [ ${state[Stack][0].path.slice(0,state[Stack][0].point).map(key => key.toString()).join(', ')} ].`, { instance: this, state, data: { action } })
+		return { ...state, [Stack]: [ { ...state[Stack][0], path: [...lastOf, action], point: lastOf.length + 1 }, ...state[Stack].slice(1) ] }
+	}
+}, [SequenceGoto]: class SequenceGotoNode extends GotoNode {
+	static type = SequenceGoto
+	static typeof(object, objectType, isAction) { return objectType === 'number' }
+	static perform(action, state) {
+		const lastOf = S._closest(this, state[Stack][0].path.slice(0,state[Stack][0].point-1), SequenceNode.type)
+		if (!lastOf) throw new PathReferenceError(`A relative goto has been provided as a number (${String(action)}), but no sequence exists that this number could be an index of from path [ ${state[Stack][0].path.slice(0,state[Stack][0].point).map(key => key.toString()).join(', ')} ].`, { instance: this, state, data: { action } })
+		return { ...state, [Stack]: [ { ...state[Stack][0], path: [...lastOf, action], point: lastOf.length + 1 }, ...state[Stack].slice(1) ] }
+	}
+}, [ErrorN]: class ErrorNode extends Node {
+	static type = ErrorN
+	static typeof = (object, objectType) => (objectType === 'object' && object instanceof Error) || (objectType === 'function' && (object === Error || object.prototype instanceof Error))
+	static perform(action, state) {
+		if (typeof action === 'function') throw new action()
+		throw action
+	}
+}, [Undefined]: class UndefinedNode extends Node {
+	static type = Undefined
+	static typeof(object, objectType) { return objectType === 'undefined' }
+	static execute(node, state) { throw new NodeReferenceError(`There is nothing to execute at path [ ${state[Stack][0].path.slice(0,state[Stack][0].point).map(key => key.toString()).join(', ')} ]`, { instance: this, state, data: { node } }) }
+}, [Empty]: class EmptyNode extends Node {
+	static type = Empty
+	static typeof(object, objectType) { return object === null }
+}, [Continue]: class ContinueNode extends GotoNode {
+	static type = Continue
+	static typeof(object, objectType) { return object === Continue }
+	static perform(action, state) {
+		const lastOf = S._closest(this, state[Stack][0].path.slice(0,state[Stack][0].point-1), WhileNode.type)
+		if (!lastOf) throw new PathReferenceError(`A Continue has been used, but no While exists that this Continue could refer to. From path [ ${state[Stack][0].path.slice(0,state[Stack][0].point).map(key => key.toString()).join(', ')} ].`, { instance: this, state, data: { action } })
+		return { ...state, [Stack]: [ { ...state[Stack][0], path: lastOf, point: lastOf.length }, ...state[Stack].slice(1) ] }
+	}
+}, [Break]: class BreakNode extends GotoNode {
+	static type = Break
+	static typeof(object, objectType, isAction) { return object === Break }
+	static proceed (node, state) {
+		const lastOf = S._closest(this, state[Stack][0].path.slice(0,state[Stack][0].point-1), WhileNode.type)
+		if (!lastOf) throw new PathReferenceError(`A Break has been used, but no While exists that this Break could refer to. From path [ ${state[Stack][0].path.slice(0,state[Stack][0].point).map(key => key.toString()).join(', ')} ].`, { instance: this, state, data: { node } })
+		return S._proceed(this, { ...state, [Stack]: [{ ...state[Stack][0], point: lastOf.length-1 }, ...state[Stack].slice(1)] }, get_path_object(this.process, lastOf.slice(0,-1)))
+	}
+	static perform = Node.perform
+}, [Return]: class ReturnNode extends GotoNode {
+	static type = Return
+	static typeof(object, objectType) { return object === Return || Boolean(object && objectType === 'object' && (Return in object)) }
+	static perform(action, state) { return { ...state, [Return]: !action || action === Return ? undefined : action[Return], } }
+	static proceed = Node.proceed
+} }
+```
 
-Initialise with an empty start adapters list.
+Initialise with an empty process adapters list.
 
-Initialise with an empty end adapters list.
+```javascript
+return new S(null).config.adapt // [  ]
+```
+
+Initialise with an empty `before` adapters list.
+
+```javascript
+return new S(null).config.before // [  ]
+```
+
+Initialise with an empty `after` adapters list.
+
+```javascript
+return new S(null).config.after // [  ]
+```
 
 ## S._closest (instance, path = [], ...nodeTypes)
 
@@ -1345,11 +1530,56 @@ return S._proceed(instance, {
 }) // { [Stack]: [ { path: [ 1 ], origin: Symbol(SSSM Return), point: 1 } ] }
 ```
 
-Determine what type of node is proceeding
+Gets the type of the given `node`
+
+```javascript
+let typeofCalled = false
+const MyNodeType = Symbol("My Node")
+class MyNode extends Node {
+	static type = MyNodeType
+	static typeof(object) {
+		typeofCalled = true
+		return object === MyNodeType
+	}
+}
+S._proceed(
+	new S(null).addNode(MyNode),
+	{[Stack]:[{path:[],origin:Return,point:0}]},
+	MyNodeType,
+)
+return typeofCalled // true
+```
 
 If the node is unrecognised, throw a TypeEror
 
+```javascript
+return S._proceed(
+	new S(null),
+	{[Stack]:[{path:[],origin:Return,point:0}]},
+	false
+) // NodeTypeError
+```
+
 Call the `proceed` method of the node to get the next path.
+
+```javascript
+let proceedCalled = false
+const MyNodeType = Symbol("My Node")
+class MyNode extends Node {
+	static type = MyNodeType
+	static typeof(object) { return object === MyNodeType }
+	static proceed(action, state) {
+		proceedCalled = true
+		return { ...state, someChange: 'someValue' }
+	}
+}
+const result = S._proceed(
+	new S(null).addNode(MyNode),
+	{[Stack]:[{path:[0],origin:Return,point:1}]},
+	MyNodeType
+)
+return proceedCalled && result // { someChange: 'someValue' }
+```
 
 ## S._perform (instance, state = {}, action = undefined)
 
@@ -1375,11 +1605,56 @@ const instance = new S([
 return S._perform(instance, { [Stack]: [{path:[0],origin:Return,point:1}], prop: 'value' }, { [Goto]: [2] }) // { prop: 'value', [Stack]: [ { path: [ 2 ], origin: Symbol(SSSM Return), point: 1 } ] }
 ```
 
-Get the node type of the given `action`
+Gets the node type of the given `action`
 
-Gets the node definition for the action
+```javascript
+let typeofCalled = false
+const MyNodeType = Symbol("My Node")
+class MyNode extends Node {
+	static type = MyNodeType
+	static typeof(object) {
+		typeofCalled = true
+		return object === MyNodeType
+	}
+}
+S._perform(
+	new S(null).addNode(MyNode),
+	{},
+	MyNodeType
+)
+return typeofCalled // true
+```
 
-Perform the action on the state
+If the given `action` is not recognised, throw a NodeTypeError
+
+```javascript
+return S._perform(
+	new S(null),
+	{},
+	false
+) // NodeTypeError
+```
+
+Performs the given `action` on the state
+
+```javascript
+let performCalled = false
+const MyNodeType = Symbol("My Node")
+class MyNode extends Node {
+	static type = MyNodeType
+	static typeof(object) { return object === MyNodeType }
+	static perform(action, state) {
+		performCalled = true
+		return { ...state, someChange: 'someValue' }
+	}
+}
+const result = S._perform(
+	new S(null).addNode(MyNode),
+	{},
+	MyNodeType
+)
+return performCalled && result // { someChange: 'someValue' }
+```
 
 ## S._execute (instance, state = {}, node = get_path_object(instance.process, state[Stack][0].path.slice(0,state[Stack][0].point))))
 
@@ -1405,11 +1680,56 @@ const instance = new S([
 return S._execute(instance, { [Stack]: [{path:[1],origin:Return,point:1}] }) // { result: 'second' }
 ```
 
-Get the type of that node
+Gets the type of the given `node`
 
-If the node is not recognised, throw a NodeTypeError
+```javascript
+let typeofCalled = false
+const MyNodeType = Symbol("My Node")
+class MyNode extends Node {
+	static type = MyNodeType
+	static typeof(object) {
+		typeofCalled = true
+		return object === MyNodeType
+	}
+}
+S._execute(
+	new S(null).addNode(MyNode),
+	{},
+	MyNodeType
+)
+return typeofCalled // true
+```
 
-Execute the node and return an action
+If the given `node` is not recognised, throw a `NodeTypeError`
+
+```javascript
+return S._execute(
+	new S(null),
+	{},
+	false
+) // NodeTypeError
+```
+
+Execute the given `node` and return an action
+
+```javascript
+let executeCalled = false
+const MyNodeType = Symbol("My Node")
+class MyNode extends Node {
+	static type = MyNodeType
+	static typeof(object) { return object === MyNodeType }
+	static execute() {
+		executeCalled = true
+		return 'some action'
+	}
+}
+const result = S._execute(
+	new S(null).addNode(MyNode),
+	{},
+	MyNodeType
+)
+return executeCalled && result // 'some action'
+```
 
 ## S._traverse(instance, iterator)
 
@@ -1442,7 +1762,7 @@ return S._traverse({
 }) // { initial: 'with this', other: [ { if: 'with another thing', then: 'with that' } ] }
 ```
 
-### Create an interation function to be used recursively
+### Create an iteration function to be used recursively
 
 Get the node at the given `path`
 
@@ -1497,17 +1817,218 @@ return S._run(instance, 1, 2, 3) === instance(1, 2, 3) // true
 
 Extract the useful parts of the config
 
-Turn the arguments into an initial condition
+```javascript
+const instance = new S(null).output(ident).until(() => true)
+let gettersAccessed = {}
+S._run(
+	{
+		config: new Proxy(instance.config, {
+			get(target, property) {
+				gettersAccessed[property] = true
+				return target[property]
+			}
+		}),
+		process: instance.process,
+	},
+	{  }
+)
+return gettersAccessed // { until: true, iterations: true, input: true, output: true, before: true, after: true, defaults: true, trace: true }
+```
+
+### Turn the arguments into an initial condition
+
+Runs the input adapter
+
+```javascript
+let inputAdapterCalled;
+S._run(
+	new S(null).output(ident).until(() => true)
+		.input((state) => {
+			inputAdapterCalled = true
+			return state
+		}),
+	{  }
+)
+return inputAdapterCalled // true
+```
+
+Takes in all arguments passed in after the instance
+
+```javascript
+let passedArgs;
+S._run(
+	new S(null).output(ident).until(() => true)
+		.input((...args) => {
+			passedArgs = args
+			return {}
+		}),
+	1, 2, 3, 4
+)
+return passedArgs // [ 1, 2, 3, 4 ]
+```
 
 ### Merge the initial condition with the default initial state
+
+the iterations are initialised at 0
+
+```javascript
+let firstValue;
+S._run(
+	new S(null).output(ident)
+		.until((state, iterations) => {
+			if (firstValue === undefined)
+				firstValue = iterations
+			return state
+		}),
+	{  }
+)
+return firstValue // 0
+```
+
+Before modifiers are called
+
+```javascript
+let beforeAdapterCalled = false
+S._run(
+	new S(null).output(ident).until(() => true)
+		.before((state) => {
+			beforeAdapterCalled = true
+			return state
+		}),
+	{  }
+)
+return beforeAdapterCalled // true
+```
+
+Before adapter are called after input adapter
+
+```javascript
+let inputAdapterCalled = false
+let beforeAdapterCalled = false
+let beforeAdapterCalledAfterInputAdapter = false
+S._run(
+	new S(null).output(ident).until(() => true)
+		.input((state) => {
+			inputAdapterCalled = true
+			return state
+		})
+		.before((state) => {
+			beforeAdapterCalled = true
+			if (inputAdapterCalled)
+				beforeAdapterCalledAfterInputAdapter = true
+			return state
+		}),
+	{  }
+)
+return inputAdapterCalled && beforeAdapterCalled && beforeAdapterCalledAfterInputAdapter // true
+```
+
+Initial state will be deep merged if enabled
+
+```javascript
+return S._run(
+	new S(null).output(ident).until(() => true).deep
+	.defaults({ myProperty: { subProperty: 'otherValue' } }),
+	{ myProperty: { myOtherProperty: 'myValue' } }
+) // { myProperty: { myOtherProperty: 'myValue', subProperty: 'otherValue' } }
+```
+
+Initial state will be merged before passing it into the before modifiers
+
+```javascript
+let initialState = null
+S._run(
+	new S(null).output(ident).until(() => true)
+		.before((state) => {
+			initialState = state
+			return state
+		}),
+	{ myProperty: 'myValue' }
+)
+return initialState // { myProperty: 'myValue', [Stack]: [ { path: [  ], origin: Symbol(SSSM Return), point: 0 } ], [Trace]: [  ], [Changes]: { myProperty: 'myValue' }, [Return]: undefined }
+```
 
 Default to an empty change object
 
 Uses the defaults as an initial state
 
-Uses the path from the initial state - allows for starting at arbitrary positions
+```javascript
+return S._run(
+	new S(null).output(ident).until(() => true)
+		.defaults({ myProperty: 'myValue' }),
+	{ }
+) // { myProperty: 'myValue' }
+```
 
-Uses the path from the initial state - allows for starting at arbitrary positions
+#### Uses the Stack from the initial state - allows for starting at arbitrary positions
+
+```javascript
+return S._run(
+	new S(null).output(ident).until(() => true),
+	{ [Stack]: [{path:['some','specific','path'],origin:Return,point:3}] }
+) // { [Stack]: [ { path: [ 'some', 'specific', 'path' ], origin: Symbol(SSSM Return), point: 3 } ] }
+```
+
+Stack starts as root node path by default.
+
+```javascript
+return S._run(
+	new S(null).output(ident).until(() => true),
+	{ }
+) // { [Stack]: [ { path: [  ], origin: Symbol(SSSM Return), point: 0 } ] }
+```
+
+Trace can be populated by passing it in
+
+```javascript
+return S._run(
+	new S([null]).output(ident).until(() => true),
+	{ [Trace]: [[{path:['some','specific','path'],origin:Return,point:3}]] }
+) // { [Trace]: [ [ { path: [ 'some', 'specific', 'path' ], origin: Symbol(SSSM Return), point: 3 } ] ] }
+```
+
+Trace will be an empty list by default.
+
+```javascript
+return S._run(
+	new S(null).output(ident).until(() => true),
+	{ }
+) // { [Trace]: [  ] }
+```
+
+#### Keep the return value if it already exists
+
+```javascript
+return S._run(new S(null).output(ident), { [Return]: 'myValue' }) // { [Return]: 'myValue' }
+```
+
+Do not define a return value by default
+
+```javascript
+return S._run(new S(null).output(ident), { }) // { [Return]: undefined }
+```
+
+Changes will be empty after initialisation
+
+```javascript
+return S._run(
+	new S(null).output(ident).before(function (state) {
+		return this.changes(state, { myOtherProperty: 'myOtherValue' })
+	}),
+	{ myProperty: 'myValue' }
+) // { myProperty: 'myValue', myOtherProperty: 'myOtherValue', [Changes]: { myProperty: undefined, myOtherProperty: undefined } }
+```
+
+Changes can be populated by passing it in
+
+```javascript
+return S._run(
+	new S(null).output(ident).before(function (state) {
+		return this.changes(state, { myOtherProperty: 'myOtherValue' })
+	}),
+	{ myProperty: 'myValue', [Changes]: { myProperty: 'anything' } }
+) // { myProperty: 'myValue', myOtherProperty: 'myOtherValue', [Changes]: { myProperty: 'anything', myOtherProperty: undefined } }
+```
 
 ### Repeat for a limited number of iterations.
 
@@ -1515,19 +2036,107 @@ This should be fine for most finite machines, but may be too little for some con
 
 #### Check the configured `until` condition to see if we should exit.
 
+```javascript
+let untilCalled = false
+S._run(new S(
+	() => ({ myProperty: 'myValue' })
+).until(() => {
+	untilCalled = true
+	return true
+}).output(ident), {
+	[Stack]: [{path:[],origin:Return,point:0}],
+})
+return untilCalled // true
+```
+
 Do it first to catch starting with a `Return` in place.
 
-If the interations are exceeded, Error
+```javascript
+return S._run(new S(
+	() => ({ myProperty: 'myValue' })
+).output(ident), {
+	[Stack]: [{path:[],origin:Return,point:0}],
+	[Return]: 'myValue'
+}) // { myProperty: undefined, [Stack]: [ { path: [  ], origin: Symbol(SSSM Return), point: 0 } ], [Return]: 'myValue' }
+```
+
+If the iterations are exceeded, Error
+
+```javascript
+return S._run(new S([
+	() => ({ myProperty: 'myValue' })
+]).for(1).trace.output(ident), {
+	[Stack]: [{path:[],origin:Return,point:0}],
+	[Trace]: [],
+}) // MaxIterationsError
+```
 
 If stack trace is enabled, push the current path to the stack
 
-Execute the current node on the process, returning the action to perform
+```javascript
+return S._run(new S(
+	() => ({ myProperty: 'myValue' })
+).until((_,runs)=>runs>=1).trace.output(ident), {
+	[Stack]: [{path:[],origin:Return,point:0}],
+	[Trace]: [],
+}) // { [Trace]: [ [ { path: [  ], origin: Symbol(SSSM Return), point: 0 } ] ] }
+```
 
-Perform any required actions. Updating the currentState
+Executes the current node on the process, returning the action to perform
 
-Proceed to the next action
+```javascript
+return S._run(new S(
+	() => ({ myProperty: 'myValue' })
+).until((_,runs)=>runs>=1).output(ident), {
+	[Stack]: [{path:[],origin:Return,point:0}]
+}) // { myProperty: 'myValue' }
+```
 
-When returning, run the ends state adapters, then the output adapter to complete execution.
+Performs any required actions. Updating the currentState
+
+```javascript
+return S._run(new S([
+	{ myProperty: 'myValue' }
+]).until((_,runs)=>runs>=1).output(ident), {
+	[Stack]: [{path:[0],origin:Return,point:1}]
+}) // { myProperty: 'myValue' }
+```
+
+Proceeds to the next action
+
+```javascript
+return S._run(new S([
+	null,
+	null
+]).until((_,runs)=>runs>=1).output(ident), {
+	[Stack]: [{path:[0],origin:Return,point:1}]
+}) // { [Stack]: [ { path: [ 1 ], origin: Symbol(SSSM Return), point: 1 } ] }
+```
+
+When returning, run the end state adapters, then the output adapter to complete execution.
+
+```javascript
+				let adaptOutputCalled = false
+				let afterCalled = false
+				let adaptOutputCalledAfterAfter = false
+
+				new S(Return)
+					.after((state) => {
+						afterCalled = true
+						return state
+					})
+					.output((state) => {
+						adaptOutputCalled = true
+						if (afterCalled)
+							adaptOutputCalledAfterAfter = true
+						return state
+					})
+					({
+						myProperty: 'myValue'
+					})
+
+				return adaptOutputCalled && afterCalled && adaptOutputCalledAfterAfter // true
+```
 
 # Default Nodes
 
@@ -1535,25 +2144,49 @@ When returning, run the ends state adapters, then the output adapter to complete
 
 Throws the given error
 
+The ErrorN symbol is exported as `{ ErrorN }`
+
+```javascript
+import { ErrorN } from './index.js'
+	
+return ErrorN; // success
+```
+
+This definition is exported by the library as `{ ErrorNode }`
+
+```javascript
+import { ErrorNode } from './index.js'
+	
+return ErrorNode; // success
+```
+
 Uses the ErrorN symbol as the type.
 
 ```javascript
 return ErrorNode.type // Symbol(SSSM Error)
 ```
 
-Look for Error objects, or Error constructors.
+### Look for Error objects, or Error constructors.
+
+Matches error objects
 
 ```javascript
 return S.config.nodes.typeof(new Error('My Error')) // Symbol(SSSM Error)
 ```
 
+Matches error constructors
+
 ```javascript
 return S.config.nodes.typeof(Error) // Symbol(SSSM Error)
 ```
 
+Matches descendent error objects
+
 ```javascript
 return S.config.nodes.typeof(new TypeError('My Error')) // Symbol(SSSM Error)
 ```
+
+Matches descendent error constructors
 
 ```javascript
 return S.config.nodes.typeof(TypeError) // Symbol(SSSM Error)
@@ -1563,7 +2196,15 @@ return S.config.nodes.typeof(TypeError) // Symbol(SSSM Error)
 
 Throw an error constructed by the function.
 
+```javascript
+return ErrorNode.perform(TestError, {}) // TestError
+```
+
 Throw an existing error instance.
+
+```javascript
+return ErrorNode.perform(new TestError(), {}) // TestError
+```
 
 ## Changes Node
 
@@ -1585,12 +2226,20 @@ const instance = new S({ newValue: true })
 return instance({ existingValue: true }) // { existingValue: true, newValue: true }
 ```
 
-This definition is exported by the library as `{ Changes }`
+The Changes symbol is exported as `{ Changes }`
 
 ```javascript
 import { Changes } from './index.js'
 	
 return Changes; // success
+```
+
+This definition is exported by the library as `{ ChangesNode }`
+
+```javascript
+import { ChangesNode } from './index.js'
+	
+return ChangesNode; // success
 ```
 
 Uses the Changes symbol as the type.
@@ -1607,6 +2256,10 @@ return S.config.nodes.typeof({ someProperty: 'someValue' }) // Symbol(SSSM Chang
 
 Apply the changes to the state and step forward to the next node
 
+```javascript
+return ChangesNode.perform.call(new S(), { myProperty: 'changed' }, { [Changes]: {}, myProperty: 'myValue' }) // { myProperty: 'changed', [Changes]: { myProperty: 'changed' } }
+```
+
 ## Sequence Node
 
 Sequences are lists of nodes and executables, they will visit each node in order and exit when done.
@@ -1619,6 +2272,14 @@ const instance = new S([
 	({ result }) => ({ result: result + ' addition2' }),
 ]).output(({ result }) => result)
 return instance({ result: 'start' }) // 'start addition1 addition2'
+```
+
+The Sequence symbol is exported as `{ Sequence }`
+
+```javascript
+import { Sequence } from './index.js'
+	
+return Sequence; // success
 ```
 
 This definition is exported by the library as `{ SequenceNode }`
@@ -1641,17 +2302,33 @@ Get the current index in this sequence from the path
 
 #### If there are more nodes to execute
 
+```javascript
+return SequenceNode.proceed.call(new S([[null,null,null], null]), [null,null,null], { [Stack]: [{path:[0,1],origin:Return,point:1}]}) // { [Stack]: [ { path: [ 0, 2 ], origin: Symbol(SSSM Return), point: 2 } ] }
+```
+
 Execute the next node
 
 Proceed as normal if the list is complete
 
-A sequence is an array. A sequence cannot be an action, that will be interpreted as an absolute-goto.
+```javascript
+return SequenceNode.proceed.call(new S([[null,null,null], null]), [null,null,null], { [Stack]: [{path:[0,2],origin:Return,point:1}]}) // { [Stack]: [ { path: [ 1 ], origin: Symbol(SSSM Return), point: 1 } ] }
+```
+
+A sequence is an array.
 
 ```javascript
 return S.config.nodes.typeof([ 1, 2, 3 ]) // Symbol(SSSM Sequence)
 ```
 
+```javascript
+return S.config.nodes.typeof([ 1, 2, 3 ], 'object', true) // Symbol(SSSM Absolute Goto)
+```
+
 Execute a sequence by directing to the first node (so long as it has nodes)
+
+```javascript
+return SequenceNode.execute([null,null,null], { [Stack]: [{path:['some',0,'complex','path'],origin:Return,point:4}]}) // [ 'some', 0, 'complex', 'path', 0 ]
+```
 
 Traverse a sequence by iterating through each node in the array.
 
@@ -1698,6 +2375,14 @@ const instance = new S(() => {
 return instance({ result: 'start' }) // 'start'
 ```
 
+The FunctionN symbol is exported as `{ FunctionN }`
+
+```javascript
+import { FunctionN } from './index.js'
+	
+return FunctionN; // success
+```
+
 This definition is exported by the library as `{ FunctionNode }`
 
 ```javascript
@@ -1720,7 +2405,24 @@ return S.config.nodes.typeof(() => {}) // Symbol(SSSM Function)
 
 Exectute a functon by running it, passing in the state.
 
+```javascript
+let methodRun = false
+const result = FunctionNode.execute((...args) => {
+	methodRun = true
+	return args
+}, { [Stack]: [{path:[],origin:Return,point:0}] })
+return methodRun && result // [ { [Stack]: [ { path: [  ], origin: Symbol(SSSM Return), point: 0 } ] } ]
+```
+
 ## Undefined Node
+
+The Undefined symbol is exported as `{ Undefined }`
+
+```javascript
+import { Undefined } from './index.js'
+	
+return Undefined; // success
+```
 
 This definition is exported by the library as `{ UndefinedNode }`
 
@@ -1761,6 +2463,14 @@ return instance() // 'second'
 
 ## Empty Node
 
+The Empty symbol is exported as `{ Empty }`
+
+```javascript
+import { Empty } from './index.js'
+	
+return Empty; // success
+```
+
 This definition is exported by the library as `{ EmptyNode }`
 
 ```javascript
@@ -1791,6 +2501,14 @@ return instance({ result: 'start' }) // 'second'
 
 ## Condition Node
 
+The Condition symbol is exported as `{ Condition }`
+
+```javascript
+import { Condition } from './index.js'
+	
+return Condition; // success
+```
+
 This definition is exported by the library as `{ ConditionNode }`
 
 ```javascript
@@ -1820,6 +2538,15 @@ return ConditionNode.keywords // [ 'if', 'then', 'else' ]
 ### Execute a condition by evaluating the `'if'` property and directing to the `'then'` or `'else'` clauses
 
 Evaluate the `'if'` property as a function that depends on the state.
+
+```javascript
+let switchMethodRun = false
+ConditionNode.execute({ if: () => {
+	switchMethodRun = true
+	return 'someKey'
+}, then: null }, { [Stack]: [{path:[],origin:Return,point:0}] })
+return switchMethodRun // true
+```
 
 If truthy, direct to the `'then'` clause if it exists
 
@@ -1870,6 +2597,14 @@ const output3 = instance({ input: 'other' })
 return { output1, output2, output3 } // { output1: 'first', output2: 'second', output3: 'none' }
 ```
 
+The Switch symbol is exported as `{ Switch }`
+
+```javascript
+import { Switch } from './index.js'
+	
+return Switch; // success
+```
+
 This definition is exported by the library as `{ SwitchNode }`
 
 ```javascript
@@ -1900,13 +2635,44 @@ return SwitchNode.keywords // [ 'switch', 'case', 'default' ]
 
 Evaluate the `'switch'` property as a function that returns a key.
 
+```javascript
+let switchMethodRun = false
+SwitchNode.execute({ switch: () => {
+	switchMethodRun = true
+	return 'someKey'
+}, case: { someKey: null } }, { [Stack]: [{path:[],origin:Return,point:0}] })
+return switchMethodRun // true
+```
+
 If the key exists in the `'case'` caluses, use the key, otherwise use the `'default'` clause
 
+```javascript
+return SwitchNode.execute({ switch: 'extant', case: { extant: null } }, { [Stack]: [{path:[],origin:Return,point:0}] }) // [ 'case', 'extant' ]
+```
+
+```javascript
+return SwitchNode.execute({ switch: 'non extant', case: { default: null } }, { [Stack]: [{path:[],origin:Return,point:0}] }) // [ 'case', 'default' ]
+```
+
 Check again if the key exists (`'default'` clause may not be defined), if it does, redirect to the case, otherwise do nothing.
+
+```javascript
+return SwitchNode.execute({ switch: 'non extant', case: {} }, { [Stack]: [{path:[],origin:Return,point:0}] }) // null
+```
 
 Traverse a switch by iterating over the `'case'` clauses
 
 ## While Node
+
+Repeatedly executes the 'do' clause, so long as the 'while' condition is true
+
+The While symbol is exported as `{ While }`
+
+```javascript
+import { While } from './index.js'
+	
+return While; // success
+```
 
 This definition is exported by the library as `{ WhileNode }`
 
@@ -1938,11 +2704,23 @@ return WhileNode.keywords // [ 'while', 'do' ]
 
 #### Evaluate the `'while'` property as a function that returns a boolean.
 
+```javascript
+return WhileNode.execute({ while: false, do: null }, { [Stack]: [{path:[0,0],origin:Return,point:2}] }) // null
+```
+
 If the condition is false, exit the while loop.
 
 If `true`, execute the `'do'` clause
 
+```javascript
+return WhileNode.execute({ while: true, do: null }, { [Stack]: [{path:[0,0],origin:Return,point:2}] }) // [ 0, 0, 'do' ]
+```
+
 Proceed by re-entering the while loop.
+
+```javascript
+return WhileNode.proceed(undefined, { [Stack]: [{path:['some',0,'complex',0,'path'],origin:Return,point:2}] }) // { [Stack]: [ { path: [ 'some', 0 ], origin: Symbol(SSSM Return), point: 2 } ] }
+```
 
 Traverse a while by iterating over the `'do'` clause
 
@@ -1957,6 +2735,14 @@ const instance = new S({
 	next: { result: 'second' }
 }).output(({ result }) => result)
 return instance({ result: 'start' }) // 'second'
+```
+
+The Machine symbol is exported as `{ Machine }`
+
+```javascript
+import { Machine } from './index.js'
+	
+return Machine; // success
 ```
 
 This definition is exported by the library as `{ MachineNode }`
@@ -1986,6 +2772,10 @@ return MachineNode.keywords // [ 'initial' ]
 ```
 
 Execute a machine by directing to the `'initial'` stages.
+
+```javascript
+return MachineNode.execute(undefined, { [Stack]: [{path:['a','b','c'],oirign:Return,point:3}]}) // [ 'a', 'b', 'c', 'initial' ]
+```
 
 Traverse a machine by iterating over all the stages
 
@@ -2017,6 +2807,14 @@ const instance = new S({
 return instance({ result: 'start' }) // 'first'
 ```
 
+The Goto symbol is exported as `{ Goto }`
+
+```javascript
+import { Goto } from './index.js'
+	
+return Goto; // success
+```
+
 This definition is exported by the library as `{ GotoNode }`
 
 ```javascript
@@ -2039,7 +2837,27 @@ return S.config.nodes.typeof({ [Goto]: 'stage' }) // Symbol(SSSM Goto)
 
 A goto is performed by performing the value of the `Goto` property to allow for using absolute or relative gotos
 
+```javascript
+let performCalled = false
+const MyNodeType = Symbol("My Node")
+class MyNode extends Node {
+	static type = MyNodeType
+	static typeof(object) { return object === MyNodeType }
+	static perform(action, state) {
+		performCalled = true
+		return { ...state, someChange: 'someValue' }
+	}
+}
+const result = GotoNode.perform.call(new S().addNode(MyNode), { [Goto]: MyNodeType }, {})
+return performCalled && result // { someChange: 'someValue' }
+```
+
 A goto does not require proceeding, simply return the current state unmodified
+
+```javascript
+const stateObj = { myProperty: 'myValue' }
+return GotoNode.proceed(undefined, stateObj) === stateObj // true
+```
 
 ## Sequence Goto Node
 
@@ -2069,6 +2887,14 @@ const instance = new S([
 return instance({ input: 'skip' }) // 'second'
 ```
 
+The SequenceGoto symbol is exported as `{ SequenceGoto }`
+
+```javascript
+import { SequenceGoto } from './index.js'
+	
+return SequenceGoto; // success
+```
+
 This definition is exported by the library as `{ SequenceGotoNode }`
 
 ```javascript
@@ -2093,9 +2919,21 @@ return S.config.nodes.typeof(8) // Symbol(SSSM Sequence Goto)
 
 Get the closest ancestor that is a sequence.
 
+```javascript
+return SequenceGotoNode.perform.call(new S([[null,{initial:null}]]), 2, { [Stack]: [{path:[0,1,'initial'],origin:Return,point:3}] }) // { [Stack]: [ { path: [ 0, 2 ], origin: Symbol(SSSM Return), point: 2 } ] }
+```
+
 If there is no such ancestor, throw a `PathReferenceError`
 
-Update the path to the parent>index
+```javascript
+return SequenceGotoNode.perform.call(new S({initial:{initial:{initial:null}}}), 'myStage', { [Stack]: [{path:['initial','initial','initial'],origin:Return,point:3}] }) // PathReferenceError
+```
+
+Update the path to the parent > index
+
+```javascript
+return SequenceGotoNode.perform.call(new S([[null,null]]), 2, { [Stack]: [{path:[0,0],origin:Return,point:2}] }) // { [Stack]: [ { path: [ 0, 2 ], origin: Symbol(SSSM Return), point: 2 } ] }
+```
 
 ## Machine Goto Node
 
@@ -2110,6 +2948,14 @@ const instance = new S({
 	next: { result: 'second' }
 }).output(({ result }) => result)
 return instance({ result: 'start' }) // 'second'
+```
+
+The MachineGoto symbol is exported as `{ MachineGoto }`
+
+```javascript
+import { MachineGoto } from './index.js'
+	
+return MachineGoto; // success
 ```
 
 This definition is exported by the library as `{ MachineGotoNode }`
@@ -2136,9 +2982,21 @@ return S.config.nodes.typeof('stage') // Symbol(SSSM Machine Goto)
 
 Get the closest ancestor that is a machine.
 
+```javascript
+return MachineGotoNode.perform.call(new S({initial:[{ initial: [null] }]}), 'myStage', { [Stack]: [{path:['initial',0,'initial',0],origin:Return,point:4}] }) // { [Stack]: [ { path: [ 'initial', 0, 'myStage' ], origin: Symbol(SSSM Return), point: 3 } ] }
+```
+
 If no machine ancestor is found, throw a `PathReferenceError`
 
+```javascript
+return MachineGotoNode.perform.call(new S([null]), 'myStage', { [Stack]: [{path:[0],origin:Return,point:1}] }) // PathReferenceError
+```
+
 Update the path to parent > stage
+
+```javascript
+return MachineGotoNode.perform.call(new S([[{ initial: null }]]), 'myStage', { [Stack]: [{path:[0,0,'initial'],origin:Return,point:3}] }) // { [Stack]: [ { path: [ 0, 0, 'myStage' ], origin: Symbol(SSSM Return), point: 3 } ] }
+```
 
 ## Interrupt Goto Node
 
@@ -2156,6 +3014,14 @@ const instance = new S({
 	[interrupt]: { result: 'second' }
 }).output(({ result }) => result)
 return instance({ result: 'start' }) // 'second'
+```
+
+The InterruptGoto symbol is exported as `{ InterruptGoto }`
+
+```javascript
+import { InterruptGoto } from './index.js'
+	
+return InterruptGoto; // success
 ```
 
 This definition is exported by the library as `{ InterruptGotoNode }`
@@ -2182,15 +3048,35 @@ return S.config.nodes.typeof(testSymbol) // Symbol(SSSM Interrupt Goto)
 
 Get the closest ancestor that contains this interrupt symbol.
 
+```javascript
+return InterruptGotoNode.perform.call(new S({ [testSymbol]: null, initial:{ [testSymbol]: null,initial: { initial: null } } }), testSymbol, { [Stack]: [{path:['initial','initial','initial'],origin:Return,point:3}] }) // { [Stack]: [ { path: [ 'initial', Symbol(test symbol) ], origin: Symbol(test symbol), point: 2 }, { path: [ 'initial', 'initial', 'initial' ], origin: Symbol(SSSM Return), point: 3 } ] }
+```
+
 If no suitable ancestor is found, return the interrupt symbol itself.
 
+```javascript
+return InterruptGotoNode.perform.call(new S([[{ initial: null }]]), testSymbol, { [Stack]: [{path:[0,0,'initial'],origin:Return,point:3}] }) // { [Stack]: [ { path: [ 0, 0, 'initial' ], origin: Symbol(SSSM Return), point: 3 } ], [Return]: Symbol(test symbol) }
+```
+
 Update the path to parent > interrupt
+
+```javascript
+return InterruptGotoNode.perform.call(new S([[{ [testSymbol]: null, initial: null }]]), testSymbol, { [Stack]: [{path:[0,0,'initial'],origin:Return,point:3}] }) // { [Stack]: [ { path: [ 0, 0, Symbol(test symbol) ], origin: Symbol(test symbol), point: 3 }, { path: [ 0, 0, 'initial' ], origin: Symbol(SSSM Return), point: 3 } ] }
+```
 
 ### An interrupt goto proceeds the path previous to it, but preserves the interrupts place at the top of the stack.
 
 Proceed the stack before this point, and strip out the affected system properties.
 
-Add the current inercept back in to the resulting stack.
+```javascript
+return InterruptGotoNode.proceed.call(new S([ null, null ]), testSymbol, { [Stack]: [{path:['first','item'],origin:testSymbol,point:2},{path:[0],origin:Return,point:1}] }) // { [Stack]: [ { path: [ 'first', 'item' ], origin: Symbol(test symbol), point: 2 }, { path: [ 1 ], origin: Symbol(SSSM Return), point: 1 } ] }
+```
+
+Add the current interrupt back in to the resulting stack.
+
+```javascript
+return InterruptGotoNode.proceed.call(new S(), testSymbol, { [Stack]: [{path:['first','item'],origin:testSymbol,point:2},{path:[],origin:Return,point:0}] }) // { [Stack]: [ { path: [ 'first', 'item' ], origin: Symbol(test symbol), point: 2 } ] }
+```
 
 ## Absolute Goto Node
 
@@ -2246,6 +3132,14 @@ const instance = new S({
 return instance({ result: 'start' }) // 'not skipped'
 ```
 
+The AbsoluteGoto symbol is exported as `{ AbsoluteGoto }`
+
+```javascript
+import { AbsoluteGoto } from './index.js'
+	
+return AbsoluteGoto; // success
+```
+
 This definition is exported by the library as `{ AbsoluteGotoNode }`
 
 ```javascript
@@ -2268,6 +3162,10 @@ return S.config.nodes.typeof(path, typeof path, true) // Symbol(SSSM Absolute Go
 ```
 
 An absolute goto is performed by setting `Stack` to the path
+
+```javascript
+return AbsoluteGotoNode.perform(['a','b','c'], { [Stack]: [{path:[],origin:Return,point:0}] }) // { [Stack]: [ { path: [ 'a', 'b', 'c' ], origin: Symbol(SSSM Return), point: 3 } ] }
+```
 
 ## Return Node
 
@@ -2300,6 +3198,14 @@ const instance = new S({ [Return]: 'custom' })
 return instance.output(state => state)({ result: 'start' }) // { result: 'start', [Return]: 'custom' }
 ```
 
+The Return symbol is exported as `{ Return }`
+
+```javascript
+import { Return } from './index.js'
+	
+return Return; // success
+```
+
 This definition is exported by the library as `{ ReturnNode }`
 
 ```javascript
@@ -2326,11 +3232,43 @@ return S.config.nodes.typeof({ [Return]: 'value' }) // Symbol(SSSM Return)
 
 Perform a return by setting the `Return` property on the state to the return value
 
+```javascript
+return ReturnNode.perform({ [Return]: 'myValue' }, {}) // { [Return]: 'myValue' }
+```
+
 Inherit from root node definition, not GotoNode.
+
+```javascript
+return ReturnNode.proceed // proceed (node, state) {
+	const stack = state[Stack] || [{path:[],origin:Return,point:0}]
+	if (stack[0].point === 0) {
+		if (stack.length === 1) return { ...state, [Return]: state[Return], [Stack]: [] }
+		const { [Return]: interruptReturn, ...cleanState } = state
+		return { ...cleanState, [Stack]: stack.slice(1), [stack[0].origin]: interruptReturn }
+	}
+	return S._proceed(this, { ...state, [Stack]: [{ ...stack[0], point: stack[0].point-1 }, ...stack.slice(1)] }, get_path_object(this.process, stack[0].path.slice(0,stack[0].point-1)))
+}
+```
 
 ## Continue Node
 
 Exit this pass of a While loop and evaluate the condition again.
+
+The Continue symbol is exported as `{ Continue }`
+
+```javascript
+import { Continue } from './index.js'
+	
+return Continue; // success
+```
+
+This definition is exported by the library as `{ ContinueNode }`
+
+```javascript
+import { ContinueNode } from './index.js'
+	
+return ContinueNode; // success
+```
 
 Uses the Continue symbol as the type.
 
@@ -2348,13 +3286,41 @@ return S.config.nodes.typeof(Continue) // Symbol(SSSM Continue)
 
 Find the closest While loop.
 
+```javascript
+return ContinueNode.perform.call(new S([{ while: true, do: {while:true,do:null} }, null]), Continue, { [Stack]: [{path:[0,'do','do'],origin:Return,point:3}] }) // { [Stack]: [ { path: [ 0, 'do' ], origin: Symbol(SSSM Return), point: 2 } ] }
+```
+
 If there is none, throw a `PathReferenceError`.
 
+```javascript
+return ContinueNode.perform.call(new S(null), Continue, { [Stack]: [{path:[],origin:Return,point:0}] }) // PathReferenceError
+```
+
 Modify the stack to point to the closest While loop.
+
+```javascript
+return ContinueNode.perform.call(new S([{ while: true, do: [null] }, null]), Continue, { [Stack]: [{path:[0,'do',0],origin:Return,point:3}] }) // { [Stack]: [ { path: [ 0 ], origin: Symbol(SSSM Return), point: 1 } ] }
+```
 
 ## Break Node
 
 Break out of a while loop, and proceed as if the condition has failed.
+
+The Break symbol is exported as `{ Break }`
+
+```javascript
+import { Break } from './index.js'
+	
+return Break; // success
+```
+
+This definition is exported by the library as `{ BreakNode }`
+
+```javascript
+import { BreakNode } from './index.js'
+	
+return BreakNode; // success
+```
 
 Uses the Break symbol as the type.
 
@@ -2372,11 +3338,28 @@ return S.config.nodes.typeof(Break) // Symbol(SSSM Break)
 
 Find the closest While loop.
 
+```javascript
+return BreakNode.proceed.call(new S([{ while: true, do: {while:true,do:null} }, null]), Break, { [Stack]: [{path:[0,'do','do'],origin:Return,point:3}] }) // { [Stack]: [ { path: [ 0 ], origin: Symbol(SSSM Return), point: 1 } ] }
+```
+
 If there is none, throw a `PathReferenceError`.
+
+```javascript
+return BreakNode.proceed.call(new S(null), Break, { [Stack]: [{path:[],origin:Return,point:0}] }) // PathReferenceError
+```
 
 Proceed on the While loop as if it is exiting.
 
+```javascript
+return BreakNode.proceed.call(new S([{ while: true, do: [null] }, null]), Break, { [Stack]: [{path:[0,'do',0],origin:Return,point:3}] }) // { [Stack]: [ { path: [ 1 ], origin: Symbol(SSSM Return), point: 1 } ] }
+```
+
 Perform by doing nothing, do not inherit from `GotoNode`.
+
+```javascript
+const stateObj = { myProperty: 'myValue' }
+return BreakNode.perform(Break, stateObj) === stateObj // true
+```
 
 # Errors
 

@@ -173,8 +173,8 @@ export class WhileNode extends Node {
 	static typeof(object, objectType, isAction) { return Boolean((!isAction) && object && objectType === 'object' && ('while' in object)) }
 	static keywords = ['while','do']
 	static execute(node, state) {
-		if (!(('do' in node) && normalise_function(node.while)(state))) return null
-		return [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'do' ]
+			if (!(('do' in node) && normalise_function(node.while)(state))) return null
+			return [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'do' ]
 	}
 	static proceed(node, state) { return { ...state, [Stack]: [ { ...state[Stack][0], path: state[Stack][0].path.slice(0,state[Stack][0].point) }, ...state[Stack].slice(1) ] } }
 	static traverse(node, path, iterate) { return { ...node, ...('do' in node ? { do: iterate([ ...path, 'do' ]) } : {}), ...(Symbols in node ? Object.fromEntries(node[Symbols].map(key => [key, iterate([...path,key])])) : {}), } }
@@ -219,7 +219,7 @@ export class InterruptGotoNode extends GotoNode {
 	static type = InterruptGoto
 	static typeof(object, objectType, isAction) { return objectType === 'symbol' }
 	static perform(action, state) {
-		const lastOf = get_closest_path(this.process, state[Stack][0].path.slice(0,state[Stack][0].point-1), parentNode => Boolean(parentNode && (typeof parentNode === 'object') && (action in parentNode)))
+		const lastOf = get_closest_path(this.process, state[Stack][state[Stack].length-1].path.slice(0,state[Stack][state[Stack].length-1].point-1), parentNode => Boolean(parentNode && (typeof parentNode === 'object') && (action in parentNode)))
 		if (!lastOf) return { ...state, [Return]: action }
 		return { ...state, [Stack]: [ { origin: action, path: [...lastOf, action], point: lastOf.length + 1 }, ...state[Stack] ] }
 	}
@@ -331,7 +331,7 @@ export class SuperSmallStateMachineCore extends ExtensibleFunction {
 			...(Return in modifiedInput ? {[Return]: modifiedInput[Return]} : {})
 		}, modifiedInput)), [Changes]: modifiedInput[Changes] || {} }
 		while (r < iterations) {
-			if (until.call(instance, currentState, r)) break
+				if (until.call(instance, currentState, r)) break
 			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[Stack][0].path.slice(0,currentState[Stack][0].point).map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, data: { iterations } })
 			if (trace) currentState = { ...currentState, [Trace]: [ ...currentState[Trace], currentState[Stack] ] }
 			const action = this._execute(instance, currentState)

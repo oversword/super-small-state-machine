@@ -227,8 +227,8 @@ export interface Config<
 	trace: boolean,
 	deep: boolean,
 }
-	export type ErrorType = Error | ErrorConstructor
 	export const ErrorN = Symbol('SSSM Error')
+	export type ErrorType = Error | ErrorConstructor
 	export class ErrorNode extends Node {
 		static type = ErrorN
 		static typeof<SelfType = ErrorType>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType { return (objectType === 'object' && object instanceof Error) || (objectType === 'function' && (object === Error || (object as Function).prototype instanceof Error)) }
@@ -318,6 +318,7 @@ SelfType = undefined>(this: Instance<State, Output, Input, Action, Process>, nod
 		static type = Empty
 		static typeof<SelfType = null>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType { return object === null }
 	}
+	export const Condition = Symbol('SSSM Condition')
 	export interface ConditionType<
 			State extends InitialState = InitialState,
 			Output extends unknown = undefined,
@@ -327,7 +328,6 @@ SelfType = undefined>(this: Instance<State, Output, Input, Action, Process>, nod
 			then?: ProcessType<State, Output, Action>
 			else?: ProcessType<State, Output, Action>
 		}
-	export const Condition = Symbol('SSSM Condition')
 	export class ConditionNode extends Node {
 		static type = Condition
 		static typeof<SelfType = ConditionType>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType { return Boolean((!isAction) && object && objectType === 'object' && ('if' in (object as object))) }
@@ -408,8 +408,8 @@ SelfType = SwitchType<State, Output, Action>,>(this: Instance<State, Output, Inp
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 SelfType = WhileType<State, Output, Action>,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> {
-			if (!(('do' in (node as WhileType<State, Output, Action>)) && normalise_function((node as WhileType<State, Output, Action>).while)(state))) return null as Action
-			return [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'do' ] as Action
+				if (!(('do' in (node as WhileType<State, Output, Action>)) && normalise_function((node as WhileType<State, Output, Action>).while)(state))) return null as Action
+				return [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'do' ] as Action
 		}
 		static proceed<
 	State extends InitialState = InitialState,
@@ -515,7 +515,7 @@ SelfType = MachineGotoType,>(this: Instance<State, Output, Input, Action, Proces
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 SelfType = InterruptGotoType,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {
-			const lastOf = get_closest_path(this.process, state[Stack][0].path.slice(0,state[Stack][0].point-1), parentNode => Boolean(parentNode && (typeof parentNode === 'object') && ((action as InterruptGotoType) in (parentNode as object))))
+			const lastOf = get_closest_path(this.process, state[Stack][state[Stack].length-1].path.slice(0,state[Stack][state[Stack].length-1].point-1), parentNode => Boolean(parentNode && (typeof parentNode === 'object') && ((action as InterruptGotoType) in (parentNode as object))))
 			if (!lastOf) return { ...state, [Return]: action } as SystemState<State, Output>
 			return { ...state, [Stack]: [ { origin: action as InterruptGotoType, path: [...lastOf, action as InterruptGotoType], point: lastOf.length + 1 }, ...state[Stack] ] }
 		}
@@ -742,7 +742,7 @@ export abstract class SuperSmallStateMachineCore<
 			...(Return in modifiedInput ? {[Return]: modifiedInput[Return]} : {})
 		} as SystemState<State, Output>, modifiedInput)), [Changes]: modifiedInput[Changes] || {} }
 		while (r < iterations) {
-			if (until.call(instance, currentState, r)) break
+				if (until.call(instance, currentState, r)) break
 			if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[Stack][0].path.slice(0,currentState[Stack][0].point).map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, data: { iterations } })
 			if (trace) currentState = { ...currentState, [Trace]: [ ...currentState[Trace], currentState[Stack] ] }
 			const action = this._execute(instance, currentState)

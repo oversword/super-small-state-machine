@@ -1,20 +1,40 @@
 import D, { E, JS, TS, CS } from './d/index.js'
 import S, {  list_path_object,  get_closest_path, named, inc, or, forIn, SuperSmallStateMachineReferenceError, NodeTypeError, PathReferenceError, Return, Goto, StrictTypes, Changes, Stack, Trace, Continue, Break, SuperSmallStateMachineTypeError, SuperSmallStateMachineError, not, and, ident, name, shallow_merge_object, update_path_object, set_path_object, clone_object, Node, normalise_function, StateReferenceError, StateTypeError, wait_time, get_path_object, deep_merge_object, NodeReferenceError, MaxIterationsError, Symbols, ConditionNode, SequenceNode, BreakNode, ContinueNode, ReturnNode, AbsoluteGotoNode, AbsoluteGoto, InterruptGotoNode, InterruptGoto, MachineGotoNode, MachineGoto, SequenceGotoNode, SequenceGoto, GotoNode, MachineNode, WhileNode, While, SwitchNode, Switch, Condition, EmptyNode, Empty, UndefinedNode, Undefined, FunctionNode, FunctionN, Sequence, ChangesNode, ErrorNode, ErrorN, Machine } from './index.js'
 import * as testModule from './index.js'
+import { Nodes } from './index.js'
+import { ExtensibleFunction } from './index.js'
 import asyncPlugin, { Interrupt, Wait } from './plugin/async.js'
 import parallelPlugin, { parallel } from './plugin/parallel.js'
 
+class TestError extends Error {
+
+}
 const testSymbol = Symbol('test symbol')
 const testSymbol2 = Symbol('test symbol 2')
 const symbols = {
-	'Stack': Stack,
-	'Trace': Trace,
-	'Changes': Changes,
-	'Return': Return,
-	'Goto': Goto,
-	'StrictTypes': StrictTypes,
-	'testSymbol': testSymbol,
-	'testSymbol2': testSymbol2,
+	Stack,
+	Trace,
+	StrictTypes,
+	testSymbol,
+	testSymbol2,
+	Changes,
+	Sequence,
+	FunctionN,
+	Condition,
+	Switch,
+	While,
+	Machine,
+	Goto,
+	InterruptGoto,
+	AbsoluteGoto,
+	MachineGoto,
+	SequenceGoto,
+	ErrorN,
+	Undefined,
+	Empty,
+	Continue,
+	Break,
+	Return,
 }
 
 const commonGenericDefinitionInner = `
@@ -1262,12 +1282,22 @@ D('Symbols',
 ),
 D('Node Definitions',
 	'Extends the Map class.',
+	E.equals(() => {
+		return new Nodes() instanceof Map
+	}, true, symbols),
 	D('This class is exported by the library as `{ Nodes }`',
 		E.exports('Nodes', testModule, './index.js'),
 	),
 	JS("export class Nodes extends Map {"),
 	TS(`export class Nodes${commonGenericDefinition} extends Map<string | symbol, typeof Node> {`),
 	D('Takes in a list of nodes and acts as a collection-object for them',
+		E.equals(() => {
+			class MyNode extends Node {
+				static type = testSymbol
+				static typeof(object) { return object === testSymbol }
+			}
+			return [...new Nodes(MyNode).entries()]
+		}, [[testSymbol, { type: testSymbol }]], symbols),
 		JS("constructor(...nodes) { super(nodes.flat(Infinity).map(node => [node.type,node])) }"),
 		TS("constructor(...nodes: Array<typeof Node>) { super(nodes.flat(Infinity).map(node => [node.type,node])) }")
 	),
@@ -1275,20 +1305,65 @@ D('Node Definitions',
 		JS("typeof(object, objectType = typeof object, isAction = false) {"),
 		TS("typeof(object: unknown, objectType: (typeof object) = typeof object, isAction: boolean = false): false | string | symbol {"),
 		D('Check if the node is an instance of Node to skip lookup',
+			E.equals(() => {
+				let typeofCalled = false
+				const MyNodeType = Symbol("My Node")
+				class MyNode extends Node {
+					static type = MyNodeType
+					static typeof(object) {
+						typeofCalled = true
+						return object === MyNodeType
+					}
+				}
+				const result = new Nodes(MyNode).typeof(new MyNode(MyNodeType)) === MyNodeType
+				return !typeofCalled && result
+			}, true, symbols),
 			JS("if (object instanceof Node) return object.constructor.type"),
 			TS("if (object instanceof Node) return (object.constructor as typeof Node).type"),
 		),
 		D('Search from last to first to allow easy overriding',
+			E.equals(() => {
+				const MyNodeType = Symbol("My Node")
+				class MyNode extends Node {
+					static type = MyNodeType
+					static typeof(object) { return object === MyNodeType }
+				}
+				const MyOtherNodeType = Symbol("My Other Node")
+				class MyOtherNode extends Node {
+					static type = MyOtherNodeType
+					static typeof(object) { return object === MyNodeType }
+				}
+				return new Nodes(MyNode, MyOtherNode).typeof(MyNodeType) === MyOtherNodeType
+			}, true, symbols),
 			'Newer types override older types',
 			JS("const foundType = [...this.values()].findLast(current => current.typeof(object, objectType, isAction))"),
 			TS("const foundType = [...this.values()].reverse().find(current => current.typeof(object, objectType, isAction))")
 		),
 		D('Return the name of the type if the type is found, otherwise return false',
+			E.equals(() => {
+				const MyNodeType = Symbol("My Node")
+				class MyNode extends Node {
+					static type = MyNodeType
+					static typeof(object) { return object === MyNodeType }
+				}
+				return new Nodes(MyNode).typeof(MyNodeType) === MyNodeType
+			}, true, symbols),
+			E.equals(() => {
+				const MyNodeType = Symbol("My Node")
+				class MyNode extends Node {
+					static type = MyNodeType
+					static typeof(object) { return object === MyNodeType }
+				}
+				return new Nodes().typeof(MyNodeType)
+			}, false, symbols),
 			CS("return foundType ? foundType.type : false"),
 		),
 		CS("}"),
 	),
 	D('Provides a list of keywords that the nodes have registered',
+		E.equals(() => {
+			return new Nodes({ type: 'a', keywords: ['this','that','theother'] }, { type: 'b', keywords: ['more'] }).keywords
+		}, ['this','that','theother','more'], symbols),
 		CS("get keywords() { return [...this.values()].flatMap(({ keywords }) => keywords) }")
 
 	),
@@ -1300,55 +1375,137 @@ D('Node Definition',
 	),
 	CS("export class Node {"),
 	D('The type will deafault to "SSSM Unnamed"',
+		E.equals(() => {
+			return typeof Node.type
+		}, 'symbol'),
 		JS("static type = Symbol('SSSM Unnamed')"),
 		TS("static type: string | symbol = Symbol('SSSM Unnamed')"),
 	),
 	D('The typeof method will return false by default.',
+		E.equals(() => {
+			return Node.typeof(true) === false && Node.typeof(1) === false && Node.typeof('string') === false && Node.typeof([]) === false && Node.typeof({}) === false
+		}, true),
 		JS("static typeof = () => false"),
 		TS("static typeof<SelfType extends unknown = never>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType { return false };"),
 	),
 	D('The keyword list will be empty be default.',
+		E.equals(() => {
+			return Node.keywords
+		}, []),
 		JS("static keywords = []"),
 		TS("static keywords: Array<string> = []"),
 	),
 	D('The execute method will return the node as an action by default.',
+		E.equals(() => {
+			const obj = { myProperty: 'myValue' }
+			return Node.execute(obj) === obj
+		}, true),
 		JS("static execute = ident"),
 		TS(`static execute<${commonGenericDefinitionInner}SelfType extends unknown = never,>(this: Instance${commonGenericArguments}, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> { return node as unknown as Action }`)
 	),
 	D('The proceed method will ascend up the process tree, or up the stack, or exit by default.',
+		E.equals(() => {
+			return Node.proceed.call(new S({
+				initial: [
+					{ myProperty: 'myValue' },
+					testSymbol,
+					({ myProperty }) => ({ myProperty: myProperty + '-B' }),
+				],
+				[testSymbol]: [
+					({ myProperty }) => ({ myProperty: myProperty + '-A' }),
+				],
+			}), undefined, {
+				myProperty: 'myValue-A-B',
+				[Stack]: [{path:['initial',1],origin:Return,point:2}]
+			})
+		}, { myProperty: 'myValue-A-B',
+			[Stack]: [{path:['initial',2],origin:Return,point:2}]
+		}, symbols),
 		JS("static proceed (node, state) {"),
 		TS(`static proceed<${commonGenericDefinitionInner}SelfType extends unknown = never,>(this: Instance${commonGenericArguments}, node: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise<SystemState<State, Output>> {`),
 		D('Get the stack',
+			D('Will use the stack on the state if it is given',
+				E.equals(() => {
+					let stackAccessed = false
+					Node.proceed.call(new S(null), undefined, new Proxy({
+						[Stack]: [{path:[],origin:Return,point:0}],
+					}, {
+						get(target, property) {
+							if (property === Stack)
+								stackAccessed = true
+							return target[property]
+						}
+					}))
+					return stackAccessed
+				}, true, symbols),
+			),
+			D('Will proceed on an empty stack by default',
+				E.equals(() => {
+					return Node.proceed.call(new S(null), undefined, {
+						[Return]: 'myValue'
+					})
+				}, {[Return]:'myValue',[Stack]:[]}, symbols),
+			),
 			CS("const stack = state[Stack] || [{path:[],origin:Return,point:0}]"),
 		),
 		D('If the current path has reached the end',
 			CS("if (stack[0].point === 0) {"),
-			D('If there are no more paths left, return.',
+			D('If there are no more paths left, return with the existing value.',
+				E.equals(() => {
+					return Node.proceed.call(new S(null), undefined, {
+						[Stack]: [{path:[],origin:Return,point:0}],
+						[Return]: 'myValue'
+					})
+				}, {[Return]:'myValue',[Stack]:[]}, symbols),
 				CS("if (stack.length === 1) return { ...state, [Return]: state[Return], [Stack]: [] }"),
 			),
 			D('If there are paths left, intercept the return value',
+				E.equals(() => {
+					return Node.proceed.call(new S({initial:null,[testSymbol]:null}), undefined, {
+						[Stack]: [{path:[testSymbol],origin:testSymbol,point:1},{path:[],origin:Return,point:0}],
+						[Return]: 'myValue'
+					})
+				}, {[Return]:undefined}, symbols),
 				CS("const { [Return]: interruptReturn, ...cleanState } = state"),
 			),
 			D('Set the interrupt which was the origin of the thread to the return value in the state.',
+				E.equals(() => {
+					return Node.proceed.call(new S({initial:null,[testSymbol]:null}), undefined, {
+						[Stack]: [{path:[],origin:testSymbol,point:1},{path:[],origin:Return,point:0}],
+						[Return]: 'myValue'
+					})
+				}, {[testSymbol]:'myValue'}, symbols),
 				JS("return { ...cleanState, [Stack]: stack.slice(1), [stack[0].origin]: interruptReturn }"),
 				TS("return { ...cleanState, [Stack]: stack.slice(1), [stack[0].origin]: interruptReturn } as SystemState<State, Output>"),
 			),
 			CS("}"),
 		),
-		D('Proceed as normal for the parent node by moving the pointer down.',
+		D('Proceeds as normal for the parent node by moving the pointer down.',
 			CS("return S._proceed(this, { ...state, [Stack]: [{ ...stack[0], point: stack[0].point-1 }, ...stack.slice(1)] }, get_path_object(this.process, stack[0].path.slice(0,stack[0].point-1)))"),
 		),
 		CS("}"),
 	),
 	D('The perform method will do nothing, and return the state as-is by default.',
+		E.equals(() => {
+			const stateObj = { myProperty: 'myValue' }
+			return Node.perform(undefined, stateObj) === stateObj
+		}, true),
 		JS(`static perform(action, state) { return state }`),
 		TS(`static perform<${commonGenericDefinitionInner}SelfType extends unknown = never,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise<SystemState<State, Output>> { return state }`)
 	),
 	D('The traverse method will return the node by default.',
+		E.equals(() => {
+			const obj = { myProperty: 'myValue' }
+			return Node.traverse(obj) === obj
+		}, true),
 		JS("static traverse = ident"),
 		TS(`static traverse<${commonGenericDefinitionInner}SelfType extends unknown = never,>(this: Instance${commonGenericArguments}, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return node }`)
 	),
 	D('An instance of a node will keep track of the original value for later reference.',
+		E.equals(() => {
+			const obj = { myProperty: 'myValue' }
+			return new Node(obj).value === obj
+		}, true),
 		CS("value = undefined"),
 		CS("constructor(node) { this.value = node }"),
 	),
@@ -1402,8 +1559,14 @@ export interface Config<
 D('Default Nodes',
 	D('Error Node',
 		'Throws the given error',
-		TS("export type ErrorType = Error | ErrorConstructor"),
+		D('The ErrorN symbol is exported as `{ ErrorN }`',
+			E.exports('ErrorN', testModule, './index.js'),
+		),
 		CS("export const ErrorN = Symbol('SSSM Error')"),
+		TS("export type ErrorType = Error | ErrorConstructor"),
+		D('This definition is exported by the library as `{ ErrorNode }`',
+			E.exports('ErrorNode', testModule, './index.js'),
+		),
 		CS("export class ErrorNode extends Node {"),
 		D('Uses the ErrorN symbol as the type.',
 			CS("static type = ErrorN"),
@@ -1412,18 +1575,26 @@ D('Default Nodes',
 			}, ErrorN, symbols),
 		),
 		D('Look for Error objects, or Error constructors.',
-			E.equals(() => {
-				return S.config.nodes.typeof(new Error('My Error'))
-			}, ErrorN, symbols),
-			E.equals(() => {
-				return S.config.nodes.typeof(Error)
-			}, ErrorN, symbols),
-			E.equals(() => {
-				return S.config.nodes.typeof(new TypeError('My Error'))
-			}, ErrorN, symbols),
-			E.equals(() => {
-				return S.config.nodes.typeof(TypeError)
-			}, ErrorN, symbols),
+			D('Matches error objects',
+				E.equals(() => {
+					return S.config.nodes.typeof(new Error('My Error'))
+				}, ErrorN, symbols),
+			),
+			D('Matches error constructors',
+				E.equals(() => {
+					return S.config.nodes.typeof(Error)
+				}, ErrorN, symbols),
+			),
+			D('Matches descendent error objects',
+				E.equals(() => {
+					return S.config.nodes.typeof(new TypeError('My Error'))
+				}, ErrorN, symbols),
+			),
+			D('Matches descendent error constructors',
+				E.equals(() => {
+					return S.config.nodes.typeof(TypeError)
+				}, ErrorN, symbols),
+			),
 			JS("static typeof = (object, objectType) => (objectType === 'object' && object instanceof Error) || (objectType === 'function' && (object === Error || object.prototype instanceof Error))"),
 			TS("static typeof<SelfType = ErrorType>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType { return (objectType === 'object' && object instanceof Error) || (objectType === 'function' && (object === Error || (object as Function).prototype instanceof Error)) }")
 		),
@@ -1431,10 +1602,16 @@ D('Default Nodes',
 			JS("static perform(action, state) {"),
 			TS(`static perform<${commonGenericDefinitionInner}SelfType = ErrorType,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {`),
 			D('Throw an error constructed by the function.',
+				E.error(() => {
+					return ErrorNode.perform(TestError, {})
+				}, TestError),
 				JS("if (typeof action === 'function') throw new action()"),
 				TS("if (typeof action === 'function') throw new (action as unknown as ErrorConstructor)()")
 			),
 			D('Throw an existing error instance.',
+				E.error(() => {
+					return ErrorNode.perform(new TestError(), {})
+				}, TestError),
 				CS("throw action")
 			),
 			CS("}")
@@ -1461,11 +1638,14 @@ D('Default Nodes',
 				newValue: true
 			}),
 		),
-		D('This definition is exported by the library as `{ Changes }`',
+		D('The Changes symbol is exported as `{ Changes }`',
 			E.exports('Changes', testModule, './index.js'),
 		),
 		CS("export const Changes = Symbol('SSSM Changes')"),
 		TS("export type ChangesType<State extends InitialState = InitialState> = Partial<State>"),
+		D('This definition is exported by the library as `{ ChangesNode }`',
+			E.exports('ChangesNode', testModule, './index.js'),
+		),
 		CS("export class ChangesNode extends Node {"),
 		D('Uses the Changes symbol as the type.',
 			CS("static type = Changes"),
@@ -1481,6 +1661,9 @@ D('Default Nodes',
 			TS("static typeof<SelfType = ChangesType>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType { return Boolean(object && objectType === 'object') }")
 		),
 		D('Apply the changes to the state and step forward to the next node',
+			E.equals(() => {
+				return ChangesNode.perform.call(new S(), { myProperty: 'changed' }, { [Changes]: {}, myProperty: 'myValue' })
+			}, { myProperty: 'changed', [Changes]: { myProperty: 'changed' }}, symbols),
 			JS("static perform(action, state) { return S._changes(this, state, action) }"),
 			TS(`static perform<${commonGenericDefinitionInner}SelfType = ChangesType<State>,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> { return S._changes(this, state, action as ChangesType<State>) as SystemState<State, Output> }`),
 		),
@@ -1497,11 +1680,14 @@ D('Default Nodes',
 				return instance({ result: 'start' })
 			}, 'start addition1 addition2'),
 		),
-		D('This definition is exported by the library as `{ SequenceNode }`',
-			E.exports('SequenceNode', testModule, './index.js'),
+		D('The Sequence symbol is exported as `{ Sequence }`',
+			E.exports('Sequence', testModule, './index.js'),
 		),
 		CS("export const Sequence = Symbol('SSSM Sequence')"),
 		TS("export type SequenceType<State extends InitialState = InitialState, Output extends unknown = undefined, Action extends unknown = ActionType<State, Output>> = Array<ProcessType<State, Output, Action>>"),
+		D('This definition is exported by the library as `{ SequenceNode }`',
+			E.exports('SequenceNode', testModule, './index.js'),
+		),
 		CS("export class SequenceNode extends Node {"),
 		D('Uses the Sequence symbol as the type.',
 			CS("static type = Sequence"),
@@ -1516,6 +1702,9 @@ D('Default Nodes',
 				CS("const index = state[Stack][0].path[state[Stack][0].point]"),
 			),
 			D('If there are more nodes to execute',
+				E.equals(() => {
+					return SequenceNode.proceed.call(new S([[null,null,null], null]), [null,null,null], { [Stack]: [{path:[0,1],origin:Return,point:1}]})
+				}, { [Stack]: [{path:[0,2],origin:Return,point:2}] }, symbols),
 				JS("if (node && (typeof index === 'number') && (index+1 < node.length))"),
 				TS("if (node && (typeof index === 'number') && (index+1 < (node as SequenceType<State, Output, Action>).length))"),
 				D('Execute the next node',
@@ -1523,23 +1712,33 @@ D('Default Nodes',
 				),
 			),
 			D('Proceed as normal if the list is complete',
+				E.equals(() => {
+					return SequenceNode.proceed.call(new S([[null,null,null], null]), [null,null,null], { [Stack]: [{path:[0,2],origin:Return,point:1}]})
+				}, { [Stack]: [{path:[1],origin:Return,point:1}] }, symbols),
 				JS("return Node.proceed.call(this, node, state)"),
 				TS("return Node.proceed.call(this as any, node, state) as SystemState<State, Output>"),
 			),
 			CS("}"),
 		),
-		D('A sequence is an array. A sequence cannot be an action, that will be interpreted as an absolute-goto.',
+		D('A sequence is an array.',
 			E.equals(() => {
 				return S.config.nodes.typeof([ 1, 2, 3 ])
 			}, Sequence, symbols),
+			E.equals(() => {
+				return S.config.nodes.typeof([ 1, 2, 3 ], 'object', true)
+			}, AbsoluteGoto),
 			JS("static typeof(object, objectType, isAction) { return ((!isAction) && objectType === 'object' && Array.isArray(object)) }"),
 			TS("static typeof<SelfType = SequenceType>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType { return ((!isAction) && objectType === 'object' && Array.isArray(object)) }")
 		),
 		D('Execute a sequence by directing to the first node (so long as it has nodes)',
+			E.equals(() => {
+				return SequenceNode.execute([null,null,null], { [Stack]: [{path:['some',0,'complex','path'],origin:Return,point:4}]})
+			}, ['some',0,'complex','path',0], symbols),
 			JS("static execute(node, state) { return node.length ? [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 0 ] : null }"),
 			TS(`static execute<${commonGenericDefinitionInner}SelfType = SequenceType<State, Output, Action>,>(this: Instance${commonGenericArguments}, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> { return ((node as SequenceType<State, Output, Action>).length ? [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 0 ] : null) as Action }`),
 		),
 		D('Traverse a sequence by iterating through each node in the array.',
+			// E.todo(),
 			JS("static traverse(node, path, iterate) { return node.map((_,i) => iterate([...path,i])) }"),
 			TS(`static traverse<${commonGenericDefinitionInner}SelfType = SequenceType<State, Output, Action>,>(this: Instance${commonGenericArguments}, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return (node as SequenceType<State, Output, Action>).map((_,i) => iterate([...path,i])) as SelfType }`)
 		),
@@ -1581,12 +1780,14 @@ D('Default Nodes',
 				return instance({ result: 'start' })
 			}, 'start'),
 		),
-
-		D('This definition is exported by the library as `{ FunctionNode }`',
-			E.exports('FunctionNode', testModule, './index.js'),
+		D('The FunctionN symbol is exported as `{ FunctionN }`',
+			E.exports('FunctionN', testModule, './index.js'),
 		),
 		CS("export const FunctionN = Symbol('SSSM Function')"),
 		TS("export type FunctionType<State extends InitialState = InitialState, Output extends unknown = undefined, Action extends unknown = ActionType<State, Output>> = (state: SystemState<State, Output>) => Action | Promise<Action>"),
+		D('This definition is exported by the library as `{ FunctionNode }`',
+			E.exports('FunctionNode', testModule, './index.js'),
+		),
 		CS("export class FunctionNode extends Node {"),
 		D('Uses the FunctionN symbol as the type.',
 			CS("static type = FunctionN"),
@@ -1602,16 +1803,27 @@ D('Default Nodes',
 			TS("static typeof<SelfType = FunctionType>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType { return (!isAction) && objectType === 'function' }")
 		),
 		D('Exectute a functon by running it, passing in the state.',
+			E.equals(() => {
+				let methodRun = false
+				const result = FunctionNode.execute((...args) => {
+					methodRun = true
+					return args
+				}, { [Stack]: [{path:[],origin:Return,point:0}] })
+				return methodRun && result
+			}, [{ [Stack]: [{path:[],origin:Return,point:0}] }], symbols),
 			JS("static execute(node, state) { return node(state) }"),
 			TS(`static execute<${commonGenericDefinitionInner}SelfType = FunctionType<State, Output, Action>,>(this: Instance${commonGenericArguments}, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> { return (node as FunctionType<State, Output, Action>)(state) }`)
 		),
 		CS("}"),
 	),
 	D('Undefined Node',
+		D('The Undefined symbol is exported as `{ Undefined }`',
+			E.exports('Undefined', testModule, './index.js'),
+		),
+		CS("export const Undefined = Symbol('SSSM Undefined')"),
 		D('This definition is exported by the library as `{ UndefinedNode }`',
 			E.exports('UndefinedNode', testModule, './index.js'),
 		),
-		CS("export const Undefined = Symbol('SSSM Undefined')"),
 		CS("export class UndefinedNode extends Node {"),
 		D('Uses the Undefined symbol as the type.',
 			CS("static type = Undefined"),
@@ -1646,10 +1858,13 @@ D('Default Nodes',
 		CS("}"),
 	),
 	D('Empty Node',
+		D('The Empty symbol is exported as `{ Empty }`',
+			E.exports('Empty', testModule, './index.js'),
+		),
+		CS("export const Empty = Symbol('SSSM Empty')"),
 		D('This definition is exported by the library as `{ EmptyNode }`',
 			E.exports('EmptyNode', testModule, './index.js'),
 		),
-		CS("export const Empty = Symbol('SSSM Empty')"),
 		CS("export class EmptyNode extends Node {"),
 		D('Uses the Empty symbol as the type.',
 			CS("static type = Empty"),
@@ -1674,6 +1889,10 @@ D('Default Nodes',
 		CS("}"),
 	),
 	D('Condition Node',
+		D('The Condition symbol is exported as `{ Condition }`',
+			E.exports('Condition', testModule, './index.js'),
+		),
+		CS("export const Condition = Symbol('SSSM Condition')"),
 		TS(`export interface ConditionType<
 			State extends InitialState = InitialState,
 			Output extends unknown = undefined,
@@ -1686,7 +1905,6 @@ D('Default Nodes',
 		D('This definition is exported by the library as `{ ConditionNode }`',
 			E.exports('ConditionNode', testModule, './index.js'),
 		),
-		CS("export const Condition = Symbol('SSSM Condition')"),
 		CS("export class ConditionNode extends Node {"),
 		D('Uses the Condition symbol as the type.',
 			CS("static type = Condition"),
@@ -1711,6 +1929,14 @@ D('Default Nodes',
 			JS("static execute(node, state) {"),
 			TS(`static execute<${commonGenericDefinitionInner}SelfType = ConditionType<State, Output, Action>,>(this: Instance${commonGenericArguments}, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> {`),
 			D("Evaluate the `'if'` property as a function that depends on the state.",
+				E.equals(() => {
+					let switchMethodRun = false
+					ConditionNode.execute({ if: () => {
+						switchMethodRun = true
+						return 'someKey'
+					}, then: null }, { [Stack]: [{path:[],origin:Return,point:0}] })
+					return switchMethodRun
+				}, true, symbols),
 				JS("if (normalise_function(node.if)(state))"),
 				TS(`if (normalise_function((node as ConditionType<State, Output, Action>).if)(state))`)
 			),
@@ -1744,17 +1970,21 @@ D('Default Nodes',
 			JS("static traverse(node, path, iterate) { return {"),
 			TS(`static traverse<${commonGenericDefinitionInner}SelfType = ConditionType<State, Output, Action>,>(this: Instance${commonGenericArguments}, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return {`),
 			D('Copy over the original properties to preserve any custom symbols.',
+				// E.todo(),
 				CS("...node,"),
 			),
 			D("Iterate on the `'then'` clause if it exists",
+				// E.todo(),
 				JS("...('then' in node ? { then: iterate([...path,'then']) } : {}),"),
 				TS(`...('then' in (node as ConditionType<State, Output, Action>) ? { then: iterate([...path,'then']) } : {}),`)
 			),
 			D("Iterate on the `'else'` clause if it exists",
+				// E.todo(),
 				JS("...('else' in node ? { else: iterate([...path,'else']) } : {}),"),
 				TS(`...('else' in (node as ConditionType<State, Output, Action>) ? { else: iterate([...path,'else']) } : {}),`)
 			),
 			D("Iterate over any symbols specified",
+				// E.todo(),
 				JS("...(Symbols in node ? Object.fromEntries(node[Symbols].map(key => [key, iterate([...path,key])])) : {}),"),
 				TS("...(Symbols in (node as ConditionType<State, Output, Action>) ? Object.fromEntries((node[Symbols] as Array<symbol>).map(key => [key, iterate([...path,key])])) : {}),")
 
@@ -1782,8 +2012,8 @@ D('Default Nodes',
 			output2: 'second',
 			output3: 'none'
 		}),
-		D('This definition is exported by the library as `{ SwitchNode }`',
-			E.exports('SwitchNode', testModule, './index.js'),
+		D('The Switch symbol is exported as `{ Switch }`',
+			E.exports('Switch', testModule, './index.js'),
 		),
 		CS("export const Switch = Symbol('SSSM Switch')"),
 		TS(`export interface SwitchType<
@@ -1794,6 +2024,9 @@ D('Default Nodes',
 			switch: (state: SystemState<State, Output>) => string | number,
 			case: Record<string | number, ProcessType<State, Output, Action>>
 		}`),
+		D('This definition is exported by the library as `{ SwitchNode }`',
+			E.exports('SwitchNode', testModule, './index.js'),
+		),
 		CS("export class SwitchNode extends Node {"),
 		D('Uses the Switch symbol as the type.',
 			CS("static type = Switch"),
@@ -1818,28 +2051,47 @@ D('Default Nodes',
 			JS("static execute(node, state) {"),
 			TS(`static execute<${commonGenericDefinitionInner}SelfType = SwitchType<State, Output, Action>,>(this: Instance${commonGenericArguments}, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> {`),
 			D("Evaluate the `'switch'` property as a function that returns a key.",
+				E.equals(() => {
+					let switchMethodRun = false
+					SwitchNode.execute({ switch: () => {
+						switchMethodRun = true
+						return 'someKey'
+					}, case: { someKey: null } }, { [Stack]: [{path:[],origin:Return,point:0}] })
+					return switchMethodRun
+				}, true, symbols),
 				JS("const key = normalise_function(node.switch)(state)"),
 				TS(`const key = normalise_function((node as SwitchType<State, Output, Action>).switch)(state)`)
 			),
 			D("If the key exists in the `'case'` caluses, use the key, otherwise use the `'default'` clause",
+				E.equals(() => {
+					return SwitchNode.execute({ switch: 'extant', case: { extant: null } }, { [Stack]: [{path:[],origin:Return,point:0}] })
+				}, ['case','extant'], symbols),
+				E.equals(() => {
+					return SwitchNode.execute({ switch: 'non extant', case: { default: null } }, { [Stack]: [{path:[],origin:Return,point:0}] })
+				}, ['case','default'], symbols),
 				JS("const fallbackKey = (key in node.case) ? key : 'default'"),
 				TS(`const fallbackKey = (key in (node as SwitchType<State, Output, Action>).case) ? key : 'default'`)
 			),
 			D("Check again if the key exists (`'default'` clause may not be defined), if it does, redirect to the case, otherwise do nothing.",
+				E.equals(() => {
+					return SwitchNode.execute({ switch: 'non extant', case: {} }, { [Stack]: [{path:[],origin:Return,point:0}] })
+				}, null, symbols),
 				JS("return (fallbackKey in node.case) ? [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'case', fallbackKey ] : null"),
 				TS(`return ((fallbackKey in (node as SwitchType<State, Output, Action>).case) ? [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'case', fallbackKey ] : null) as Action`)
 			),
 			CS("}"),
 		),
 		D("Traverse a switch by iterating over the `'case'` clauses",
+			// E.todo(),
 			JS("static traverse(node, path, iterate) { return { ...node, case: Object.fromEntries(Object.keys(node.case).map(key => [ key, iterate([...path,'case',key]) ])), ...(Symbols in node ? Object.fromEntries(node[Symbols].map(key => [key, iterate([...path,key])])) : {}) } }"),
 			TS(`static traverse<${commonGenericDefinitionInner}SelfType = SwitchType<State, Output, Action>,>(this: Instance${commonGenericArguments}, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return { ...node, case: Object.fromEntries(Object.keys((node as SwitchType<State, Output, Action>).case).map(key => [ key, iterate([...path,'case',key]) ])), ...(Symbols in (node as SwitchType<State, Output, Action>) ? Object.fromEntries((node[Symbols] as Array<symbol>).map(key => [key, iterate([...path,key])])) : {}) } }`),
 		),
 		CS("}"),
 	),
 	D('While Node',
-		D('This definition is exported by the library as `{ WhileNode }`',
-			E.exports('WhileNode', testModule, './index.js'),
+		"Repeatedly executes the 'do' clause, so long as the 'while' condition is true",
+		D('The While symbol is exported as `{ While }`',
+			E.exports('While', testModule, './index.js'),
 		),
 		CS("export const While = Symbol('SSSM While')"),
 		TS(`export interface WhileType<
@@ -1850,6 +2102,9 @@ D('Default Nodes',
 			while: (state: SystemState<State, Output>) => boolean,
 			do: ProcessType<State, Output, Action>
 		}`),
+		D('This definition is exported by the library as `{ WhileNode }`',
+			E.exports('WhileNode', testModule, './index.js'),
+		),
 		CS("export class WhileNode extends Node {"),
 		D('Uses the While symbol as the type.',
 			CS("static type = While"),
@@ -1874,20 +2129,32 @@ D('Default Nodes',
 			JS("static execute(node, state) {"),
 			TS(`static execute<${commonGenericDefinitionInner}SelfType = WhileType<State, Output, Action>,>(this: Instance${commonGenericArguments}, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> {`),
 			D("Evaluate the `'while'` property as a function that returns a boolean.",
-				"If the condition is false, exit the while loop.",
-				JS("if (!(('do' in node) && normalise_function(node.while)(state))) return null"),
-				TS(`if (!(('do' in (node as WhileType<State, Output, Action>)) && normalise_function((node as WhileType<State, Output, Action>).while)(state))) return null as Action`),
-				"If `true`, execute the `'do'` clause",
-				JS("return [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'do' ]"),
-				TS(`return [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'do' ] as Action`)
+				E.equals(() => {
+					return WhileNode.execute({ while: false, do: null }, { [Stack]: [{path:[0,0],origin:Return,point:2}] })
+				}, null, symbols),
+				D("If the condition is false, exit the while loop.",
+					JS("if (!(('do' in node) && normalise_function(node.while)(state))) return null"),
+					TS(`if (!(('do' in (node as WhileType<State, Output, Action>)) && normalise_function((node as WhileType<State, Output, Action>).while)(state))) return null as Action`),
+				),
+				D("If `true`, execute the `'do'` clause",
+					E.equals(() => {
+						return WhileNode.execute({ while: true, do: null }, { [Stack]: [{path:[0,0],origin:Return,point:2}] })
+					}, [0,0,'do'], symbols),
+					JS("return [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'do' ]"),
+					TS(`return [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'do' ] as Action`)
+				),
 			),
 			CS("}"),
 		),
 		D("Proceed by re-entering the while loop.",
+			E.equals(() => {
+				return WhileNode.proceed(undefined, { [Stack]: [{path:['some',0,'complex',0,'path'],origin:Return,point:2}] })
+			}, { [Stack]: [{path:['some',0],origin:Return,point:2}] }, symbols),
 			JS("static proceed(node, state) { return { ...state, [Stack]: [ { ...state[Stack][0], path: state[Stack][0].path.slice(0,state[Stack][0].point) }, ...state[Stack].slice(1) ] } }"),
 			TS(`static proceed<${commonGenericDefinitionInner}SelfType = WhileType<State, Output, Action>,>(this: Instance${commonGenericArguments}, node: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise<SystemState<State, Output>> { return { ...state, [Stack]: [ { ...state[Stack][0], path: state[Stack][0].path.slice(0,state[Stack][0].point) }, ...state[Stack].slice(1) ] } }`),
 		),
 		D("Traverse a while by iterating over the `'do'` clause",
+			// E.todo(),
 			JS("static traverse(node, path, iterate) { return { ...node, ...('do' in node ? { do: iterate([ ...path, 'do' ]) } : {}), ...(Symbols in node ? Object.fromEntries(node[Symbols].map(key => [key, iterate([...path,key])])) : {}), } }"),
 			TS(`static traverse<${commonGenericDefinitionInner}SelfType = WhileType<State, Output, Action>,>(this: Instance${commonGenericArguments}, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return { ...node, ...('do' in (node as WhileType<State, Output, Action>) ? { do: iterate([ ...path, 'do' ]) } : {}), ...(Symbols in (node as WhileType<State, Output, Action>) ? Object.fromEntries((node[Symbols] as Array<symbol>).map(key => [key, iterate([...path,key])])) : {}), } }`),
 		),
@@ -1904,8 +2171,8 @@ D('Default Nodes',
 			}).output(({ result }) => result)
 			return instance({ result: 'start' })
 		}, 'second'),
-		D('This definition is exported by the library as `{ MachineNode }`',
-			E.exports('MachineNode', testModule, './index.js'),
+		D('The Machine symbol is exported as `{ Machine }`',
+			E.exports('Machine', testModule, './index.js'),
 		),
 		CS("export const Machine = Symbol('SSSM Machine')"),
 		TS(`export interface MachineType<
@@ -1917,6 +2184,9 @@ D('Default Nodes',
 			[key: string | number]: ProcessType<State, Output, Action>
 			[Symbols]?: Array<InterruptGotoType>
 		}`),
+		D('This definition is exported by the library as `{ MachineNode }`',
+			E.exports('MachineNode', testModule, './index.js'),
+		),
 		CS("export class MachineNode extends Node {"),
 		D('Uses the Machine symbol as the type.',
 			CS("static type = Machine"),
@@ -1938,10 +2208,14 @@ D('Default Nodes',
 			}, ['initial'], symbols),
 		),
 		D("Execute a machine by directing to the `'initial'` stages.",
+			E.equals(() => {
+				return MachineNode.execute(undefined, { [Stack]: [{path:['a','b','c'],oirign:Return,point:3}]})
+			}, ['a','b','c','initial'], symbols),
 			JS("static execute(node, state) { return [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'initial' ] }"),
 			TS(`static execute<${commonGenericDefinitionInner}SelfType = MachineType<State, Output, Action>,>(this: Instance${commonGenericArguments}, node: SelfType, state: SystemState<State, Output>): Action | Promise<Action> { return [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'initial' ] as Action }`),
 		),
 		D('Traverse a machine by iterating over all the stages',
+			// E.todo(),
 			JS("static traverse(node, path, iterate) { return { ...node, ...Object.fromEntries(Object.keys(node).concat(Symbols in node ? node[Symbols]: []).map(key => [ key, iterate([...path,key]) ])) } }"),
 			TS(`static traverse<${commonGenericDefinitionInner}SelfType = MachineType<State, Output, Action>,>(this: Instance${commonGenericArguments}, node: SelfType, path: Path, iterate: ((path: Path) => SelfType)): SelfType { return { ...node, ...Object.fromEntries(Object.keys(node as object).concat((Symbols in (node as object)) ? (node as SelfType)[Symbols]: []).map(key => [ key, iterate([...path,key]) ])) } }`),
 		),
@@ -1972,11 +2246,14 @@ D('Default Nodes',
 				return instance({ result: 'start' })
 			}, 'first'),
 		),
-		D('This definition is exported by the library as `{ GotoNode }`',
-			E.exports('GotoNode', testModule, './index.js'),
+		D('The Goto symbol is exported as `{ Goto }`',
+			E.exports('Goto', testModule, './index.js'),
 		),
 		CS("export const Goto = Symbol('SSSM Goto')"),
 		TS("export type GotoType = { [Goto]: AbsoluteGotoType | SequenceGotoType | MachineGotoType }"),
+		D('This definition is exported by the library as `{ GotoNode }`',
+			E.exports('GotoNode', testModule, './index.js'),
+		),
 		CS("export class GotoNode extends Node {"),
 		D('Uses the Goto symbol as the type.',
 			CS("static type = Goto"),
@@ -1992,10 +2269,28 @@ D('Default Nodes',
 			TS("static typeof<SelfType = GotoType>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType  { return Boolean(object && objectType === 'object' && (Goto in (object as object))) }")
 		),
 		D('A goto is performed by performing the value of the `Goto` property to allow for using absolute or relative gotos',
+			E.equals(() => {
+				let performCalled = false
+				const MyNodeType = Symbol("My Node")
+				class MyNode extends Node {
+					static type = MyNodeType
+					static typeof(object) { return object === MyNodeType }
+					static perform(action, state) {
+						performCalled = true
+						return { ...state, someChange: 'someValue' }
+					}
+				}
+				const result = GotoNode.perform.call(new S().addNode(MyNode), { [Goto]: MyNodeType }, {})
+				return performCalled && result
+			}, { someChange: 'someValue' }, symbols),
 			JS("static perform(action, state) { return S._perform(this, state, action[Goto]) }"),
 			TS(`static perform<${commonGenericDefinitionInner}SelfType = GotoType,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> { return S._perform(this, state, (action as GotoType)[Goto] as Action) }`)
 		),
 		D('A goto does not require proceeding, simply return the current state unmodified',
+			E.equals(() => {
+				const stateObj = { myProperty: 'myValue' }
+				return GotoNode.proceed(undefined, stateObj) === stateObj
+			}, true, symbols),
 			JS("static proceed(node, state) { return state }"),
 			TS(`static proceed(node, state) { return state }`)
 		),
@@ -2026,11 +2321,14 @@ D('Default Nodes',
 				return instance({ input: 'skip' })
 			}, 'second'),
 		),
-		D('This definition is exported by the library as `{ SequenceGotoNode }`',
-			E.exports('SequenceGotoNode', testModule, './index.js'),
+		D('The SequenceGoto symbol is exported as `{ SequenceGoto }`',
+			E.exports('SequenceGoto', testModule, './index.js'),
 		),
 		CS("export const SequenceGoto = Symbol('SSSM Sequence Goto')"),
 		TS("export type SequenceGotoType = number"),
+		D('This definition is exported by the library as `{ SequenceGotoNode }`',
+			E.exports('SequenceGotoNode', testModule, './index.js'),
+		),
 		CS("export class SequenceGotoNode extends GotoNode {"),
 		D('Uses the SequenceGoto symbol as the type.',
 			CS("static type = SequenceGoto"),
@@ -2049,12 +2347,21 @@ D('Default Nodes',
 			JS("static perform(action, state) {"),
 			TS(`static perform<${commonGenericDefinitionInner}SelfType = SequenceGotoType,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {`),
 			D('Get the closest ancestor that is a sequence.',
+				E.equals(() => {
+					return SequenceGotoNode.perform.call(new S([[null,{initial:null}]]), 2, { [Stack]: [{path:[0,1,'initial'],origin:Return,point:3}] })
+				}, { [Stack]: [{path:[0,2],origin:Return,point:2}] }, symbols),
 				CS("const lastOf = S._closest(this, state[Stack][0].path.slice(0,state[Stack][0].point-1), SequenceNode.type)"),
 			),
 			D('If there is no such ancestor, throw a `PathReferenceError`',
+				E.error(() => {
+					return SequenceGotoNode.perform.call(new S({initial:{initial:{initial:null}}}), 'myStage', { [Stack]: [{path:['initial','initial','initial'],origin:Return,point:3}] })
+				}, PathReferenceError),
 				CS("if (!lastOf) throw new PathReferenceError(`A relative goto has been provided as a number (${String(action)}), but no sequence exists that this number could be an index of from path [ ${state[Stack][0].path.slice(0,state[Stack][0].point).map(key => key.toString()).join(', ')} ].`, { instance: this, state, data: { action } })"),
 			),
-			D('Update the path to the parent>index',
+			D('Update the path to the parent > index',
+				E.equals(() => {
+					return SequenceGotoNode.perform.call(new S([[null,null]]), 2, { [Stack]: [{path:[0,0],origin:Return,point:2}] })
+				}, { [Stack]: [{path:[0,2],origin:Return,point:2}] }, symbols),
 				JS("return { ...state, [Stack]: [ { ...state[Stack][0], path: [...lastOf, action], point: lastOf.length + 1 }, ...state[Stack].slice(1) ] }"),
 				TS("return { ...state, [Stack]: [ { ...state[Stack][0], path: [...lastOf, action as SequenceGotoType], point: lastOf.length + 1 }, ...state[Stack].slice(1) ] }"),
 			),
@@ -2075,11 +2382,14 @@ D('Default Nodes',
 				return instance({ result: 'start' })
 			}, 'second')
 		),
-		D('This definition is exported by the library as `{ MachineGotoNode }`',
-			E.exports('MachineGotoNode', testModule, './index.js'),
+		D('The MachineGoto symbol is exported as `{ MachineGoto }`',
+			E.exports('MachineGoto', testModule, './index.js'),
 		),
 		CS("export const MachineGoto = Symbol('SSSM Machine Goto')"),
 		TS("export type MachineGotoType = string"),
+		D('This definition is exported by the library as `{ MachineGotoNode }`',
+			E.exports('MachineGotoNode', testModule, './index.js'),
+		),
 		CS("export class MachineGotoNode extends GotoNode {"),
 		D('Uses the MachineGoto symbol as the type.',
 			CS("static type = MachineGoto"),
@@ -2098,12 +2408,21 @@ D('Default Nodes',
 			JS("static perform(action, state) {"),
 			TS(`static perform<${commonGenericDefinitionInner}SelfType = MachineGotoType,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {`),
 			D('Get the closest ancestor that is a machine.',
+				E.equals(() => {
+					return MachineGotoNode.perform.call(new S({initial:[{ initial: [null] }]}), 'myStage', { [Stack]: [{path:['initial',0,'initial',0],origin:Return,point:4}] })
+				}, { [Stack]: [{path:['initial',0,'myStage'],origin:Return,point:3}] }, symbols),
 				CS("const lastOf = S._closest(this, state[Stack][0].path.slice(0,state[Stack][0].point-1), MachineNode.type)"),
 			),
 			D('If no machine ancestor is found, throw a `PathReferenceError`',
+				E.error(() => {
+					return MachineGotoNode.perform.call(new S([null]), 'myStage', { [Stack]: [{path:[0],origin:Return,point:1}] })
+				}, PathReferenceError),
 				CS("if (!lastOf) throw new PathReferenceError(`A relative goto has been provided as a string (${String(action)}), but no state machine exists that this string could be a state of. From path [ ${state[Stack][0].path.slice(0,state[Stack][0].point).map(key => key.toString()).join(', ')} ].`, { instance: this, state, data: { action } })"),
 			),
 			D('Update the path to parent > stage',
+				E.equals(() => {
+					return MachineGotoNode.perform.call(new S([[{ initial: null }]]), 'myStage', { [Stack]: [{path:[0,0,'initial'],origin:Return,point:3}] })
+				}, { [Stack]: [{path:[0,0,'myStage'],origin:Return,point:3}] }, symbols),
 				JS("return { ...state, [Stack]: [ { ...state[Stack][0], path: [...lastOf, action], point: lastOf.length + 1 }, ...state[Stack].slice(1) ] }"),
 				TS("return { ...state, [Stack]: [ { ...state[Stack][0], path: [...lastOf, action as MachineGotoType], point: lastOf.length + 1 }, ...state[Stack].slice(1) ] }"),
 			),
@@ -2126,12 +2445,14 @@ D('Default Nodes',
 				return instance({ result: 'start' })
 			}, 'second')
 		),
+		D('The InterruptGoto symbol is exported as `{ InterruptGoto }`',
+			E.exports('InterruptGoto', testModule, './index.js'),
+		),
+		CS("export const InterruptGoto = Symbol('SSSM Interrupt Goto')"),
+		TS("export type InterruptGotoType = symbol"),
 		D('This definition is exported by the library as `{ InterruptGotoNode }`',
 			E.exports('InterruptGotoNode', testModule, './index.js'),
 		),
-		
-		CS("export const InterruptGoto = Symbol('SSSM Interrupt Goto')"),
-		TS("export type InterruptGotoType = symbol"),
 		CS("export class InterruptGotoNode extends GotoNode {"),
 		D('Uses the InterruptGoto symbol as the type.',
 			CS("static type = InterruptGoto"),
@@ -2150,14 +2471,23 @@ D('Default Nodes',
 			JS("static perform(action, state) {"),
 			TS(`static perform<${commonGenericDefinitionInner}SelfType = InterruptGotoType,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {`),
 			D('Get the closest ancestor that contains this interrupt symbol.',
-				JS("const lastOf = get_closest_path(this.process, state[Stack][0].path.slice(0,state[Stack][0].point-1), parentNode => Boolean(parentNode && (typeof parentNode === 'object') && (action in parentNode)))"),
-				TS("const lastOf = get_closest_path(this.process, state[Stack][0].path.slice(0,state[Stack][0].point-1), parentNode => Boolean(parentNode && (typeof parentNode === 'object') && ((action as InterruptGotoType) in (parentNode as object))))"),
+				E.equals(() => {
+					return InterruptGotoNode.perform.call(new S({ [testSymbol]: null, initial:{ [testSymbol]: null,initial: { initial: null } } }), testSymbol, { [Stack]: [{path:['initial','initial','initial'],origin:Return,point:3}] })
+				}, { [Stack]:  [{path:['initial',testSymbol],origin:testSymbol,point:2}, {path:['initial','initial','initial'],origin:Return,point:3}] }, symbols),
+				JS("const lastOf = get_closest_path(this.process, state[Stack][state[Stack].length-1].path.slice(0,state[Stack][state[Stack].length-1].point-1), parentNode => Boolean(parentNode && (typeof parentNode === 'object') && (action in parentNode)))"),
+				TS("const lastOf = get_closest_path(this.process, state[Stack][state[Stack].length-1].path.slice(0,state[Stack][state[Stack].length-1].point-1), parentNode => Boolean(parentNode && (typeof parentNode === 'object') && ((action as InterruptGotoType) in (parentNode as object))))"),
 			),
 			D('If no suitable ancestor is found, return the interrupt symbol itself.',
+				E.equals(() => {
+					return InterruptGotoNode.perform.call(new S([[{ initial: null }]]), testSymbol, { [Stack]: [{path:[0,0,'initial'],origin:Return,point:3}] })
+				}, { [Return]: testSymbol, [Stack]:  [{path:[0,0,'initial'],origin:Return,point:3}] }, symbols),
 				JS("if (!lastOf) return { ...state, [Return]: action }"),
 				TS("if (!lastOf) return { ...state, [Return]: action } as SystemState<State, Output>"),
 			),
 			D('Update the path to parent > interrupt',
+				E.equals(() => {
+					return InterruptGotoNode.perform.call(new S([[{ [testSymbol]: null, initial: null }]]), testSymbol, { [Stack]: [{path:[0,0,'initial'],origin:Return,point:3}] })
+				}, { [Stack]:  [{path:[0,0,testSymbol],origin:testSymbol,point:3}, {path:[0,0,'initial'],origin:Return,point:3}] }, symbols),
 				JS("return { ...state, [Stack]: [ { origin: action, path: [...lastOf, action], point: lastOf.length + 1 }, ...state[Stack] ] }"),
 				TS("return { ...state, [Stack]: [ { origin: action as InterruptGotoType, path: [...lastOf, action as InterruptGotoType], point: lastOf.length + 1 }, ...state[Stack] ] }"),
 			),
@@ -2167,9 +2497,15 @@ D('Default Nodes',
 			JS("static proceed(node, state) {"),
 			TS(`static proceed<${commonGenericDefinitionInner}SelfType = InterruptGotoType,>(this: Instance${commonGenericArguments}, node: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {`),
 			D('Proceed the stack before this point, and strip out the affected system properties.',
+				E.equals(() => {
+					return InterruptGotoNode.proceed.call(new S([ null, null ]), testSymbol, { [Stack]: [{path:['first','item'],origin:testSymbol,point:2},{path:[0],origin:Return,point:1}] })
+				}, { [Stack]:  [{path:['first','item'],origin:testSymbol,point:2}, {path:[1],origin:Return,point:1}] }, symbols),
 				CS("const { [Stack]: stack, [Return]: interruptReturn, ...proceedPrevious } = S._proceed(this, { ...state, [Stack]: state[Stack].slice(1) }, undefined)"),
 			),
-			D('Add the current inercept back in to the resulting stack.',
+			D('Add the current interrupt back in to the resulting stack.',
+				E.equals(() => {
+					return InterruptGotoNode.proceed.call(new S(), testSymbol, { [Stack]: [{path:['first','item'],origin:testSymbol,point:2},{path:[],origin:Return,point:0}] })
+				}, { [Stack]:  [{path:['first','item'],origin:testSymbol,point:2}] }, symbols),
 				JS("return { ...proceedPrevious, [Stack]: [ state[Stack][0], ...stack ] }"),
 				TS("return { ...proceedPrevious, [Stack]: [ state[Stack][0], ...stack ] } as SystemState<State, Output>"),
 			),
@@ -2225,11 +2561,14 @@ D('Default Nodes',
 				return instance({ result: 'start' })
 			}, 'not skipped'),
 		),
-		D('This definition is exported by the library as `{ AbsoluteGotoNode }`',
-			E.exports('AbsoluteGotoNode', testModule, './index.js'),
+		D('The AbsoluteGoto symbol is exported as `{ AbsoluteGoto }`',
+			E.exports('AbsoluteGoto', testModule, './index.js'),
 		),
 		CS("export const AbsoluteGoto = Symbol('SSSM Absolute Goto')"),
 		TS("export type AbsoluteGotoType = Path"),
+		D('This definition is exported by the library as `{ AbsoluteGotoNode }`',
+			E.exports('AbsoluteGotoNode', testModule, './index.js'),
+		),
 		CS("export class AbsoluteGotoNode extends GotoNode {"),
 		D('Uses the AbsoluteGoto symbol as the type.',
 			CS("static type = AbsoluteGoto"),
@@ -2246,6 +2585,9 @@ D('Default Nodes',
 			TS("static typeof<SelfType = AbsoluteGotoType>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType  { return isAction && Array.isArray(object) }")
 		),
 		D('An absolute goto is performed by setting `Stack` to the path',
+			E.equals(() => {
+				return AbsoluteGotoNode.perform(['a','b','c'], { [Stack]: [{path:[],origin:Return,point:0}] })
+			}, { [Stack]: [{path:['a','b','c'],origin:Return,point:3}] },symbols),
 			JS("static perform(action, state) { return { ...state, [Stack]: [ { ...state[Stack][0], path: action, point: action.length }, ...state[Stack].slice(1) ] } }"),
 			TS(`static perform<${commonGenericDefinitionInner}SelfType = AbsoluteGotoType,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> { return { ...state, [Stack]: [ { ...state[Stack][0], path: (action as AbsoluteGotoType), point: (action as AbsoluteGotoType).length }, ...state[Stack].slice(1) ] } }`)
 		),
@@ -2276,12 +2618,15 @@ D('Default Nodes',
 				return instance.output(state => state)({ result: 'start' })
 			}, { result: 'start', [Return]: 'custom' }, symbols),
 		),
-		D('This definition is exported by the library as `{ ReturnNode }`',
-			E.exports('ReturnNode', testModule, './index.js'),
+		D('The Return symbol is exported as `{ Return }`',
+			E.exports('Return', testModule, './index.js'),
 		),
 		CS("export const Return = Symbol('SSSM Return')"),
 		TS("export type ReturnObjectType<Output extends unknown = unknown> = { [Return]: Output }"),
 		TS("export type ReturnType<Output extends unknown = unknown> = ReturnObjectType<Output> | typeof Return"),
+		D('This definition is exported by the library as `{ ReturnNode }`',
+			E.exports('ReturnNode', testModule, './index.js'),
+		),
 		CS("export class ReturnNode extends GotoNode {"),
 		D('Uses the Return symbol as the type.',
 			CS("static type = Return"),
@@ -2300,18 +2645,30 @@ D('Default Nodes',
 			TS("static typeof<SelfType = ReturnType>(object: unknown, objectType: typeof object, isAction: boolean): object is SelfType  { return object === Return || Boolean(object && objectType === 'object' && (Return in (object as object))) }")
 		),
 		D('Perform a return by setting the `Return` property on the state to the return value',
+			E.equals(() => {
+				return ReturnNode.perform({ [Return]: 'myValue' }, {})
+			}, { [Return]: 'myValue' }, symbols),
 			JS("static perform(action, state) { return { ...state, [Return]: !action || action === Return ? undefined : action[Return], } }"),
 			TS(`static perform<${commonGenericDefinitionInner}SelfType = ReturnType<Output>,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> { return { ...state, [Return]: !action || action === Return ? undefined : (action as unknown as ReturnObjectType<Output>)[Return] as Output, } }`),
 		),
 		D('Inherit from root node definition, not GotoNode.',
+			E.equals(() => {
+				return ReturnNode.proceed
+			}, Node.proceed),
 			CS("static proceed = Node.proceed")
 		),
 		CS("}"),
 	),
 	D('Continue Node',
 		'Exit this pass of a While loop and evaluate the condition again.',
+		D('The Continue symbol is exported as `{ Continue }`',
+			E.exports('Continue', testModule, './index.js'),
+		),
 		CS("export const Continue = Symbol('SSSM Continue')"),
 		TS("export type ContinueType = typeof Continue"),
+		D('This definition is exported by the library as `{ ContinueNode }`',
+			E.exports('ContinueNode', testModule, './index.js'),
+		),
 		CS("export class ContinueNode extends GotoNode {"),
 		D('Uses the Continue symbol as the type.',
 			CS("static type = Continue"),
@@ -2330,12 +2687,21 @@ D('Default Nodes',
 			JS("static perform(action, state) {"),
 			TS(`static perform<${commonGenericDefinitionInner}SelfType = ContinueType,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {`),
 			D('Find the closest While loop.',
+				E.equals(() => {
+					return ContinueNode.perform.call(new S([{ while: true, do: {while:true,do:null} }, null]), Continue, { [Stack]: [{path:[0,'do','do'],origin:Return,point:3}] })
+				}, { [Stack]: [{ path: [0,'do'], origin:Return, point:2 }] }, symbols),
 				CS("const lastOf = S._closest(this, state[Stack][0].path.slice(0,state[Stack][0].point-1), WhileNode.type)"),
 			),
 			D('If there is none, throw a `PathReferenceError`.',
+				E.error(() => {
+					return ContinueNode.perform.call(new S(null), Continue, { [Stack]: [{path:[],origin:Return,point:0}] })
+				}, PathReferenceError, symbols),
 				CS("if (!lastOf) throw new PathReferenceError(`A Continue has been used, but no While exists that this Continue could refer to. From path [ ${state[Stack][0].path.slice(0,state[Stack][0].point).map(key => key.toString()).join(', ')} ].`, { instance: this, state, data: { action } })"),
 			),
 			D('Modify the stack to point to the closest While loop.',
+				E.equals(() => {
+					return ContinueNode.perform.call(new S([{ while: true, do: [null] }, null]), Continue, { [Stack]: [{path:[0,'do',0],origin:Return,point:3}] })
+				}, { [Stack]: [{ path: [0],origin:Return,point:1 }] }, symbols),
 				CS("return { ...state, [Stack]: [ { ...state[Stack][0], path: lastOf, point: lastOf.length }, ...state[Stack].slice(1) ] }"),
 			),
 			CS("}")
@@ -2344,8 +2710,14 @@ D('Default Nodes',
 	),
 	D('Break Node',
 		'Break out of a while loop, and proceed as if the condition has failed.',
+		D('The Break symbol is exported as `{ Break }`',
+			E.exports('Break', testModule, './index.js'),
+		),
 		CS("export const Break = Symbol('SSSM Break')"),
 		TS("export type BreakType = typeof Break"),
+		D('This definition is exported by the library as `{ BreakNode }`',
+			E.exports('BreakNode', testModule, './index.js'),
+		),
 		CS("export class BreakNode extends GotoNode {"),
 		D('Uses the Break symbol as the type.',
 			CS("static type = Break"),
@@ -2364,17 +2736,30 @@ D('Default Nodes',
 			JS("static proceed (node, state) {"),
 			TS(`static proceed<${commonGenericDefinitionInner}SelfType = BreakType,>(this: Instance${commonGenericArguments}, node: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {`),
 			D('Find the closest While loop.',
+				E.equals(() => {
+					return BreakNode.proceed.call(new S([{ while: true, do: {while:true,do:null} }, null]), Break, { [Stack]: [{path:[0,'do','do'],origin:Return,point:3}] })
+				}, { [Stack]: [{ path: [0], origin:Return, point:1 }] }, symbols),
 				CS("const lastOf = S._closest(this, state[Stack][0].path.slice(0,state[Stack][0].point-1), WhileNode.type)"),
 			),
 			D('If there is none, throw a `PathReferenceError`.',
+				E.error(() => {
+					return BreakNode.proceed.call(new S(null), Break, { [Stack]: [{path:[],origin:Return,point:0}] })
+				}, PathReferenceError, symbols),
 				CS("if (!lastOf) throw new PathReferenceError(`A Break has been used, but no While exists that this Break could refer to. From path [ ${state[Stack][0].path.slice(0,state[Stack][0].point).map(key => key.toString()).join(', ')} ].`, { instance: this, state, data: { node } })"),
 			),
 			D('Proceed on the While loop as if it is exiting.',
+				E.equals(() => {
+					return BreakNode.proceed.call(new S([{ while: true, do: [null] }, null]), Break, { [Stack]: [{path:[0,'do',0],origin:Return,point:3}] })
+				}, { [Stack]: [{ path: [1],origin:Return,point:1 }] }, symbols),
 				CS("return S._proceed(this, { ...state, [Stack]: [{ ...state[Stack][0], point: lastOf.length-1 }, ...state[Stack].slice(1)] }, get_path_object(this.process, lastOf.slice(0,-1)))"),
 			),
 			CS("}")
 		),
 		D('Perform by doing nothing, do not inherit from `GotoNode`.',
+			E.equals(() => {
+				const stateObj = { myProperty: 'myValue' }
+				return BreakNode.perform(Break, stateObj) === stateObj
+			}, true),
 			CS("static perform = Node.perform"),
 		),
 		CS("}")
@@ -2406,8 +2791,56 @@ export type ActionType<
 `),
 ),
 D('Extensible Function',
+	D('Create an executable object with custom properties',
+		E.equals(() => {
+			class MyExecutable extends ExtensibleFunction {
+				prop1 = 0
+				#prop2 = 0
+				get prop2 () { return this.#prop2 }
+				prop3 = 0
+				constructor(prop1,prop2,prop3) {
+					super(() => {})
+					this.prop1 = prop1
+					this.#prop2 = prop2
+					this.prop3 = prop3
+				}
+			}
+			return new MyExecutable(1, 2, 3)
+		}, { prop1: 1, prop2: 2, prop3: 3 }),
+	),
 	CS("export class ExtensibleFunction extends Function {"),
 	D('Some prototype magic to make it work',
+		D('A function is passed into the the ExtensibleFunction',
+			E.success(() => {
+				return new ExtensibleFunction(() => {})
+			}, {}, symbols),
+		),
+		D('The created instance will call the passed in function when it is called',
+			E.equals(() => {
+				let methodCalled = false;
+				const result = new ExtensibleFunction((...args) => {
+					methodCalled = true
+					return args
+				})(1, 'b', Math.PI)
+				return methodCalled && result
+			}, [1, 'b', Math.PI], symbols),
+		),
+		D('The created instance will be the passed in function',
+			E.equals(() => {
+				const myFunct = () => {}
+				return new ExtensibleFunction(myFunct) === myFunct
+			}, true, symbols),
+		),
+		D('The created instance will be an `instanceof ExtensibleFunction`',
+			E.equals(() => {
+				return new ExtensibleFunction(() => {}) instanceof ExtensibleFunction
+			}, true, symbols),
+		),
+		D('The created instance will be an `instanceof Function`',
+			E.equals(() => {
+				return new ExtensibleFunction(() => {}) instanceof Function
+			}, true, symbols),
+		),
 		JS("constructor(f) { super(); return Object.setPrototypeOf(f, new.target.prototype) }"),
 		TS("constructor(f: Function) { super(); return Object.setPrototypeOf(f, new.target.prototype) }")
 	),
@@ -2426,43 +2859,81 @@ D('Core',
 			return S.config
 		}, { deep: false, strict: false, trace: false, iterations: 10000, override: null, adapt: [], before: [], after: [], defaults: {} }),
 		D('Initialise an empty state by default',
+			E.equals(() => {
+				return Object.keys(new S(null).config.defaults)
+			}, [], symbols),
 			CS("defaults: {},")
 		),
 		D('Input the initial state by default',
+			E.equals(() => {
+				return new S(null).config.input({ myProperty: 'myValue' }, 2, 3)
+			}, { myProperty: 'myValue' }, symbols),
 			CS("input: (state = {}) => state,"),
 		),
 		D('Return the `Return` property by default',
+			E.equals(() => {
+				return new S(null).config.output({ [Return]: 'myValue' })
+			}, 'myValue', symbols),
 			CS("output:  state => state[Return],")
 		),
 		D('Do not perform strict state checking by default',
+			E.equals(() => {
+				return new S(null).config.strict
+			}, false, symbols),
 			CS("strict: false,"),
 		),
-		D('Allow 1000 iterations by default',
+		D('Allow 10000 iterations by default',
+			E.equals(() => {
+				return new S(null).config.iterations
+			}, 10000, symbols),
 			CS("iterations: 10000,")
 		),
-		D('Run util the return symbol is present by default.',
+		D('Run until the return symbol is present by default.',
+			E.equals(() => {
+				return new S(null).config.until({ [Return]: undefined })
+			}, true, symbols),
 			CS("until: state => Return in state,")
 		),
 		D('Do not keep the stack trace by default',
+			E.equals(() => {
+				return new S(null).config.trace
+			}, false, symbols),
 			CS("trace: false,"),
 		),
 		D('Shallow merge changes by default',
+			E.equals(() => {
+				return new S(null).config.deep
+			}, false, symbols),
 			CS("deep: false,"),
 		),
 		D('Do not override the execution method by default',
+			E.equals(() => {
+				return new S(null).config.override
+			}, null, symbols),
 			CS("override: null,"),
 		),
 		D('Uses the provided nodes by default.',
-			JS("nodes: new Nodes(ChangesNode, SequenceNode, FunctionNode, ConditionNode, SwitchNode, WhileNode, MachineNode, GotoNode, InterruptGotoNode, AbsoluteGotoNode, MachineGotoNode, SequenceGotoNode, ErrorNode, UndefinedNode, EmptyNode, ContinueNode, BreakNode, ReturnNode),"),
-			TS("nodes: new Nodes(ChangesNode, SequenceNode, FunctionNode, ConditionNode, SwitchNode, WhileNode, MachineNode, GotoNode, InterruptGotoNode, AbsoluteGotoNode, MachineGotoNode, SequenceGotoNode, ErrorNode, UndefinedNode, EmptyNode, ContinueNode, BreakNode, ReturnNode),")
+			E.equals(() => {
+				return new S(null).config.nodes
+			}, { [Changes]: ChangesNode, [Sequence]: SequenceNode, [FunctionN]: FunctionNode, [Condition]: ConditionNode, [Switch]: SwitchNode, [While]: WhileNode, [Machine]: MachineNode, [Goto]: GotoNode, [InterruptGoto]: InterruptGotoNode, [AbsoluteGoto]: AbsoluteGotoNode, [MachineGoto]: MachineGotoNode, [SequenceGoto]: SequenceGotoNode, [ErrorN]: ErrorNode, [Undefined]: UndefinedNode, [Empty]: EmptyNode, [Continue]: ContinueNode, [Break]: BreakNode, [Return]: ReturnNode }, symbols),
+			CS("nodes: new Nodes(ChangesNode, SequenceNode, FunctionNode, ConditionNode, SwitchNode, WhileNode, MachineNode, GotoNode, InterruptGotoNode, AbsoluteGotoNode, MachineGotoNode, SequenceGotoNode, ErrorNode, UndefinedNode, EmptyNode, ContinueNode, BreakNode, ReturnNode),"),
 		),
-		D('Initialise with an empty adapters list.',
+		D('Initialise with an empty process adapters list.',
+			E.equals(() => {
+				return new S(null).config.adapt
+			}, [], symbols),
 			CS("adapt: [],"),
 		),
-		D('Initialise with an empty start adapters list.',
+		D('Initialise with an empty `before` adapters list.',
+			E.equals(() => {
+				return new S(null).config.before
+			}, [], symbols),
 			CS("before: [],"),
 		),
-		D('Initialise with an empty end adapters list.',
+		D('Initialise with an empty `after` adapters list.',
+			E.equals(() => {
+				return new S(null).config.after
+			}, [], symbols),
 			CS("after: [],"),
 		),
 		CS("}"),
@@ -2485,14 +2956,18 @@ D('Core',
 		JS("static _closest (instance, path = [], ...nodeTypes) {"),
 		TS(`public static _closest${commonGenericDefinition}(instance: Instance${commonGenericArguments}, path: Path, ...nodeTypes: Array<string | symbol | Array<string | symbol>>): Path | null {`),
 		D('Node types can be passed in as arrays of strings, or arrays of arrays of strings...',
+			// E.todo(),
 			CS("const flatTypes = nodeTypes.flat(Infinity)"),
 		),
 		D('Use get_closest_path to find the closest path.',
+			// E.todo(),
 			CS("return get_closest_path(instance.process, path, node => {"),
 			D('Get the type of the node',
+				// E.todo(),
 				CS("const nodeType = instance.config.nodes.typeof(node)"),
 			),
 			D('Pick this node if it matches any of the given types',
+				// E.todo(),
 				CS("return Boolean(nodeType && flatTypes.includes(nodeType))"),
 			),
 			CS("})"),
@@ -2522,24 +2997,30 @@ D('Core',
 		JS("static _changes (instance, state = {}, changes = {}) {"),
 		TS(`public static _changes${commonGenericDefinition}(instance: Instance${commonGenericArguments}, state: SystemState<State, Output>, changes: Partial<State>): SystemState<State, Output> {`),
 		D('If the strict state flag is truthy, perform state checking logic',
+			// E.todo(),
 			'Go through each property in the changes and check they all already exist',
 			CS("if (instance.config.strict && Object.entries(changes).some(([property]) => !(property in state)))"),
 			D('Throw a StateReferenceError if a property is referenced that did not previosly exist.',
+				// E.todo(),
 				CS("throw new StateReferenceError(`Only properties that exist on the initial context may be updated.\\nYou changed [ ${Object.keys(changes).filter(property => !(property in state)).map(key => key.toString()).join(', ')} ], which ${Object.keys(changes).filter(property => !(property in state)).length === 1 ? 'is' : 'are'} not in: [ ${Object.keys(state).map(key => key.toString()).join(', ')} ].\\nPath: [ ${state[Stack][0].path.slice(0,state[Stack][0].point).map(key => key.toString()).join(' / ')} ]`, { instance, state, data: { changes } })"),
 			),
 		),
 		D('If the strict state flag is set to the Strict Types Symbol, perform type checking logic.',
+			// E.todo(),
 			'Go through each property and check the JS type is the same as the initial values.',
 			CS("if (instance.config.strict === StrictTypes && Object.entries(changes).some(([property,value]) => typeof value !== typeof state[property]))"),
 			D('Throw a StateTypeError if a property changes types.',
+				// E.todo(),
 				CS("throw new StateTypeError(`Properties must have the same type as their initial value. ${Object.entries(changes).filter(([property,value]) => typeof value !== typeof state[property]).map(([property,value]) => `${typeof value} given for '${property}', should be ${typeof state[property]}`).join('. ')}.`, { instance, state, data: { changes } })"),
 			),
 		),
 		D('Collect all the changes in the changes object.',
+			// E.todo(),
 			CS("const merge = instance.config.deep ? deep_merge_object : shallow_merge_object"),
 			CS("const allChanges = merge(state[Changes] || {}, changes)"),
 		),
 		D('Deep merge the current state with the new changes',
+			// E.todo(),
 			JS("return { ...merge(state, allChanges), [Changes]: allChanges }"), 
 			TS("return { ...merge(state, allChanges), [Changes]: allChanges } as SystemState<State, Output>"), 
 		),
@@ -2578,13 +3059,55 @@ D('Core',
 		),
 		JS("static _proceed (instance, state = {}, node = undefined) {"),
 		TS(`public static _proceed${commonGenericDefinition}(instance: Instance${commonGenericArguments}, state: SystemState<State, Output>, node: Process | Action = undefined as unknown as Action): SystemState<State, Output> {`),
-		D('Determine what type of node is proceeding',
+		D('Gets the type of the given `node`',
+			E.equals(() => {
+				let typeofCalled = false
+				const MyNodeType = Symbol("My Node")
+				class MyNode extends Node {
+					static type = MyNodeType
+					static typeof(object) {
+						typeofCalled = true
+						return object === MyNodeType
+					}
+				}
+				S._proceed(
+					new S(null).addNode(MyNode),
+					{[Stack]:[{path:[],origin:Return,point:0}]},
+					MyNodeType,
+				)
+				return typeofCalled
+			}, true, symbols),
 			CS(`const nodeType = instance.config.nodes.typeof(node, typeof node, state[Stack][0].point === state[Stack][0].path.length)`),
 		),
 		D('If the node is unrecognised, throw a TypeEror',
+			E.error(() => {
+				return S._proceed(
+					new S(null),
+					{[Stack]:[{path:[],origin:Return,point:0}]},
+					false
+				)
+			}, NodeTypeError, symbols),
 			CS("if (!nodeType) throw new NodeTypeError(`Unknown action type: ${typeof node}${nodeType ? `, nodeType: ${String(nodeType)}` : ''}`, { instance, state, data: { node } })"),
 		),
 		D('Call the `proceed` method of the node to get the next path.',
+			E.equals(() => {
+				let proceedCalled = false
+				const MyNodeType = Symbol("My Node")
+				class MyNode extends Node {
+					static type = MyNodeType
+					static typeof(object) { return object === MyNodeType }
+					static proceed(action, state) {
+						proceedCalled = true
+						return { ...state, someChange: 'someValue' }
+					}
+				}
+				const result = S._proceed(
+					new S(null).addNode(MyNode),
+					{[Stack]:[{path:[0],origin:Return,point:1}]},
+					MyNodeType
+				)
+				return proceedCalled && result
+			}, { someChange: 'someValue' }, symbols),
 			JS(`return instance.config.nodes.get(nodeType).proceed.call(instance, node instanceof Node ? node.value : node, state)`),
 			TS(`return instance.config.nodes.get(nodeType)!.proceed.call(instance as any, node instanceof Node ? node.value : node, state) as SystemState<State, Output>`),
 		),
@@ -2619,13 +3142,55 @@ D('Core',
 		),
 		JS("static _perform (instance, state = {}, action = undefined) {"),
 		TS(`public static _perform${commonGenericDefinition}(instance: Instance${commonGenericArguments}, state: SystemState<State, Output>, action: Action = null as Action): SystemState<State, Output> {`),
-		D('Get the node type of the given `action`',
+		D('Gets the node type of the given `action`',
+			E.equals(() => {
+				let typeofCalled = false
+				const MyNodeType = Symbol("My Node")
+				class MyNode extends Node {
+					static type = MyNodeType
+					static typeof(object) {
+						typeofCalled = true
+						return object === MyNodeType
+					}
+				}
+				S._perform(
+					new S(null).addNode(MyNode),
+					{},
+					MyNodeType
+				)
+				return typeofCalled
+			}, true, symbols),
 			CS("const nodeType = instance.config.nodes.typeof(action, typeof action, true)"),
 		),
-		D('Gets the node definition for the action',
+		D('If the given `action` is not recognised, throw a NodeTypeError',
+			E.error(() => {
+				return S._perform(
+					new S(null),
+					{},
+					false
+				)
+			}, NodeTypeError, symbols),
 			CS("if (!nodeType) throw new NodeTypeError(`Unknown action type: ${typeof action}${nodeType ? `, nodeType: ${String(nodeType)}` : ''}.`, { instance, state, data: { action } })"),
 		),
-		D('Perform the action on the state',
+		D('Performs the given `action` on the state',
+			E.equals(() => {
+				let performCalled = false
+				const MyNodeType = Symbol("My Node")
+				class MyNode extends Node {
+					static type = MyNodeType
+					static typeof(object) { return object === MyNodeType }
+					static perform(action, state) {
+						performCalled = true
+						return { ...state, someChange: 'someValue' }
+					}
+				}
+				const result = S._perform(
+					new S(null).addNode(MyNode),
+					{},
+					MyNodeType
+				)
+				return performCalled && result
+			}, { someChange: 'someValue' }, symbols),
 			JS("return instance.config.nodes.get(nodeType).perform.call(instance, action instanceof Node ? action.value : action, state)"),
 			TS("return instance.config.nodes.get(nodeType)!.perform.call(instance as any, action instanceof Node ? action.value : action, state) as SystemState<State, Output>"),
 		),
@@ -2654,13 +3219,55 @@ D('Core',
 		),
 		JS("static _execute (instance, state = {}, node = get_path_object(instance.process, state[Stack][0].path.slice(0,state[Stack][0].point))) {"),
 		TS(`public static _execute${commonGenericDefinition}(instance: Instance${commonGenericArguments}, state: SystemState<State, Output>, node: Process = get_path_object(instance.process, state[Stack][0].path.slice(0,state[Stack][0].point)) as Process): Action {`),
-		D('Get the type of that node',
+		D('Gets the type of the given `node`',
+			E.equals(() => {
+				let typeofCalled = false
+				const MyNodeType = Symbol("My Node")
+				class MyNode extends Node {
+					static type = MyNodeType
+					static typeof(object) {
+						typeofCalled = true
+						return object === MyNodeType
+					}
+				}
+				S._execute(
+					new S(null).addNode(MyNode),
+					{},
+					MyNodeType
+				)
+				return typeofCalled
+			}, true, symbols),
 			CS("const nodeType = instance.config.nodes.typeof(node)"),
 		),
-		D('If the node is not recognised, throw a NodeTypeError',
+		D('If the given `node` is not recognised, throw a `NodeTypeError`',
+			E.error(() => {
+				return S._execute(
+					new S(null),
+					{},
+					false
+				)
+			}, NodeTypeError, symbols),
 			CS("if (!nodeType) throw new NodeTypeError(`Unknown node type: ${typeof node}${nodeType ? `, nodeType: ${String(nodeType)}` : ''}.`, { instance, state, data: { node } })"),
 		),
-		D('Execute the node and return an action',
+		D('Execute the given `node` and return an action',
+			E.equals(() => {
+				let executeCalled = false
+				const MyNodeType = Symbol("My Node")
+				class MyNode extends Node {
+					static type = MyNodeType
+					static typeof(object) { return object === MyNodeType }
+					static execute() {
+						executeCalled = true
+						return 'some action'
+					}
+				}
+				const result = S._execute(
+					new S(null).addNode(MyNode),
+					{},
+					MyNodeType
+				)
+				return executeCalled && result
+			}, 'some action', symbols),
 			JS("return instance.config.nodes.get(nodeType).execute.call(instance, node instanceof Node ? node.value : node, state)"),
 			TS("return instance.config.nodes.get(nodeType)!.execute.call(instance as any, node instanceof Node ? node.value : node, state) as Action")
 		),
@@ -2703,20 +3310,25 @@ D('Core',
 		}),
 		JS("static _traverse(instance, iterator = ident) {"),
 		TS(`public static _traverse${commonGenericDefinition} (instance: Instance${commonGenericArguments}, iterator: ((node: Process, path: Path, process: Process, nodeType: string | symbol) => Process) = ident): Process {`),
-		D('Create an interation function to be used recursively',
+		D('Create an iteration function to be used recursively',
+			// E.todo(),
 			JS("const iterate = (path = []) => {"),
 			TS("const iterate = (path: Path = []): Process => {"),
 			D('Get the node at the given `path`',
+				// E.todo(),
 				JS("const node = get_path_object(instance.process, path)"),
 				TS("const node = get_path_object<Process>(instance.process, path)!"),
 			),
 			D('Get the type of the node',
+				// E.todo(),
 				CS("const nodeType = instance.config.nodes.typeof(node)"),
 			),
+			// E.todo(),
 			D('If the node is not recognised, throw a NodeTypeError',
 				CS("if (!nodeType) throw new NodeTypeError(`Unknown node type: ${typeof node}${nodeType ? `, nodeType: ${String(nodeType)}` : ''} at [ ${path.map(key => key.toString()).join(', ')} ]`, { instance, data: { node } })"),
 			),
 			D('Call the iterator for all nodes as a transformer',
+				// E.todo(),
 				JS("return iterator.call(instance, instance.config.nodes.get(nodeType).traverse.call(instance, node instanceof Node ? node.value : node, path, iterate), path, instance.process, nodeType)"),
 				TS("return iterator.call(instance, instance.config.nodes.get(nodeType)!.traverse.call(instance as any, node instanceof Node ? node.value : node, path, iterate) as Process, path, instance.process, nodeType)"),
 			),
@@ -2765,53 +3377,366 @@ D('Core',
 		JS("static _run (instance, ...input) {"),
 		TS(`public static _run${commonGenericDefinition}(instance: Instance${commonGenericArguments}, ...input: Input): Output {`),
 		D('Extract the useful parts of the config',
+			E.equals(() => {
+				const instance = new S(null).output(ident).until(() => true)
+				let gettersAccessed = {}
+				S._run(
+					{
+						config: new Proxy(instance.config, {
+							get(target, property) {
+								gettersAccessed[property] = true
+								return target[property]
+							}
+						}),
+						process: instance.process,
+					},
+					{  }
+				)
+				return gettersAccessed
+			}, {until:true, iterations:true, input: true, output: true, before: true, after: true, defaults: true, trace: true }, symbols),
 			CS("const { until, iterations, input: adaptInput, output: adaptOutput, before, after, defaults, trace } = { ...this.config, ...instance.config }")
 		),
 		D('Turn the arguments into an initial condition',
+			D('Runs the input adapter',
+				E.equals(() => {
+					let inputAdapterCalled;
+					S._run(
+						new S(null).output(ident).until(() => true)
+							.input((state) => {
+								inputAdapterCalled = true
+								return state
+							}),
+						{  }
+					)
+					return inputAdapterCalled
+				}, true, symbols),
+			),
+			D('Takes in all arguments passed in after the instance',
+				E.equals(() => {
+					let passedArgs;
+					S._run(
+						new S(null).output(ident).until(() => true)
+							.input((...args) => {
+								passedArgs = args
+								return {}
+							}),
+						1, 2, 3, 4
+					)
+					return passedArgs
+				}, [1, 2, 3, 4], symbols),
+			),
 			CS("const modifiedInput = adaptInput.apply(instance, input) || {}")
 		),
 		D('Merge the initial condition with the default initial state',
+			D('the iterations are initialised at 0',
+				E.equals(() => {
+					let firstValue;
+					S._run(
+						new S(null).output(ident)
+							.until((state, iterations) => {
+								if (firstValue === undefined)
+									firstValue = iterations
+								return state
+							}),
+						{  }
+					)
+					return firstValue
+				}, 0, symbols),
+			),
+			D('Before modifiers are called',
+				E.equals(() => {
+					let beforeAdapterCalled = false
+					S._run(
+						new S(null).output(ident).until(() => true)
+							.before((state) => {
+								beforeAdapterCalled = true
+								return state
+							}),
+						{  }
+					)
+					return beforeAdapterCalled
+				}, true, symbols),
+			),
+			D('Before adapter are called after input adapter',
+				E.equals(() => {
+					let inputAdapterCalled = false
+					let beforeAdapterCalled = false
+					let beforeAdapterCalledAfterInputAdapter = false
+					S._run(
+						new S(null).output(ident).until(() => true)
+							.input((state) => {
+								inputAdapterCalled = true
+								return state
+							})
+							.before((state) => {
+								beforeAdapterCalled = true
+								if (inputAdapterCalled)
+									beforeAdapterCalledAfterInputAdapter = true
+								return state
+							}),
+						{  }
+					)
+					return inputAdapterCalled && beforeAdapterCalled && beforeAdapterCalledAfterInputAdapter
+				}, true, symbols),
+			),
+			D('Initial state will be deep merged if enabled',
+				E.equals(() => {
+					return S._run(
+						new S(null).output(ident).until(() => true).deep
+						.defaults({ myProperty: { subProperty: 'otherValue' } }),
+						{ myProperty: { myOtherProperty: 'myValue' } }
+					)
+				}, {
+					myProperty: { myOtherProperty: 'myValue', subProperty: 'otherValue' },
+				}, symbols),
+			),
+			D('Initial state will be merged before passing it into the before modifiers',
+				E.equals(() => {
+					let initialState = null
+					S._run(
+						new S(null).output(ident).until(() => true)
+							.before((state) => {
+								initialState = state
+								return state
+							}),
+						{ myProperty: 'myValue' }
+					)
+					return initialState
+				}, {
+					myProperty: 'myValue',
+					[Changes]: { myProperty: 'myValue' },
+					[Stack]: [{path:[],origin:Return,point:0}],
+					[Trace]: [],
+					[Return]: undefined
+				}, symbols),
+			),
 			CS("let r = 0, currentState = { ...before.reduce((prev, modifier) => modifier.call(instance, prev), this._changes(instance, {"),
 			D('Default to an empty change object',
 				CS("[Changes]: {},")
 			),
 			D('Uses the defaults as an initial state',
+				E.equals(() => {
+					return S._run(
+						new S(null).output(ident).until(() => true)
+							.defaults({ myProperty: 'myValue' }),
+						{ }
+					)
+				}, {
+					myProperty: 'myValue'
+				}, symbols),
 				CS("...defaults,")
 			),
-			D('Uses the path from the initial state - allows for starting at arbitrary positions',
+			D('Uses the Stack from the initial state - allows for starting at arbitrary positions',
+				E.equals(() => {
+					return S._run(
+						new S(null).output(ident).until(() => true),
+						{ [Stack]: [{path:['some','specific','path'],origin:Return,point:3}] }
+					)
+				}, {
+					[Stack]: [{path:['some','specific','path'],origin:Return,point:3}]
+				}, symbols),
+				D('Stack starts as root node path by default.',
+					E.equals(() => {
+						return S._run(
+							new S(null).output(ident).until(() => true),
+							{ }
+						)
+					}, {
+						[Stack]: [{path:[],origin:Return,point:0}]
+					}, symbols),
+				),
+				D('Trace can be populated by passing it in',
+					E.equals(() => {
+						return S._run(
+							new S([null]).output(ident).until(() => true),
+							{ [Trace]: [[{path:['some','specific','path'],origin:Return,point:3}]] }
+						)
+					}, {
+						[Trace]: [[{path:['some','specific','path'],origin:Return,point:3}]]
+					}, symbols),
+				),
+				D('Trace will be an empty list by default.',
+					E.equals(() => {
+						return S._run(
+							new S(null).output(ident).until(() => true),
+							{ }
+						)
+					}, {
+						[Trace]: []
+					}, symbols),
+				),
 				CS("[Stack]: modifiedInput[Stack] || [{path:[],origin:Return,point:0}], [Trace]: modifiedInput[Trace] || [],")
 			),
-			D('Uses the path from the initial state - allows for starting at arbitrary positions',
+			D('Keep the return value if it already exists',
+				E.equals(() => {
+					return S._run(new S(null).output(ident), { [Return]: 'myValue' })
+				}, {
+					[Return]: 'myValue'
+				}, symbols),
+				D('Do not define a return value by default',
+					E.equals(() => {
+						return S._run(new S(null).output(ident), { })
+					}, {
+						[Return]: undefined
+					}, symbols),
+				),
 				CS("...(Return in modifiedInput ? {[Return]: modifiedInput[Return]} : {})"),
+			),
+			D('Changes will be empty after initialisation',
+				E.equals(() => {
+					return S._run(
+						new S(null).output(ident).before(function (state) {
+							return this.changes(state, { myOtherProperty: 'myOtherValue' })
+						}),
+						{ myProperty: 'myValue' }
+					)
+				}, {
+					myProperty: 'myValue',
+					myOtherProperty: 'myOtherValue',
+					[Changes]: {
+						myProperty: undefined,
+						myOtherProperty: undefined,
+					}
+				}, symbols)
+			),
+			D('Changes can be populated by passing it in',
+				E.equals(() => {
+					return S._run(
+						new S(null).output(ident).before(function (state) {
+							return this.changes(state, { myOtherProperty: 'myOtherValue' })
+						}),
+						{ myProperty: 'myValue', [Changes]: { myProperty: 'anything' } }
+					)
+				}, {
+					myProperty: 'myValue',
+					myOtherProperty: 'myOtherValue',
+					[Changes]: {
+						myProperty: 'anything',
+						myOtherProperty: undefined,
+					}
+				}, symbols)
 			),
 			JS("}, modifiedInput)), [Changes]: modifiedInput[Changes] || {} }"),
 			TS("} as SystemState<State, Output>, modifiedInput)), [Changes]: modifiedInput[Changes] || {} }")
 		),
 		D('Repeat for a limited number of iterations.',
-			'This should be fine for most finite machines, but may be too little for some constantly running machines.',
+			'This should be fine for most finite machines, but may be too little for some constantly running machines.',	
 			CS("while (r < iterations) {"),
 			D('Check the configured `until` condition to see if we should exit.',
-				'Do it first to catch starting with a `Return` in place.',
-				CS("if (until.call(instance, currentState, r)) break")
+				E.equals(() => {
+					let untilCalled = false
+					S._run(new S(
+						() => ({ myProperty: 'myValue' })
+					).until(() => {
+						untilCalled = true
+						return true
+					}).output(ident), {
+						[Stack]: [{path:[],origin:Return,point:0}],
+					})
+					return untilCalled
+				}, true, symbols),
+				D('Do it first to catch starting with a `Return` in place.',
+					E.equals(() => {
+						return S._run(new S(
+							() => ({ myProperty: 'myValue' })
+						).output(ident), {
+							[Stack]: [{path:[],origin:Return,point:0}],
+							[Return]: 'myValue'
+						})
+					}, {
+						[Stack]: [{path:[],origin:Return,point:0}],
+						myProperty: undefined,
+						[Return]: 'myValue'
+					}, symbols),
+					CS("if (until.call(instance, currentState, r)) break"),
+				)
 			),
-			D('If the interations are exceeded, Error',
+			D('If the iterations are exceeded, Error',
+				E.error(() => {
+					return S._run(new S([
+						() => ({ myProperty: 'myValue' })
+					]).for(1).trace.output(ident), {
+						[Stack]: [{path:[],origin:Return,point:0}],
+						[Trace]: [],
+					})
+				}, MaxIterationsError),
 				CS("if (++r >= iterations) throw new MaxIterationsError(`Maximum iterations of ${iterations} reached at path [ ${currentState[Stack][0].path.slice(0,currentState[Stack][0].point).map(key => key.toString()).join(', ')} ]`, { instance, state: currentState, data: { iterations } })"),
 			),
 			D('If stack trace is enabled, push the current path to the stack',
+				E.equals(() => {
+					return S._run(new S(
+						() => ({ myProperty: 'myValue' })
+					).until((_,runs)=>runs>=1).trace.output(ident), {
+						[Stack]: [{path:[],origin:Return,point:0}],
+						[Trace]: [],
+					})
+				}, {
+					[Trace]: [[{path:[],origin:Return,point:0}]]
+				}, symbols),
 				CS("if (trace) currentState = { ...currentState, [Trace]: [ ...currentState[Trace], currentState[Stack] ] }")
 			),
-			D('Execute the current node on the process, returning the action to perform',
+			D('Executes the current node on the process, returning the action to perform',
+				E.equals(() => {
+					return S._run(new S(
+						() => ({ myProperty: 'myValue' })
+					).until((_,runs)=>runs>=1).output(ident), {
+						[Stack]: [{path:[],origin:Return,point:0}]
+					})
+				}, {
+					myProperty: 'myValue',
+				}, symbols),
 				CS("const action = this._execute(instance, currentState)")
 			),
-			D('Perform any required actions. Updating the currentState',
+			D('Performs any required actions. Updating the currentState',
+				E.equals(() => {
+					return S._run(new S([
+						{ myProperty: 'myValue' }
+					]).until((_,runs)=>runs>=1).output(ident), {
+						[Stack]: [{path:[0],origin:Return,point:1}]
+					})
+				}, {
+					myProperty: 'myValue',
+				}, symbols),
 				CS("currentState = this._perform(instance, currentState, action)")
 			),
-			D('Proceed to the next action',
+			D('Proceeds to the next action',
+				E.equals(() => {
+					return S._run(new S([
+						null,
+						null
+					]).until((_,runs)=>runs>=1).output(ident), {
+						[Stack]: [{path:[0],origin:Return,point:1}]
+					})
+				}, {
+					[Stack]: [{path:[1],origin:Return,point:1}]
+				}, symbols),
 				CS("currentState = this._proceed(instance, currentState, action)")
 			),
 			CS("}")
 		),
-		D('When returning, run the ends state adapters, then the output adapter to complete execution.',
+		D('When returning, run the end state adapters, then the output adapter to complete execution.',
+			E.equals(() => {
+				let adaptOutputCalled = false
+				let afterCalled = false
+				let adaptOutputCalledAfterAfter = false
+
+				new S(Return)
+					.after((state) => {
+						afterCalled = true
+						return state
+					})
+					.output((state) => {
+						adaptOutputCalled = true
+						if (afterCalled)
+							adaptOutputCalledAfterAfter = true
+						return state
+					})
+					({
+						myProperty: 'myValue'
+					})
+
+				return adaptOutputCalled && afterCalled && adaptOutputCalledAfterAfter
+			}, true, symbols),
 			CS("return adaptOutput.call(instance, after.reduce((prev, modifier) => modifier.call(instance, prev), currentState))")
 		),
 		CS("}")

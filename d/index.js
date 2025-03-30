@@ -1,4 +1,30 @@
-import { get_path_object } from "../index.js"
+import { deep_merge_object, get_path_object, set_path_object } from "../index.js"
+
+export const make_path_object = (path = [], value = undefined) => {
+	if (path.length === 0) return value;
+	if (typeof path[0] === 'number') { let ret = []; ret[path[0]] = make_path_object(path.slice(1), value); return ret; }
+	return { [path[0]]: make_path_object(path.slice(1), value) }
+}
+export const merge_object = (obj, other, symbols) => {
+	if (typeof obj !== 'object' || !obj) return other
+	if (other === undefined) return obj
+	if (typeof other !== 'object' || !other) return other
+	// console.log(toString({ obj, other }, symbols))
+	// console.log(toString(indexObject(obj, symbols), symbols))
+	// console.log(toString(indexObject(other, symbols), symbols))
+	const keys = indexObject(obj, symbols)
+		.concat(indexObject(other, symbols))
+	if (Array.isArray(obj)) {
+		let ret = []
+		for (let key of keys)
+			ret[key] = merge_object(obj[key], other[key])
+		return ret
+	}
+	let ret = {}
+	for (let key of keys)
+		ret[key] = merge_object(obj[key], other[key])
+	return ret
+}
 
 export const D_processed = Symbol('d')
 export class DescriptionError extends Error {}
@@ -19,12 +45,41 @@ const rebase_string = (str, add = '') => {
 	// .join('\n')
 }
 
-const matches = (object, match, symbols = {}) => {
+export const matches = (object, match, symbols = {}) => {
 	if (object === null || match === null || typeof object !== 'object' || typeof match !== 'object')
 		return object === match
 	if (Array.isArray(match) && match.length !== object.length) return false;
-	return Object.keys(match).concat(Object.values(symbols))
-		.every(key => (!(key in match)) || matches(object[key], match[key], symbols))
+	return (match instanceof Map ? match.keys() : Object.keys(match)).concat(Object.values(symbols))
+		.every(key => (!((match instanceof Map) ? match.has(key) : (key in match))) || matches(
+			object instanceof Map ? object.get(key) : object[key],
+			match instanceof Map ? match.get(key) : match[key], symbols))
+}
+export const hasKey = object => {
+	if (object instanceof Map) return object.has.bind(object)
+	return key => key in object
+}
+export const indexObject = (object, symbols = {}) => {
+	const symbolKeys = Object.values(symbols).filter(hasKey(object))
+	if (object instanceof Map) return object.keys().concat(symbolKeys)
+	if (Array.isArray(object)) return Object.keys(object).map(n => Number(n)).concat(symbols)
+	return Object.keys(object).concat(symbolKeys)
+}
+export const differences = (object, match, symbols = {}) => {
+	if (object === null || match === null || (typeof object !== 'object' && typeof object !== 'function') || typeof match !== 'object')
+		return object === match ? [] : [{exp:match,got:object,path:[]}]
+	if (Array.isArray(match) && match.length !== object.length) {
+		// TODO: Array diff
+		return [{exp:match,got:object,path:[]}]
+	}
+	// const 
+	return indexObject(match, symbols)
+		.flatMap(key => {
+			return differences(
+				object instanceof Map ? object.get(key) : object[key],
+				match instanceof Map ? match.get(key) : match[key],
+				symbols
+			).map(diff => ({ ...diff, path: [key,...diff.path] }))
+		})
 }
 
 
@@ -106,6 +161,13 @@ export const toString = (obj, symbols = {}, level = 0) => {
 				return 'null'
 			if (Array.isArray(obj))
 				return `[${obj.map(item => `\n${indent2}${toString(item, symbols, level + 1)},`).join('')}\n${indent}]`
+			if (obj instanceof Map)
+				return '{' + Object.entries(obj)
+				.concat(Object.values(symbols)
+					.filter(symbol => symbol in obj)
+					.map(symbol => [symbol, obj[symbol]])
+				)
+				.map(([ key, value ]) => `\n${indent2}${keyToString(key, symbols)}: ${toString(value, symbols, level + 1)},`).join('') + `\n${indent}}`
 			return '{' + Object.entries(obj)
 				.concat(Object.values(symbols)
 					.filter(symbol => symbol in obj)
@@ -118,6 +180,11 @@ export const toString = (obj, symbols = {}, level = 0) => {
 			console.error(`Unknown type cannot be converted to string: ${typeof obj}`)
 			return String(obj)
 	}
+}
+const printDifference = (diffs, mode, symbols) => {
+	const pathObjs = diffs.map(diff => make_path_object(diff.path, diff[mode]))
+	const reduced = pathObjs.reduce((curr, pathObj) => merge_object(curr, pathObj, symbols), {})
+	return toString(reduced, symbols)
 }
 export class ExtensibleFunction extends Function { constructor(f) { super(); return Object.setPrototypeOf(f, new.target.prototype); }; }
 
@@ -217,8 +284,9 @@ export const E = {
 	equals: (method, value, symbols) => {
 		return new TransformedFunction(method, async () => {
 			const result = await method()
-			if (matches(result, value, symbols)) return;
-			throw new DescriptionError(`\nExpected ${toString(value, symbols)},\n     got ${toString(result, symbols)}.`)
+			const diffs = differences(result, value, symbols)
+			if (diffs.length === 0) return;
+			throw new DescriptionError(`\nExpected ${printDifference(diffs, 'exp', symbols)},\n     got ${printDifference(diffs, 'got', symbols)}.`)
 		}, string => {
 			const lines = string.split('\n')
 			const returnLine = lines.length-2
@@ -425,11 +493,11 @@ export const test = async description => {
 	const results = await sequentialTests(runTest, tests)
 	const failures = results.filter(res => !res.success)
 
-	printTests(results, ({ printedPath, result }) => {
+	printTests(results, ({ printOffset, printedPath, result }) => {
 		if (result.success)
 			console.log(`\x1b[32m${printedPath} \x1b[0m`)
 		else if (result.error instanceof DescriptionError)
-			console.error(`\x1b[33m${printedPath}\tFailure: ${result.error.message}\x1b[0m`)
+			console.error(`\x1b[33m${printedPath}\tFailure: ${rebase_string(result.error.message, printOffset)}\x1b[0m`)
 		else {
 			console.error(`\x1b[31m${printedPath}\tCrash: ${result.error.constructor.name}\x1b[0m`)
 		}
@@ -439,7 +507,7 @@ export const test = async description => {
 		console.error(`\n\n\x1b[33m ${failures.length} Failures`)
 		printTests(failures, ({ printOffset, printedPath, result }) => {
 			if (result.error instanceof DescriptionError)
-				console.error(`\x1b[33m${printedPath}\tFailure: ${result.error.message}\x1b[0m`)
+				console.error(`\x1b[33m${printedPath}\tFailure: ${rebase_string(result.error.message, printOffset)}\x1b[0m`)
 			else {
 				console.error(`\x1b[31m${printedPath}\tCrash: ${result.error.constructor.name}\x1b[0m`)
 				console.error(result.error)
