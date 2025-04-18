@@ -1448,8 +1448,8 @@ D('Node Definition',
 			),
 			CS("const stack = state[Stack] || [{path:[],origin:Return,point:0}]"),
 		),
-		D('If the current path has reached the end',
-			CS("if (stack[0].point === 0) {"),
+		D('If the current path has reached the end, or we have intentionally returned',
+			CS("if (stack[0].point === 0 || (Return in state)) {"),
 			D('If there are no more paths left, return with the existing value.',
 				E.equals(() => {
 					return Node.proceed.call(new S(null), undefined, {

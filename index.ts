@@ -161,7 +161,7 @@ SelfType extends unknown = never,>(this: Instance<State, Output, Input, Action, 
 	Process extends unknown = ProcessType<State, Output, Action>,
 SelfType extends unknown = never,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise<SystemState<State, Output>> {
 		const stack = state[Stack] || [{path:[],origin:Return,point:0}]
-		if (stack[0].point === 0) {
+		if (stack[0].point === 0 || (Return in state)) {
 			if (stack.length === 1) return { ...state, [Return]: state[Return], [Stack]: [] }
 			const { [Return]: interruptReturn, ...cleanState } = state
 			return { ...cleanState, [Stack]: stack.slice(1), [stack[0].origin]: interruptReturn } as SystemState<State, Output>

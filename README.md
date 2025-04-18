@@ -1335,8 +1335,8 @@ Uses the provided nodes by default.
 	static typeof(object, objectType, isAction) { return Boolean((!isAction) && object && objectType === 'object' && ('while' in object)) }
 	static keywords = ['while','do']
 	static execute(node, state) {
-		if (!(('do' in node) && normalise_function(node.while)(state))) return null
-		return [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'do' ]
+			if (!(('do' in node) && normalise_function(node.while)(state))) return null
+			return [ ...state[Stack][0].path.slice(0,state[Stack][0].point), 'do' ]
 	}
 	static proceed(node, state) { return { ...state, [Stack]: [ { ...state[Stack][0], path: state[Stack][0].path.slice(0,state[Stack][0].point) }, ...state[Stack].slice(1) ] } }
 	static traverse(node, path, iterate) { return { ...node, ...('do' in node ? { do: iterate([ ...path, 'do' ]) } : {}), ...(Symbols in node ? Object.fromEntries(node[Symbols].map(key => [key, iterate([...path,key])])) : {}), } }
