@@ -1360,6 +1360,7 @@ Uses the provided nodes by default.
 		return { ...state, [Stack]: [ { origin: action, path: [...lastOf, action], point: lastOf.length + 1 }, ...state[Stack] ] }
 	}
 	static proceed(node, state) {
+		if (state[Return] === node) return ReturnNode.proceed.call(this, undefined, state)
 		const { [Stack]: stack, [Return]: interruptReturn, ...proceedPrevious } = S._proceed(this, { ...state, [Stack]: state[Stack].slice(1) }, undefined)
 		return { ...proceedPrevious, [Stack]: [ state[Stack][0], ...stack ] }
 	}
@@ -1418,7 +1419,11 @@ Uses the provided nodes by default.
 	static type = Return
 	static typeof(object, objectType) { return object === Return || Boolean(object && objectType === 'object' && (Return in object)) }
 	static perform(action, state) { return { ...state, [Return]: !action || action === Return ? undefined : action[Return], } }
-	static proceed = Node.proceed
+	static proceed(action, state) {
+		if (state[Stack].length === 1) return { ...(state[Stack][0].point === 0 ? { ...state, [Stack]: [] } : S._proceed(this, state, undefined)), [Return]: state[Return] }
+		const { [Return]: interruptReturn, ...cleanState } = state
+		return { ...cleanState, [Stack]: state[Stack].slice(1), [state[Stack][0].origin]: interruptReturn }
+	}
 } }
 ```
 
@@ -3066,6 +3071,8 @@ return InterruptGotoNode.perform.call(new S([[{ [testSymbol]: null, initial: nul
 
 ### An interrupt goto proceeds the path previous to it, but preserves the interrupts place at the top of the stack.
 
+If the interrupt is trying to return, proceed as if returning.
+
 Proceed the stack before this point, and strip out the affected system properties.
 
 ```javascript
@@ -3236,18 +3243,33 @@ Perform a return by setting the `Return` property on the state to the return val
 return ReturnNode.perform({ [Return]: 'myValue' }, {}) // { [Return]: 'myValue' }
 ```
 
-Inherit from root node definition, not GotoNode.
+### Proceed up the stack or return.
+
+If there are no more paths left, return with the existing value.
 
 ```javascript
-return ReturnNode.proceed // proceed (node, state) {
-	const stack = state[Stack] || [{path:[],origin:Return,point:0}]
-	if (stack[0].point === 0) {
-		if (stack.length === 1) return { ...state, [Return]: state[Return], [Stack]: [] }
-		const { [Return]: interruptReturn, ...cleanState } = state
-		return { ...cleanState, [Stack]: stack.slice(1), [stack[0].origin]: interruptReturn }
-	}
-	return S._proceed(this, { ...state, [Stack]: [{ ...stack[0], point: stack[0].point-1 }, ...stack.slice(1)] }, get_path_object(this.process, stack[0].path.slice(0,stack[0].point-1)))
-}
+return ReturnNode.proceed.call(new S(null), undefined, {
+	[Stack]: [{path:[],origin:Return,point:0}],
+	[Return]: 'myValue'
+}) // { [Stack]: [  ], [Return]: 'myValue' }
+```
+
+If there are paths left, intercept the return value
+
+```javascript
+return ReturnNode.proceed.call(new S({initial:null,[testSymbol]:null}), undefined, {
+	[Stack]: [{path:[testSymbol],origin:testSymbol,point:1},{path:[],origin:Return,point:0}],
+	[Return]: 'myValue'
+}) // { [Return]: undefined }
+```
+
+Set the interrupt which was the origin of the thread to the return value in the state.
+
+```javascript
+return ReturnNode.proceed.call(new S({initial:null,[testSymbol]:null}), undefined, {
+	[Stack]: [{path:[],origin:testSymbol,point:1},{path:[],origin:Return,point:0}],
+	[Return]: 'myValue'
+}) // { [testSymbol]: 'myValue' }
 ```
 
 ## Continue Node

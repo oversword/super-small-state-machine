@@ -1423,65 +1423,11 @@ D('Node Definition',
 		}, symbols),
 		JS("static proceed (node, state) {"),
 		TS(`static proceed<${commonGenericDefinitionInner}SelfType extends unknown = never,>(this: Instance${commonGenericArguments}, node: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise<SystemState<State, Output>> {`),
-		D('Get the stack',
-			D('Will use the stack on the state if it is given',
-				E.equals(() => {
-					let stackAccessed = false
-					Node.proceed.call(new S(null), undefined, new Proxy({
-						[Stack]: [{path:[],origin:Return,point:0}],
-					}, {
-						get(target, property) {
-							if (property === Stack)
-								stackAccessed = true
-							return target[property]
-						}
-					}))
-					return stackAccessed
-				}, true, symbols),
-			),
-			D('Will proceed on an empty stack by default',
-				E.equals(() => {
-					return Node.proceed.call(new S(null), undefined, {
-						[Return]: 'myValue'
-					})
-				}, {[Return]:'myValue',[Stack]:[]}, symbols),
-			),
-			CS("const stack = state[Stack] || [{path:[],origin:Return,point:0}]"),
-		),
 		D('If the current path has reached the end, or we have intentionally returned',
-			CS("if (stack[0].point === 0 || (Return in state)) {"),
-			D('If there are no more paths left, return with the existing value.',
-				E.equals(() => {
-					return Node.proceed.call(new S(null), undefined, {
-						[Stack]: [{path:[],origin:Return,point:0}],
-						[Return]: 'myValue'
-					})
-				}, {[Return]:'myValue',[Stack]:[]}, symbols),
-				CS("if (stack.length === 1) return { ...state, [Return]: state[Return], [Stack]: [] }"),
-			),
-			D('If there are paths left, intercept the return value',
-				E.equals(() => {
-					return Node.proceed.call(new S({initial:null,[testSymbol]:null}), undefined, {
-						[Stack]: [{path:[testSymbol],origin:testSymbol,point:1},{path:[],origin:Return,point:0}],
-						[Return]: 'myValue'
-					})
-				}, {[Return]:undefined}, symbols),
-				CS("const { [Return]: interruptReturn, ...cleanState } = state"),
-			),
-			D('Set the interrupt which was the origin of the thread to the return value in the state.',
-				E.equals(() => {
-					return Node.proceed.call(new S({initial:null,[testSymbol]:null}), undefined, {
-						[Stack]: [{path:[],origin:testSymbol,point:1},{path:[],origin:Return,point:0}],
-						[Return]: 'myValue'
-					})
-				}, {[testSymbol]:'myValue'}, symbols),
-				JS("return { ...cleanState, [Stack]: stack.slice(1), [stack[0].origin]: interruptReturn }"),
-				TS("return { ...cleanState, [Stack]: stack.slice(1), [stack[0].origin]: interruptReturn } as SystemState<State, Output>"),
-			),
-			CS("}"),
+			CS("if (state[Stack][0].point === 0) return ReturnNode.proceed.call(this, null, { ...state, [Return]: state[Return] })"),
 		),
 		D('Proceeds as normal for the parent node by moving the pointer down.',
-			CS("return S._proceed(this, { ...state, [Stack]: [{ ...stack[0], point: stack[0].point-1 }, ...stack.slice(1)] }, get_path_object(this.process, stack[0].path.slice(0,stack[0].point-1)))"),
+			CS("return S._proceed(this, { ...state, [Stack]: [{ ...state[Stack][0], point: state[Stack][0].point-1 }, ...state[Stack].slice(1)] }, get_path_object(this.process, state[Stack][0].path.slice(0,state[Stack][0].point-1)))"),
 		),
 		CS("}"),
 	),
@@ -2496,6 +2442,9 @@ D('Default Nodes',
 		D('An interrupt goto proceeds the path previous to it, but preserves the interrupts place at the top of the stack.',
 			JS("static proceed(node, state) {"),
 			TS(`static proceed<${commonGenericDefinitionInner}SelfType = InterruptGotoType,>(this: Instance${commonGenericArguments}, node: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {`),
+			D('If the interrupt is trying to return, proceed as if returning.',
+				CS("if (state[Return] === node) return ReturnNode.proceed.call(this, undefined, state)")
+			),
 			D('Proceed the stack before this point, and strip out the affected system properties.',
 				E.equals(() => {
 					return InterruptGotoNode.proceed.call(new S([ null, null ]), testSymbol, { [Stack]: [{path:['first','item'],origin:testSymbol,point:2},{path:[0],origin:Return,point:1}] })
@@ -2649,13 +2598,41 @@ D('Default Nodes',
 				return ReturnNode.perform({ [Return]: 'myValue' }, {})
 			}, { [Return]: 'myValue' }, symbols),
 			JS("static perform(action, state) { return { ...state, [Return]: !action || action === Return ? undefined : action[Return], } }"),
-			TS(`static perform<${commonGenericDefinitionInner}SelfType = ReturnType<Output>,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> { return { ...state, [Return]: !action || action === Return ? undefined : (action as unknown as ReturnObjectType<Output>)[Return] as Output, } }`),
+			TS(`static perform<${commonGenericDefinitionInner}SelfType = ReturnType<Output>,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise<SystemState<State, Output>> { return { ...state, [Return]: !action || action === Return ? undefined : (action as unknown as ReturnObjectType<Output>)[Return] as Output, } }`),
 		),
-		D('Inherit from root node definition, not GotoNode.',
-			E.equals(() => {
-				return ReturnNode.proceed
-			}, Node.proceed),
-			CS("static proceed = Node.proceed")
+		D('Proceed up the stack or return.',
+			JS("static proceed(action, state) {"),
+			TS(`static proceed<${commonGenericDefinitionInner}SelfType = ReturnType<Output>,>(this: Instance${commonGenericArguments}, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise<SystemState<State, Output>> {`),
+			
+			D('If there are no more paths left, return with the existing value.',
+				E.equals(() => {
+					return ReturnNode.proceed.call(new S(null), undefined, {
+						[Stack]: [{path:[],origin:Return,point:0}],
+						[Return]: 'myValue'
+					})
+				}, {[Return]:'myValue',[Stack]:[]}, symbols),
+				CS("if (state[Stack].length === 1) return { ...(state[Stack][0].point === 0 ? { ...state, [Stack]: [] } : S._proceed(this, state, undefined)), [Return]: state[Return] }"),
+			),
+			D('If there are paths left, intercept the return value',
+				E.equals(() => {
+					return ReturnNode.proceed.call(new S({initial:null,[testSymbol]:null}), undefined, {
+						[Stack]: [{path:[testSymbol],origin:testSymbol,point:1},{path:[],origin:Return,point:0}],
+						[Return]: 'myValue'
+					})
+				}, {[Return]:undefined}, symbols),
+				CS("const { [Return]: interruptReturn, ...cleanState } = state"),
+			),
+			D('Set the interrupt which was the origin of the thread to the return value in the state.',
+				E.equals(() => {
+					return ReturnNode.proceed.call(new S({initial:null,[testSymbol]:null}), undefined, {
+						[Stack]: [{path:[],origin:testSymbol,point:1},{path:[],origin:Return,point:0}],
+						[Return]: 'myValue'
+					})
+				}, {[testSymbol]:'myValue'}, symbols),
+				JS("return { ...cleanState, [Stack]: state[Stack].slice(1), [state[Stack][0].origin]: interruptReturn }"),
+				TS("return { ...cleanState, [Stack]: state[Stack].slice(1), [state[Stack][0].origin]: interruptReturn } as SystemState<State, Output>"),
+			),
+			CS('}')
 		),
 		CS("}"),
 	),
@@ -5445,6 +5422,117 @@ D('Requirements',
 				return machine({ order: [] })
 			}, ['uno','dos'])
 		),
+
+
+		D("Unhandled interrupts will return from the machine, with the return value as the interrupt",
+			E.equals(() => {
+				const machine = new S({
+					initial: [
+						null,
+						null,
+						null,
+						null,
+						testSymbol,
+						null,
+						null,
+					],
+				})
+				return machine()
+			}, testSymbol)
+		),
+
+		D("Unhandled interrupts will return, and step the stack forward before returning",
+			E.equals(() => {
+				const machine = new S({
+					initial: [
+						null,
+						null,
+						null,
+						null,
+						testSymbol,
+						null,
+						null,
+					],
+				}).output(state => state[Stack])
+				return machine()
+			}, [{path:['initial',5],origin:Return,point:2}])
+		),
+
+		D("Unhandled interrupts inside an interrupt will return from the conatining interrupt",
+			E.equals(() => {
+				const machine = new S({
+					initial: [
+						null,
+						testSymbol,
+						null,
+					],
+					[testSymbol]: [
+						null,
+						null,
+						testSymbol2,
+						null,
+					]
+				}).output(ident)
+				return machine()
+			}, {[testSymbol]:testSymbol2,[Return]: undefined}, symbols)
+		),
+		
+		D("If an interrupt is the last thing, the return value will be the return of the interrupt",
+			E.equals(() => {
+				const machine = new S({
+					initial: [
+						null,
+						testSymbol,
+					],
+					[testSymbol]: [
+						{[Return]:'myValue'}
+					]
+				})
+				return machine()
+			}, 'myValue', symbols)
+		),
+
+		D("If an interrupt is external, an unhandled interrupt will be the return value of the external interrupt",
+			E.equals(async () => {
+				const machine = new S({
+					initial: [
+						Wait,
+					],
+					[testSymbol]: [
+						testSymbol2
+					]
+				}).with(asyncPlugin)()
+				await wait_time(100)
+				const result = await machine.interrupt(testSymbol)
+				await machine;
+				return result
+			}, testSymbol2, symbols)
+		),
+
+		D("Returning will increment the stack before returning",
+			E.equals(() => {
+				const machine = new S({
+					initial: [
+						null,
+						Return,
+						null,
+					],
+				}).output(state => state[Stack])
+				return machine()
+			}, [{path:['initial',2],origin:Return,point:2}], symbols)
+		),
+
+		D("If a return is the last thing, the stack will be empty",
+			E.equals(() => {
+				const machine = new S({
+					initial: [
+						null,
+						Return,
+					],
+				}).output(state => state[Stack])
+				return machine()
+			}, [], symbols)
+		),
 		
 		D("Interrupts can be sent to a child machine",
 			E.equals(async () => {
@@ -5467,11 +5555,11 @@ D('Requirements',
 					initial: [
 						() => ({ countMachine: countMachine() }),
 						{
-							 while: ({ order }) => order.length < 3,
-							 do: [
+							while: ({ order }) => order.length < 3,
+							do: [
 								() => wait_time(50),
 								async ({ countMachine, order }) => ({ order: [ ...order, await countMachine.interrupt(interrupt) ] }),
-							 ]
+							]
 						}
 					],
 				}).with(asyncPlugin)
@@ -5489,11 +5577,11 @@ D('Requirements',
 						{
 							while: ({ num }) => num < 4,
 							do: [
-							   () => wait_time(50),
-							   ({ sendParent, num }) => sendParent({ childEvent: num }, interrupt),
-							   ({ num }) => ({ num: num + 1 })
+							() => wait_time(50),
+							({ sendParent, num }) => sendParent({ childEvent: num }, interrupt),
+							({ num }) => ({ num: num + 1 })
 							]
-					   	},
+						},
 					],
 				}).with(asyncPlugin)
 				const machine = new S({
@@ -5541,11 +5629,11 @@ D('Requirements',
 					initial: [
 						() => ({ countMachine: countMachine() }),
 						{
-							 while: ({ order }) => order.length < 3,
-							 do: [
+							while: ({ order }) => order.length < 3,
+							do: [
 								() => wait_time(10),
 								async ({ countMachine, order }) => ({ order: [ ...order, await countMachine.interrupt(interrupt) ] }),
-							 ]
+							]
 						}
 					],
 				}).with(asyncPlugin)
@@ -5563,11 +5651,11 @@ D('Requirements',
 						{
 							while: ({ parOrder }) => parOrder.length < 3,
 							do: [
-							   () => wait_time(10),
-							   async ({ sendParent, num, parOrder }) => ({ parOrder: await sendParent({ childEvent: num }, interrupt, ({ order }) => ({ [Return]: order })) }),
-							   ({ num }) => ({ num: num + 1 })
+							() => wait_time(10),
+							async ({ sendParent, num, parOrder }) => ({ parOrder: await sendParent({ childEvent: num }, interrupt, ({ order }) => ({ [Return]: order })) }),
+							({ num }) => ({ num: num + 1 })
 							]
-					   	},
+						},
 					],
 				}).with(asyncPlugin)
 				const machine = new S({

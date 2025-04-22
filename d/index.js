@@ -1,4 +1,5 @@
 import { deep_merge_object, get_path_object, set_path_object } from "../index.js"
+import { wait_time } from "../index.new.js";
 
 export const make_path_object = (path = [], value = undefined) => {
 	if (path.length === 0) return value;
@@ -436,7 +437,10 @@ export const test = async description => {
 	const runTest = async ({ code, path }) => {
 		const captured = capture()
 		try {
-			const result = await code()
+			const result = await Promise.race([
+				code(),
+				wait_time(1000).then(() => {throw new Error('Test never finished')})
+			])
 			captured.restore()
 			return {
 				success: true,

@@ -160,13 +160,8 @@ SelfType extends unknown = never,>(this: Instance<State, Output, Input, Action, 
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 SelfType extends unknown = never,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise<SystemState<State, Output>> {
-		const stack = state[Stack] || [{path:[],origin:Return,point:0}]
-		if (stack[0].point === 0 || (Return in state)) {
-			if (stack.length === 1) return { ...state, [Return]: state[Return], [Stack]: [] }
-			const { [Return]: interruptReturn, ...cleanState } = state
-			return { ...cleanState, [Stack]: stack.slice(1), [stack[0].origin]: interruptReturn } as SystemState<State, Output>
-		}
-		return S._proceed(this, { ...state, [Stack]: [{ ...stack[0], point: stack[0].point-1 }, ...stack.slice(1)] }, get_path_object(this.process, stack[0].path.slice(0,stack[0].point-1)))
+		if (state[Stack][0].point === 0) return ReturnNode.proceed.call(this, null, { ...state, [Return]: state[Return] })
+		return S._proceed(this, { ...state, [Stack]: [{ ...state[Stack][0], point: state[Stack][0].point-1 }, ...state[Stack].slice(1)] }, get_path_object(this.process, state[Stack][0].path.slice(0,state[Stack][0].point-1)))
 	}
 	static perform<
 	State extends InitialState = InitialState,
@@ -526,6 +521,7 @@ SelfType = InterruptGotoType,>(this: Instance<State, Output, Input, Action, Proc
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
 SelfType = InterruptGotoType,>(this: Instance<State, Output, Input, Action, Process>, node: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> {
+			if (state[Return] === node) return ReturnNode.proceed.call(this, undefined, state)
 			const { [Stack]: stack, [Return]: interruptReturn, ...proceedPrevious } = S._proceed(this, { ...state, [Stack]: state[Stack].slice(1) }, undefined)
 			return { ...proceedPrevious, [Stack]: [ state[Stack][0], ...stack ] } as SystemState<State, Output>
 		}
@@ -555,8 +551,18 @@ SelfType = AbsoluteGotoType,>(this: Instance<State, Output, Input, Action, Proce
 	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
 	Action extends unknown = ActionType<State, Output>,
 	Process extends unknown = ProcessType<State, Output, Action>,
-SelfType = ReturnType<Output>,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise< SystemState<State, Output>> { return { ...state, [Return]: !action || action === Return ? undefined : (action as unknown as ReturnObjectType<Output>)[Return] as Output, } }
-		static proceed = Node.proceed
+SelfType = ReturnType<Output>,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise<SystemState<State, Output>> { return { ...state, [Return]: !action || action === Return ? undefined : (action as unknown as ReturnObjectType<Output>)[Return] as Output, } }
+		static proceed<
+	State extends InitialState = InitialState,
+	Output extends unknown = undefined,
+	Input extends Array<unknown> = [Partial<InputSystemState<State, Output>>] | [],
+	Action extends unknown = ActionType<State, Output>,
+	Process extends unknown = ProcessType<State, Output, Action>,
+SelfType = ReturnType<Output>,>(this: Instance<State, Output, Input, Action, Process>, action: SelfType, state: SystemState<State, Output>): SystemState<State, Output> | Promise<SystemState<State, Output>> {
+			if (state[Stack].length === 1) return { ...(state[Stack][0].point === 0 ? { ...state, [Stack]: [] } : S._proceed(this, state, undefined)), [Return]: state[Return] }
+			const { [Return]: interruptReturn, ...cleanState } = state
+			return { ...cleanState, [Stack]: state[Stack].slice(1), [state[Stack][0].origin]: interruptReturn } as SystemState<State, Output>
+		}
 	}
 	export const Continue = Symbol('SSSM Continue')
 	export type ContinueType = typeof Continue
