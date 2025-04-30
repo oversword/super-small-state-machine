@@ -1,0 +1,516 @@
+
+
+const set = (path, value) => [...path].reverse().reduce((current, key) => ({ [key]: current }), value)
+const update = (obj, path, generator) => set(path, generator(get_path_object(obj, path), path, obj))
+const increment = name => ({ [name]: value }) => ({ [name]: value + 1 })
+const assignPath = (path, generator) => state => update(state, path, generator)
+const movePath = (gambit, regionRef, state) => {
+	if (regionRef[0] === 'player')
+		return ['players',state.playerOrder[state.player],'region',regionRef[1],'gambit',gambit]
+	if (regionRef[0] === 'players')
+		return ['players', normalise_function(regionRef[1])(state),'region',regionRef[2],'gambit',gambit]
+	return ['region',regionRef[0],'gambit',gambit]
+}
+const indexPath = regionRef => {
+	if (regionRef[0] === 'player') return regionRef[2]
+	if (regionRef[0] === 'players') return regionRef[3]
+	return regionRef[1]
+}
+const regionPath = regionRef => {
+	if (regionRef[0] === 'player') return regionRef[1]
+	if (regionRef[0] === 'players') return regionRef[2]
+	return regionRef[0]
+}
+const normalise_index_list = (list) => {
+	if (Array.isArray(list)) return list
+	return [list]
+}
+const not = f => (...a) => !f(...a)
+const and = (...fl) => (...a) => fl.every(f => f(...a))
+const or = (...fl) => (...a) => fl.some(f => f(...a))
+
+const move = (gambit, fromRegionRef, toRegionRef) => {
+	return state => {
+		const fromPath = movePath(gambit, fromRegionRef, state)
+		const toPath = movePath(gambit, toRegionRef, state)
+		
+		const fromRegion = get_path_object(state, fromPath)
+		const toRegion = get_path_object(state, toPath)
+		
+		const fromList = fromRegion.list
+		const toList = toRegion.list
+		
+		const normalisedInput = normalise_function(indexPath(fromRegionRef))(state)
+		const fromIndexes = normalisedInput === undefined ? [undefined] : normalise_index_list(normalisedInput).sort((a,b)=>b-a)
+		const toIndexes = normalise_index_list(normalise_function(indexPath(toRegionRef))(state)).sort((a,b)=>b-a)
+		
+		let changes = []
+		let currentFromList = fromList
+		let currentToList = toList
+		for (let i in fromIndexes) {
+			const fromIndex = fromIndexes[i]
+			const toIndex = toIndexes[i]
+			const fromItem = fromList[fromIndex]
+			
+			const { item: toItem = fromItem, index: actualFromIndex = fromIndex, list: changedFromList = currentFromList } = fromRegion.take(fromItem, fromIndex, currentFromList)
+			const { item: changedToItem = toItem, index: actualToIndex = toIndex, list: changedToList = currentToList } = toRegion.put(toItem, toIndex, currentToList)
+			
+			const change = {
+				from: [...fromPath,'list',actualFromIndex],
+				to: [...toPath,'list',actualToIndex]
+			}
+			changes.push(change)
+			currentFromList = changedFromList
+			currentToList = changedToList
+		}
+		return deep_merge_object(assignPath([...fromPath,'list'], () => currentFromList)(state), assignPath([...toPath,'list'], () => currentToList)(state))
+	}
+}
+const game = {
+	forRounds: (rounds = 0, ...doMethods) => [
+		{ round:0, },
+		{
+			while: ({ round }) => round < rounds,
+			do: [
+				...doMethods,
+				increment('round')
+			]
+		},
+	],
+	forPlayers: (...doMethods) => [
+		{ player:0, },
+		{
+			while: ({ player, playerOrder }) => player < playerOrder.length,
+			do: [
+				...doMethods,
+				increment('player')
+			]
+		},
+	],
+	nextPlayer: ({ player, playerOrder, playerDirection }) => ({ player: (player + playerDirection + playerOrder.length) % playerOrder.length }),
+	PlayerInput: Symbol('Player Input')
+}
+const card = {
+	display: {
+		'Back': '🂠',
+		'Ace of Spades': '🂡',
+		'Two of Spades': '🂢',
+		'Three of Spades': '🂣',
+		'Four of Spades': '🂤',
+		'Five of Spades': '🂥',
+		'Six of Spades': '🂦',
+		'Seven of Spades': '🂧',
+		'Eight of Spades': '🂨',
+		'Nine of Spades': '🂩',
+		'Ten of Spades': '🂪',
+		'Jack of Spades': '🂫',
+		'Knight of Spades': '🂬',
+		'Queen of Spades': '🂭',
+		'King of Spades': '🂮',
+		'Ace of Hearts': '🂱',
+		'Two of Hearts': '🂲',
+		'Three of Hearts': '🂳',
+		'Four of Hearts': '🂴',
+		'Five of Hearts': '🂵',
+		'Six of Hearts': '🂶',
+		'Seven of Hearts': '🂷',
+		'Eight of Hearts': '🂸',
+		'Nine of Hearts': '🂹',
+		'Ten of Hearts': '🂺',
+		'Jack of Hearts': '🂻',
+		'Knight of Hearts': '🂼',
+		'Queen of Hearts': '🂽',
+		'King of Hearts': '🂾',
+		'Ace of Diamonds': '🃁',
+		'Two of Diamonds': '🃂',
+		'Three of Diamonds': '🃃',
+		'Four of Diamonds': '🃄',
+		'Five of Diamonds': '🃅',
+		'Six of Diamonds': '🃆',
+		'Seven of Diamonds': '🃇',
+		'Eight of Diamonds': '🃈',
+		'Nine of Diamonds': '🃉',
+		'Ten of Diamonds': '🃊',
+		'Jack of Diamonds': '🃋',
+		'Knight of Diamonds': '🃌',
+		'Queen of Diamonds': '🃍',
+		'King of Diamonds': '🃎',
+		'Ace of Clubs': '🃑',
+		'Two of Clubs': '🃒',
+		'Three of Clubs': '🃓',
+		'Four of Clubs': '🃔',
+		'Five of Clubs': '🃕',
+		'Six of Clubs': '🃖',
+		'Seven of Clubs': '🃗',
+		'Eight of Clubs': '🃘',
+		'Nine of Clubs': '🃙',
+		'Ten of Clubs': '🃚',
+		'Jack of Clubs': '🃛',
+		'Knight of Clubs': '🃜',
+		'Queen of Clubs': '🃝',
+		'King of Clubs': '🃞',
+		'Joker': '🃟',
+	},
+	deck: (copies = 1, jokers = 0) => {
+		const suits = ['Hearts','Clubs','Diamonds','Spades']
+		const cards = ['Ace','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Jack','Queen','King']
+		return Array(copies).fill(null).flatMap((_,copy) => suits.flatMap(suit => cards.map(card => ({
+			id: `${card} of ${suit}${copy ? `(${copy+1})` : ''}`,
+			data: { card, suit },
+			visible: false
+		})))).concat(Array(jokers).fill(null).map((_,j) => ({
+			id: `Joker ${j+1}`,
+			data: { card: 'Joker', suit: 'Joker' },
+			visible: false,
+		})))
+	},
+	shuffle: times => ({ region: { deck: { gambit: { card: { list: deck } } } } }) => ({ region: { deck: { gambit: { card: { list: Array(times).fill(null).reduce(l => l.sort(() => Math.random()-0.5), [...deck]) } } } } }),
+	deal: count => forRounds(count,
+		forPlayers(
+			move('card', ['deck'], ['player', 'hand']),
+		),
+	),
+}
+const cardDisplay = {
+	'Back': '🂠',
+	'Ace of Spades': '🂡',
+	'Two of Spades': '🂢',
+	'Three of Spades': '🂣',
+	'Four of Spades': '🂤',
+	'Five of Spades': '🂥',
+	'Six of Spades': '🂦',
+	'Seven of Spades': '🂧',
+	'Eight of Spades': '🂨',
+	'Nine of Spades': '🂩',
+	'Ten of Spades': '🂪',
+	'Jack of Spades': '🂫',
+	'Knight of Spades': '🂬',
+	'Queen of Spades': '🂭',
+	'King of Spades': '🂮',
+	'Ace of Hearts': '🂱',
+	'Two of Hearts': '🂲',
+	'Three of Hearts': '🂳',
+	'Four of Hearts': '🂴',
+	'Five of Hearts': '🂵',
+	'Six of Hearts': '🂶',
+	'Seven of Hearts': '🂷',
+	'Eight of Hearts': '🂸',
+	'Nine of Hearts': '🂹',
+	'Ten of Hearts': '🂺',
+	'Jack of Hearts': '🂻',
+	'Knight of Hearts': '🂼',
+	'Queen of Hearts': '🂽',
+	'King of Hearts': '🂾',
+	'Ace of Diamonds': '🃁',
+	'Two of Diamonds': '🃂',
+	'Three of Diamonds': '🃃',
+	'Four of Diamonds': '🃄',
+	'Five of Diamonds': '🃅',
+	'Six of Diamonds': '🃆',
+	'Seven of Diamonds': '🃇',
+	'Eight of Diamonds': '🃈',
+	'Nine of Diamonds': '🃉',
+	'Ten of Diamonds': '🃊',
+	'Jack of Diamonds': '🃋',
+	'Knight of Diamonds': '🃌',
+	'Queen of Diamonds': '🃍',
+	'King of Diamonds': '🃎',
+	'Ace of Clubs': '🃑',
+	'Two of Clubs': '🃒',
+	'Three of Clubs': '🃓',
+	'Four of Clubs': '🃔',
+	'Five of Clubs': '🃕',
+	'Six of Clubs': '🃖',
+	'Seven of Clubs': '🃗',
+	'Eight of Clubs': '🃘',
+	'Nine of Clubs': '🃙',
+	'Ten of Clubs': '🃚',
+	'Jack of Clubs': '🃛',
+	'Knight of Clubs': '🃜',
+	'Queen of Clubs': '🃝',
+	'King of Clubs': '🃞',
+	'Joker': '🃟',
+}
+const deck = (copies = 1, jokers = 0) => {
+	const suits = ['Hearts','Clubs','Diamonds','Spades']
+	const cards = ['Ace','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Jack','Queen','King']
+	return Array(copies).fill(null).flatMap((_,copy) => suits.flatMap(suit => cards.map(card => ({
+		id: `${card} of ${suit}${copy ? `(${copy+1})` : ''}`,
+		data: { card, suit },
+		visible: false
+	})))).concat(Array(jokers).fill(null).map((_,j) => ({
+		id: `Joker ${j+1}`,
+		data: { card: 'Joker', suit: 'Joker' },
+		visible: false,
+	})))
+}
+
+const shuffle = times => ({ region: { deck: { gambit: { card: { list: deck } } } } }) => ({ region: { deck: { gambit: { card: { list: Array(times).fill(null).reduce(l => l.sort(() => Math.random()-0.5), [...deck]) } } } } })
+const deal = count => forRounds(count,
+	forPlayers(
+		move('card', ['deck'], ['player', 'hand']),
+	),
+)
+
+
+const player = name => {
+	return {
+		id: name,// + String(Math.random()),
+		data: { name },
+		region: {
+			...goFish.groupsRegion,
+			hand: {
+				gambit: {
+					card: {
+						list: [],
+						take: (item, index = 0, list) => ({
+							index,
+							list: [...list.slice(0,index),...list.slice(1+index)],
+							item: list[item]
+						}),
+						put: (item, _index, list) => ({
+							list: [ ...list, item ],
+							index: list.length,
+						})
+					}
+				},
+			},
+		}
+	}
+}
+const forRounds = (rounds = 0, ...doMethods) => [
+	{ round:0, },
+	{
+		while: ({ round }) => round < rounds,
+		do: [
+			...doMethods,
+			increment('round')
+		]
+	},
+]
+const forPlayers = (...doMethods) => [
+	{ player:0, },
+	{
+		while: ({ player, playerOrder }) => player < playerOrder.length,
+		do: [
+			...doMethods,
+			increment('player')
+		]
+	},
+]
+const nextPlayer = ({ player, playerOrder, playerDirection }) => ({ player: (player + playerDirection + playerOrder.length) % playerOrder.length })
+const PlayerInput = Symbol('Player Input')
+class PlayerResponse {
+	constructor(state) {
+	}
+}
+
+class NotYourTurn extends PlayerResponse {}
+class TargetSelf extends PlayerResponse {}
+class NoTarget extends PlayerResponse {}
+class NoCard extends PlayerResponse {}
+class Success extends PlayerResponse {}
+const PlayerResponses = [NotYourTurn,TargetSelf,NoTarget,NoCard,Success]
+
+const repeat_string = (str = '', count = 0) => Array(count).fill(str).join('')
+const printRegions = (obj, indent = 0) => Object.entries(obj.region).forEach(([regionName, region]) => {
+	console.group(regionName)
+	Object.entries(region.gambit).forEach(([gambitName,{list}]) => {
+		console.group(gambitName)
+		console.log(list.map(({ id }) => '%c'+cardDisplay[id]).join(''), ...list.map(({ data: { suit } }) => `font-size: 80px; color: ${suit === 'Diamonds' || suit === 'Hearts' ? 'red' : 'black'};`))
+		console.groupEnd()
+	})
+	console.groupEnd()
+})
+const printGame = state => {
+	printRegions(state)
+	Object.entries(state.players).forEach(([playerName, player]) => {
+		console.group(`Player: ${playerName}`)
+		printRegions(player)
+		console.groupEnd()
+	})
+}
+const goFish = {
+	groupsRegion: {
+		groups: {
+			gambit: {
+				card: {
+					list: [],
+					put: (item, _index, list) => ({
+						list: [ ...list, item ],
+						index: list.length,
+					})
+				}
+			},
+		}
+	},
+	allowedMove: ({ playerInput, player, playerOrder, players, regions }) => {
+		if (playerInput.player !== playerOrder[player]) return 'not_your_turn'
+		if (playerInput.target === playerInput.player) return 'target_self'
+		if (!(playerInput.target in players)) return 'no_target'
+		const cards = get_path_object(players, [playerInput.player,'region','hand','gambit','card','list'])
+		if (!cards.some(card => playerInput.card === card.data.card)) return 'no_card'
+		return 'success'
+	},
+	targetHasCards: ({ player, playerOrder, players, playerInput }) => get_path_object(players, [playerInput.target,'region','hand','gambit','card','list'])
+							.some(card => card.data.card === playerInput.card),
+	matchingCards: ({ playerInput, players }) => {
+		const targetList = get_path_object(players, [playerInput.target,'region','hand','gambit','card','list'])
+		return Object.keys(targetList).map(Number).filter(index => targetList[index].data.card === playerInput.card)
+	},
+	cardGroups: ({ player, playerOrder, players: { [playerOrder[player]]: { region: { hand: { gambit: { card: { list: hand } } }, groups: { gambit: { card: { list: groups } } } } } } }) => {
+		const cardGroups = {}
+		for (let card of hand) {
+			cardGroups[card.data.card] = cardGroups[card.data.card] || []
+			cardGroups[card.data.card].push(card.id)
+		}
+		const fullGroups = Object.values(cardGroups).filter(l => l.length >= 4).map(l => l.slice(0,4)).flat()
+		const cardIndexes = fullGroups.map(id => hand.findIndex(card => card.id === id))
+		return cardIndexes
+	},
+	winCondition: ({ players }) => Object.values(players).some(player => get_path_object(player, ['region','hand','gambit','card','list','length']) === 0)
+}
+const playGame = new S({
+	initial: [
+		shuffle(10),
+		deal(7),
+		{player:0},
+		'gameloop'
+	],
+	gameloop: {
+		while: not(goFish.winCondition),
+		do: [
+			{
+				initial: [
+					printGame,
+					PlayerInput,
+					'validate'
+				],
+				validate: [
+					{
+						switch: goFish.allowedMove,
+						case: {
+							not_your_turn: NotYourTurn,
+							target_self: TargetSelf,
+							no_target: NoTarget,
+							no_card: NoCard,
+							success: [
+								Success,
+								'action'
+							],
+						},
+					}
+					,
+					'initial'
+				],
+				action: [
+					{
+						if: goFish.targetHasCards,
+						then: move('card', ['players',({ playerInput }) => playerInput.target,'hand',goFish.matchingCards], ['player','hand']),
+						else: move('card', ['deck'], ['player', 'hand'])
+					},
+				]
+			},
+			move('card',['player', 'hand', goFish.cardGroups],['player','groups']),
+			nextPlayer,
+		]
+	}
+})
+.async
+.addNode(class PlayerInputNode extends NodeDefinition {
+	static name = 'PI'
+	static typeof(object, opjectType, isAction) { return isAction && object === PlayerInput }
+	static async perform(action, state) { return S._perform(this, state, { playerInput: await yieldPlayerInput(state) }) }
+})
+.addNode(class PlayerResponseNode extends NodeDefinition {
+	static name = 'PR'
+	static typeof(object) { return PlayerResponses.includes(object) }
+	static async perform(action, state) {
+		sendPlayerResponse(new action(state))
+		return S._perform(this, state, undefined)
+	}
+})
+.defaults({
+	player: -1,
+	round: -1,
+	playerDirection: 1,
+	playerOrder: [],
+	players: {},
+	region: {
+		deck: {
+			gambit: {
+				card: {
+					list: deck(),
+					take: (_item, _index, list) => ({
+						list: list.slice(0, -1),
+						index: list.length-1,
+						item: list[list.length-1]
+					}),
+					put: (item, _index, list) => ({
+						list: [ item, ...list ],
+						index: 0,
+					})
+				}
+			},
+		},
+	}
+})
+.input((players) => ({
+	players: Object.fromEntries(players.map(player => [player.id,player])),
+	playerOrder: players.map(({ id }) => id),
+}))
+
+let _playerInputs = []
+let _waiting = false
+
+
+const sendPlayerResponse = playerResponse => {
+	if (playerResponse instanceof Success) {
+		console.log('good')
+	} else {
+		console.error(playerResponse)
+	}
+}
+const sendPlayerInput = (playerInput) => {
+	if (_waiting) {
+		const resolve = _waiting.resolve
+		_waiting = null
+		resolve(playerInput)
+	}
+	else _playerInputs.push(playerInput)
+}
+
+const yieldPlayerInput = async state => {
+	if (_playerInputs.length) {
+		const [first,...remaining] = _playerInputs
+		_playerInputs = remaining
+		return first
+	}
+	let resolve;
+	const promise = new Promise((res) => {
+		resolve = res
+	})
+	if (_waiting) {
+		const orig = _waiting
+		_waiting = {
+			...promise,
+			resolve,
+		}
+		await orig
+		_waiting = false
+	} else {
+		_waiting = {
+			...promise,
+			resolve,
+		}
+	}
+	return promise
+}
+	
+
+playGame([
+	player('p1'),
+	player('p2'),
+	player('p3'),
+]).then(console.log)
+
